@@ -1,9 +1,23 @@
-//! FSRS scheduler wrapper.
+//! FSRS-6 scheduler wrapper.
 //!
-//! TODO(A3): filled by agent A3 — FSRS Engineer.
-//! Expected contents:
-//! - Wrapper around the `fsrs` crate (v5.x).
-//! - Public functions: `schedule_card(card, rating, now) -> NextReview`,
-//!   `init_card() -> Card`, and helpers to convert between DB rows and
-//!   FSRS internal state.
-//! - Default parameters and a hook for per-user retrievability target.
+//! Built on top of the upstream `fsrs` 5.2 crate. The wrapper exists so the
+//! rest of the backend (commands, DB layer, IPC payloads) only ever talks
+//! to plain serde-friendly DTOs and never touches `burn`/`ndarray` types
+//! directly.
+//!
+//! Public surface:
+//! - [`DEFAULT_PARAMS`] / [`FSRS_VERSION`] / [`DEFAULT_DESIRED_RETENTION`]
+//! - [`CardScheduler`] — `new`, `with_defaults`, `next_states`, `apply_review`
+//! - DTOs: [`MemoryStateDTO`], [`NextStatesDTO`], [`NextStateDTO`],
+//!   [`ReviewOutcome`], [`Rating`]
+
+pub mod params;
+pub mod scheduler;
+
+#[cfg(test)]
+mod tests;
+
+pub use params::{DEFAULT_DESIRED_RETENTION, DEFAULT_PARAMS, FSRS_VERSION};
+pub use scheduler::{
+    CardScheduler, MemoryStateDTO, NextStateDTO, NextStatesDTO, Rating, ReviewOutcome,
+};
