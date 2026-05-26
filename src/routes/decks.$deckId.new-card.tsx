@@ -1,12 +1,17 @@
-import { createRoute, Link } from "@tanstack/react-router";
+/**
+ * "Add card" page. Thin shell around `<NoteEditor>` — the editor handles
+ * templates, tags, preview, and submit. Back-navigation lives in the
+ * TopBar breadcrumb.
+ */
+
+import { createRoute, Link, useNavigate } from "@tanstack/react-router";
+import { ArrowLeft } from "lucide-react";
+import { NoteEditor } from "@/components/NoteEditor";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useDeck } from "@/lib/queries";
 import { Route as rootRoute } from "./__root";
 
-/**
- * "Add card" stub. Wave B2 owns the real editor (template picker, fields,
- * tags, live preview).
- */
 export const Route = createRoute({
   getParentRoute: () => rootRoute,
   path: "/decks/$deckId/new-card",
@@ -16,19 +21,36 @@ export const Route = createRoute({
 
 function NewCardPage() {
   const { deckId } = Route.useParams();
+  const navigate = useNavigate();
+  const deck = useDeck(deckId);
+
   return (
     <div className="space-y-6 p-6">
+      <div className="flex items-center gap-2">
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/decks/$deckId" params={{ deckId }}>
+            <ArrowLeft className="h-4 w-4" />
+            Retour au deck
+          </Link>
+        </Button>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>New card</CardTitle>
-          <CardDescription>Card editor for deck #{deckId} — coming in Wave B2.</CardDescription>
+          <CardTitle>
+            Nouvelle carte
+            {deck.data && (
+              <span className="ml-2 text-muted-foreground">dans « {deck.data.name} »</span>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <Button asChild variant="outline">
-            <Link to="/decks/$deckId" params={{ deckId }}>
-              Back to deck
-            </Link>
-          </Button>
+          <NoteEditor
+            deckId={deckId}
+            onAdded={() => {
+              void navigate({ to: "/decks/$deckId", params: { deckId } });
+            }}
+          />
         </CardContent>
       </Card>
     </div>

@@ -16,6 +16,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
+import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routes/routeTree";
 
@@ -53,6 +54,7 @@ export default function App() {
       <ThemeProvider>
         <ToastProvider>
           <RouterProvider router={router} />
+          <Toaster />
           <ToastViewport />
         </ToastProvider>
       </ThemeProvider>
