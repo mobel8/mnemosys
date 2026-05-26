@@ -17,9 +17,7 @@ afterEach(() => {
 
 describe("CyclicSighing", () => {
   it("renders the phase label and the remaining counter at open", () => {
-    render(
-      <CyclicSighing open onClose={() => undefined} durationSeconds={120} />,
-    );
+    render(<CyclicSighing open onClose={() => undefined} durationSeconds={120} />);
     // The default first phase is "inhale1" → label includes "Inspire (1)".
     expect(screen.getByText(/Inspire \(1\)/i)).toBeInTheDocument();
     const remaining = screen.getByTestId("time-remaining");

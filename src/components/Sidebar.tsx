@@ -7,7 +7,17 @@
  */
 
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BarChart3, Github, Home, Moon, Settings, Sparkles, Sun, Trophy } from "lucide-react";
+import {
+  BarChart3,
+  Github,
+  Home,
+  Moon,
+  Settings,
+  Shuffle,
+  Sparkles,
+  Sun,
+  Trophy,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -20,6 +30,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Home", icon: Home },
+  { to: "/review-interleaved", label: "Review entrelacée", icon: Shuffle },
   { to: "/ai-generate", label: "Génération IA", icon: Sparkles },
   { to: "/stats", label: "Stats", icon: BarChart3 },
   { to: "/achievements", label: "Succès", icon: Trophy },

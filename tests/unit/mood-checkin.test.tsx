@@ -15,9 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const submitMock = vi.fn();
 
 vi.mock("@/lib/queries", () => ({
-  useSubmitWellness: (hookOpts?: {
-    onSuccess?: (data: unknown) => void;
-  }) => ({
+  useSubmitWellness: (hookOpts?: { onSuccess?: (data: unknown) => void }) => ({
     mutate: (
       input: Record<string, unknown>,
       mutateOpts?: { onSuccess?: (data: unknown) => void },

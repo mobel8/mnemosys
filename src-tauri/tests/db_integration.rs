@@ -907,3 +907,155 @@ fn scheduler_dispatcher_round_trip() {
     assert_eq!(via_dispatch.state, direct.state);
     assert!((via_dispatch.difficulty - direct.difficulty).abs() < 1e-9);
 }
+
+// ---- Vague 5 — interleaved review ------------------------------------------
+
+/// Spin up a fresh DB with two decks, each carrying `cards_per_deck` cards
+/// that are all due in the past. Returns `(db, deck_a_id, deck_b_id)`.
+fn fresh_db_with_two_decks_of_due_cards(cards_per_deck: usize) -> (Database, i64, i64) {
+    let db = Database::for_test();
+    let now = 1_700_000_000_i64;
+
+    let (deck_a, deck_b) = {
+        let conn = db.lock();
+        let deck_a = db
+            .decks(&conn)
+            .create("Alpha", None, "#3b82f6", 0.9, None)
+            .unwrap();
+        let deck_b = db
+            .decks(&conn)
+            .create("Bravo", None, "#10b981", 0.9, None)
+            .unwrap();
+
+        for deck in [&deck_a, &deck_b] {
+            for i in 0..cards_per_deck {
+                let note = db
+                    .notes(&conn)
+                    .create(
+                        deck.id,
+                        NoteTemplate::Basic,
+                        json!({
+                            "front": format!("{}-Q{}", deck.name, i),
+                            "back":  format!("{}-A{}", deck.name, i),
+                        }),
+                        vec![],
+                    )
+                    .unwrap();
+                let card_id = db
+                    .cards(&conn)
+                    .list_in_deck(deck.id, 100, 0)
+                    .unwrap()
+                    .into_iter()
+                    .find(|cn| cn.card.note_id == note.id)
+                    .unwrap()
+                    .card
+                    .id;
+                db.cards(&conn)
+                    .update_after_review(card_id, CardState::Review, 5.0, 5.0, -1, now)
+                    .unwrap();
+            }
+        }
+        (deck_a, deck_b)
+    };
+
+    (db, deck_a.id, deck_b.id)
+}
+
+#[test]
+fn interleaved_due_cards_returns_from_all_specified_decks() {
+    let (db, deck_a_id, deck_b_id) = fresh_db_with_two_decks_of_due_cards(5);
+    let conn = db.lock();
+    let now = 1_700_000_000_i64;
+
+    let queue = db
+        .cards(&conn)
+        .due_cards_interleaved(&[deck_a_id, deck_b_id], now, 20)
+        .expect("interleaved fetch");
+
+    // Both decks should be represented (5 + 5 = 10 due cards exist).
+    assert_eq!(queue.len(), 10);
+    let mut from_a = 0_usize;
+    let mut from_b = 0_usize;
+    for c in &queue {
+        if c.card.deck_id == deck_a_id {
+            from_a += 1;
+        } else if c.card.deck_id == deck_b_id {
+            from_b += 1;
+        }
+    }
+    assert_eq!(from_a, 5);
+    assert_eq!(from_b, 5);
+}
+
+#[test]
+fn interleaved_due_cards_respects_limit() {
+    let (db, deck_a_id, deck_b_id) = fresh_db_with_two_decks_of_due_cards(10);
+    let conn = db.lock();
+    let now = 1_700_000_000_i64;
+
+    let queue = db
+        .cards(&conn)
+        .due_cards_interleaved(&[deck_a_id, deck_b_id], now, 7)
+        .expect("interleaved fetch");
+    assert_eq!(queue.len(), 7);
+
+    // An empty deck list errors out at the command layer; the DB layer
+    // simply returns an empty vec so callers can defend in depth.
+    let empty = db
+        .cards(&conn)
+        .due_cards_interleaved(&[], now, 7)
+        .expect("empty deck list");
+    assert!(empty.is_empty());
+
+    // limit=0 → empty queue too.
+    let zero = db
+        .cards(&conn)
+        .due_cards_interleaved(&[deck_a_id], now, 0)
+        .expect("zero limit");
+    assert!(zero.is_empty());
+}
+
+#[test]
+fn interleaved_due_cards_shuffles_order() {
+    // 20 cards across 2 decks should produce different orderings across
+    // a few runs. We sample N=5 calls and assert that at least one
+    // produces a distinct ID sequence from the first one — a tolerant
+    // check that catches the « shuffle absent » regression without
+    // depending on a specific PRNG seed.
+    let (db, deck_a_id, deck_b_id) = fresh_db_with_two_decks_of_due_cards(10);
+    let conn = db.lock();
+    let now = 1_700_000_000_i64;
+
+    let first: Vec<i64> = db
+        .cards(&conn)
+        .due_cards_interleaved(&[deck_a_id, deck_b_id], now, 20)
+        .unwrap()
+        .into_iter()
+        .map(|cn| cn.card.id)
+        .collect();
+    assert_eq!(first.len(), 20);
+
+    let mut saw_different_order = false;
+    for _ in 0..5 {
+        // Sleep a sub-millisecond gap so the SystemTime-seeded shuffle
+        // doesn't reuse the same nanosecond. The shuffle also mixes the
+        // slice length into the seed, but two same-size shuffles within
+        // the same ns would still collide — hence the tiny jitter.
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let next: Vec<i64> = db
+            .cards(&conn)
+            .due_cards_interleaved(&[deck_a_id, deck_b_id], now, 20)
+            .unwrap()
+            .into_iter()
+            .map(|cn| cn.card.id)
+            .collect();
+        if next != first {
+            saw_different_order = true;
+            break;
+        }
+    }
+    assert!(
+        saw_different_order,
+        "interleaved queue order never changed across 5 calls — shuffle missing?"
+    );
+}

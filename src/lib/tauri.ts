@@ -289,6 +289,19 @@ export interface GeneratedCard {
   tags: string[];
 }
 
+/**
+ * Vague 5 — elaboration enrichment for a single card. Mirrors the Rust
+ * `CardElaborationDTO`. Both fields may be empty strings if Claude failed
+ * to produce a useful payload; callers should treat empty values as
+ * « nothing to display » rather than erroring.
+ */
+export interface CardElaboration {
+  /** One-sentence elaborative-interrogation rationale. */
+  why: string;
+  /** 1-2 short concrete examples, joined by `\n` when multiple. */
+  example: string;
+}
+
 // --- Session 2: TTS ------------------------------------------------------
 
 export type TTSVoice = "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" | "coral" | "sage";
@@ -426,6 +439,13 @@ export const api = {
   review: {
     dueCards: (deckId: number | null, limit: number) =>
       invoke<CardWithNote[]>("get_due_cards", { deckId, limit }),
+    /**
+     * Vague 5 — multi-deck interleaved due queue. Returns up to `limit`
+     * cards drawn from every deck listed in `deckIds`, shuffled so the
+     * learner mixes contexts (Rohrer & Taylor 2015).
+     */
+    dueCardsInterleaved: (deckIds: number[], limit: number) =>
+      invoke<CardWithNote[]>("get_interleaved_due_cards", { deckIds, limit }),
     previewNextStates: (cardId: number) => invoke<NextStates>("preview_next_states", { cardId }),
     /**
      * Submit a graded card. `confidence` is the optional 1..5 metacognitive
@@ -484,6 +504,13 @@ export const api = {
     /** Generate cards from a PDF on disk. */
     generateCardsPdf: (pdfPath: string, maxCards: number, language: string) =>
       invoke<GeneratedCard[]>("generate_cards_pdf", { pdfPath, maxCards, language }),
+    /**
+     * Vague 5 — produce a `{ why, example }` pedagogical elaboration for a
+     * single card. `cardText` is the prompt+answer concatenation the
+     * caller already has handy (basic: « front / back »; cloze: full text).
+     */
+    generateCardElaboration: (cardText: string, language: string) =>
+      invoke<CardElaboration>("generate_card_elaboration", { cardText, language }),
   },
   tts: {
     /** Synthesise speech. Hits cache first; otherwise calls OpenAI. */

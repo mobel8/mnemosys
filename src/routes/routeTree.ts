@@ -21,6 +21,7 @@ import { Route as decksDeckIdRoute } from "./decks.$deckId";
 import { Route as decksDeckIdNewCardRoute } from "./decks.$deckId.new-card";
 import { Route as indexRoute } from "./index";
 import { Route as reviewDeckIdRoute } from "./review.$deckId";
+import { Route as reviewInterleavedRoute } from "./review-interleaved";
 import { Route as settingsRoute } from "./settings";
 import { Route as statsRoute } from "./stats";
 
@@ -29,6 +30,7 @@ export const routeTree = rootRoute.addChildren([
   decksDeckIdRoute,
   decksDeckIdNewCardRoute,
   reviewDeckIdRoute,
+  reviewInterleavedRoute,
   aiGenerateRoute,
   statsRoute,
   achievementsRoute,

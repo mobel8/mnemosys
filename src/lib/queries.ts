@@ -22,6 +22,7 @@ import {
   type AppSettings,
   api,
   type Card,
+  type CardElaboration,
   type CardWithNote,
   type ConversionResult,
   type DayCount,
@@ -56,6 +57,8 @@ export const queryKeys = {
   cardsInDeck: (deckId: number, limit: number, offset: number) =>
     ["cards-in-deck", deckId, limit, offset] as const,
   dueCards: (deckId: number | null, limit: number) => ["due-cards", deckId, limit] as const,
+  interleavedDueCards: (deckIds: number[], limit: number) =>
+    ["interleaved-due-cards", [...deckIds].sort((a, b) => a - b), limit] as const,
   nextStates: (cardId: number) => ["next-states", cardId] as const,
   searchNotes: (query: string, limit: number) => ["search-notes", query, limit] as const,
   todayStats: ["today-stats"] as const,
@@ -131,6 +134,31 @@ export function useDueCards(
   return useQuery<CardWithNote[]>({
     queryKey: queryKeys.dueCards(deckId, limit),
     queryFn: () => api.review.dueCards(deckId, limit),
+    ...opts,
+  });
+}
+
+/**
+ * Vague 5 — multi-deck interleaved due queue. Disabled until `deckIds` is
+ * non-empty so toggling decks on/off in the picker doesn't fire a backend
+ * call with an invalid empty list (the command rejects it).
+ *
+ * Cache key normalises `deckIds` order so checking decks in a different
+ * sequence still hits the same cache entry.
+ */
+export function useInterleavedDueCards(
+  deckIds: number[],
+  limit = 20,
+  opts?: Partial<UseQueryOptions<CardWithNote[]>>,
+) {
+  return useQuery<CardWithNote[]>({
+    queryKey: queryKeys.interleavedDueCards(deckIds, limit),
+    queryFn: () => api.review.dueCardsInterleaved(deckIds, limit),
+    enabled: deckIds.length > 0,
+    // The interleaved queue is consumed by the session, not the dashboard —
+    // we want a fresh shuffled snapshot every time the user clicks « start ».
+    staleTime: 0,
+    refetchOnWindowFocus: false,
     ...opts,
   });
 }
@@ -469,6 +497,20 @@ export function useGenerateCardsFromPdf(
   return useMutation({
     mutationFn: ({ pdfPath, maxCards, language }) =>
       api.ai.generateCardsPdf(pdfPath, maxCards, language),
+    ...opts,
+  });
+}
+
+/**
+ * Vague 5 — generate `{ why, example }` elaboration for one card via Claude.
+ * Stateless — no cache invalidation. The caller is responsible for merging
+ * the result into the note's `fields` before persistence.
+ */
+export function useGenerateCardElaboration(
+  opts?: UseMutationOptions<CardElaboration, Error, { cardText: string; language: string }>,
+) {
+  return useMutation({
+    mutationFn: ({ cardText, language }) => api.ai.generateCardElaboration(cardText, language),
     ...opts,
   });
 }

@@ -12,7 +12,7 @@
  * crashes (Suspense errors, missing exports, undefined hooks, …).
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 const ROUTES = ["/", "/stats", "/settings", "/ai-generate"] as const;
 

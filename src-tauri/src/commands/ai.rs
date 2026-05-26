@@ -17,6 +17,7 @@
 //! 3. If neither is set, returns a validation error suitable for the UI
 //!    to surface as a "configure your key" hint.
 
+use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
 use crate::ai::{generate_cards_from_pdf, generate_cards_from_text, ClaudeClient, GeneratedCard};
@@ -108,4 +109,134 @@ pub async fn generate_cards_pdf(
     generate_cards_from_pdf(&client, &bytes, max_cards, &language)
         .await
         .map_err(|e| AppError::Other(e.to_string()))
+}
+
+// ---------------------------------------------------------------------------
+// Vague 5 — Card elaboration (Why? + Example)
+// ---------------------------------------------------------------------------
+
+/// One elaboration enrichment for a card: a short « why this is correct »
+/// rationale (elaborative interrogation — Bisra meta g=0.55) plus 1-2
+/// concrete examples (concrete examples — Micallef d=0.30). Either field
+/// may be an empty string if Claude couldn't produce a useful payload.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardElaborationDTO {
+    /// One-sentence elaborative-interrogation rationale.
+    pub why: String,
+    /// 1-2 concrete worked examples concatenated with `\n` separators.
+    pub example: String,
+}
+
+/// System prompt for the elaboration generator. Same JSON-only discipline
+/// as the main card generator so we can parse the response with `serde_json`.
+const ELABORATION_SYSTEM_PROMPT: &str = r#"You enrich a flashcard with two pedagogical augmentations:
+1. "why"    — one short sentence explaining WHY the answer is correct (elaborative interrogation).
+2. "example" — one or two short, concrete examples that illustrate the concept (concrete examples).
+
+Rules:
+1. Output a SINGLE JSON object — NO markdown fences, NO preamble, NO trailing prose.
+2. Keys: "why" (string), "example" (string). Both required, both non-null.
+3. "why" stays under ~25 words and avoids restating the answer verbatim.
+4. "example" is short: ~1-2 sentences total, with each example on its own line if there are two.
+5. Stay in the requested language.
+6. NEVER invent facts you cannot ground in the supplied card content.
+
+Example output (and ONLY this kind of output):
+{"why":"Because X causes Y through Z.","example":"Ex 1: ...\nEx 2: ..."}
+"#;
+
+const ELABORATION_MAX_OUTPUT_TOKENS: u32 = 600;
+
+/// Strip markdown fences if present and parse a single elaboration object.
+fn parse_elaboration_response(response: &str) -> AppResult<CardElaborationDTO> {
+    let cleaned = strip_code_fences(response.trim());
+    serde_json::from_str::<CardElaborationDTO>(cleaned).map_err(|e| {
+        let preview: String = response.chars().take(200).collect();
+        AppError::Other(format!(
+            "Elaboration JSON parse error: {} (got: {})",
+            e, preview
+        ))
+    })
+}
+
+fn strip_code_fences(s: &str) -> &str {
+    let mut out = s.trim();
+    if let Some(rest) = out.strip_prefix("```") {
+        let rest = match rest.find('\n') {
+            Some(nl) => &rest[nl + 1..],
+            None => rest,
+        };
+        out = rest.trim_end();
+    }
+    if let Some(stripped) = out.strip_suffix("```") {
+        out = stripped.trim_end();
+    }
+    out.trim()
+}
+
+/// Generate a `{ why, example }` elaboration for a single card.
+///
+/// `card_text` is the prompt+answer concatenation the UI has already
+/// computed (basic: « front / back »; cloze: the full text). Stateless —
+/// the result is meant to be merged into the note's `fields` JSON by the
+/// caller before persistence.
+#[tauri::command]
+pub async fn generate_card_elaboration(
+    app: AppHandle,
+    card_text: String,
+    language: String,
+) -> AppResult<CardElaborationDTO> {
+    let trimmed = card_text.trim();
+    if trimmed.is_empty() {
+        return Err(AppError::Validation(
+            "card_text must not be empty".to_string(),
+        ));
+    }
+
+    let api_key = resolve_api_key(&app)?;
+    let client = ClaudeClient::new(api_key);
+
+    let prompt = format!(
+        "Enrich the following flashcard. Output language: {language}. \
+         Return ONLY the JSON object.\n\n\
+         Card:\n{trimmed}"
+    );
+
+    let response = client
+        .complete(
+            Some(ELABORATION_SYSTEM_PROMPT),
+            &prompt,
+            ELABORATION_MAX_OUTPUT_TOKENS,
+        )
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))?;
+
+    parse_elaboration_response(&response)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_clean_elaboration_json() {
+        let raw = r#"{"why":"Because A causes B.","example":"Ex: water boils at 100C."}"#;
+        let dto = parse_elaboration_response(raw).expect("parse");
+        assert_eq!(dto.why, "Because A causes B.");
+        assert!(dto.example.contains("100C"));
+    }
+
+    #[test]
+    fn parses_elaboration_with_fences() {
+        let raw = "```json\n{\"why\":\"x\",\"example\":\"y\"}\n```";
+        let dto = parse_elaboration_response(raw).expect("parse fenced");
+        assert_eq!(dto.why, "x");
+        assert_eq!(dto.example, "y");
+    }
+
+    #[test]
+    fn elaboration_rejects_malformed_payload() {
+        let raw = "not json at all";
+        assert!(parse_elaboration_response(raw).is_err());
+    }
 }

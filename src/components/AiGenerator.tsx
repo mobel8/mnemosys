@@ -41,6 +41,7 @@ import { toast } from "@/components/ui/use-toast";
 import {
   useCreateNote,
   useDecks,
+  useGenerateCardElaboration,
   useGenerateCardsFromPdf,
   useGenerateCardsFromText,
 } from "@/lib/queries";
@@ -66,6 +67,11 @@ type SourceTab = "text" | "pdf";
  * Local working copy of a `GeneratedCard`. We carry an `id` so React keys
  * stay stable through edits / removals (the backend returns no id of its
  * own — generation is stateless).
+ *
+ * Vague 5 — `why` / `example` are optional elaborations the user opts into
+ * via the « enrich with explanations » checkbox. Both stay as plain strings
+ * inside `fields` when the note is persisted; an empty string means
+ * « nothing to display » to the review UI.
  */
 interface CardDraft {
   id: string;
@@ -74,6 +80,8 @@ interface CardDraft {
   back: string;
   text: string;
   tags: string[];
+  why: string;
+  example: string;
 }
 
 function draftFromGenerated(card: GeneratedCard, index: number): CardDraft {
@@ -81,6 +89,8 @@ function draftFromGenerated(card: GeneratedCard, index: number): CardDraft {
   const front = typeof fields.front === "string" ? fields.front : "";
   const back = typeof fields.back === "string" ? fields.back : "";
   const text = typeof fields.text === "string" ? fields.text : "";
+  const why = typeof fields.why === "string" ? fields.why : "";
+  const example = typeof fields.example === "string" ? fields.example : "";
   return {
     // `index` keeps ids ordered when multiple drafts are minted in the same tick.
     id: `${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 8)}`,
@@ -89,7 +99,15 @@ function draftFromGenerated(card: GeneratedCard, index: number): CardDraft {
     back,
     text,
     tags: Array.isArray(card.tags) ? card.tags : [],
+    why,
+    example,
   };
+}
+
+/** Concatenate a draft into the « card text » the elaboration prompt expects. */
+function draftToCardText(draft: CardDraft): string {
+  if (draft.template === "cloze") return draft.text.trim();
+  return `${draft.front.trim()}\n\n${draft.back.trim()}`.trim();
 }
 
 /**
@@ -116,6 +134,13 @@ export function AiGenerator() {
   const [pdfPath, setPdfPath] = useState<string | null>(null);
   const [maxCards, setMaxCards] = useState<number>(DEFAULT_MAX_CARDS);
   const [language, setLanguage] = useState<LanguageValue>("fr");
+  /**
+   * Vague 5 — opt-in IA augmentée. When `true`, each generated card gets a
+   * follow-up Claude call to mint a `{ why, example }` enrichment. Stays
+   * off by default because the extra round-trips multiply the cost.
+   */
+  const [includeElaboration, setIncludeElaboration] = useState(false);
+  const [isElaborating, setIsElaborating] = useState(false);
 
   // Drafts (the validation queue) ----------------------------------------
   const [drafts, setDrafts] = useState<CardDraft[]>([]);
@@ -134,6 +159,7 @@ export function AiGenerator() {
   // Mutations -------------------------------------------------------------
   const genText = useGenerateCardsFromText();
   const genPdf = useGenerateCardsFromPdf();
+  const genElaboration = useGenerateCardElaboration();
   const createNote = useCreateNote();
 
   const isGenerating = genText.isPending || genPdf.isPending;
@@ -143,6 +169,7 @@ export function AiGenerator() {
   const textInputId = useId();
   const maxCardsId = useId();
   const langSelectId = useId();
+  const elaborationCheckboxId = useId();
 
   // ----- Handlers --------------------------------------------------------
 
@@ -205,14 +232,71 @@ export function AiGenerator() {
           description:
             "Claude n'a rien renvoyé pour cette source. Essaie un texte plus long ou un autre extrait.",
         });
-      } else {
-        toast({
-          title: "Cartes générées",
-          description: `${nextDrafts.length} carte${nextDrafts.length > 1 ? "s" : ""} prête${nextDrafts.length > 1 ? "s" : ""} à être validée${nextDrafts.length > 1 ? "s" : ""}.`,
-        });
+        return;
+      }
+      toast({
+        title: "Cartes générées",
+        description: `${nextDrafts.length} carte${nextDrafts.length > 1 ? "s" : ""} prête${nextDrafts.length > 1 ? "s" : ""} à être validée${nextDrafts.length > 1 ? "s" : ""}.`,
+      });
+
+      // Vague 5 — opt-in elaboration pass. Each card gets an independent
+      // Claude call so a single failure doesn't tank the whole batch; we
+      // patch successful enrichments back into `drafts` as they land.
+      if (includeElaboration) {
+        await enrichDraftsWithElaboration(nextDrafts);
       }
     } catch (err) {
       handleGenerationError(err);
+    }
+  }
+
+  async function enrichDraftsWithElaboration(targetDrafts: CardDraft[]): Promise<void> {
+    if (targetDrafts.length === 0) return;
+    setIsElaborating(true);
+    let succeeded = 0;
+    let failed = 0;
+    try {
+      for (const draft of targetDrafts) {
+        const cardText = draftToCardText(draft);
+        if (cardText.length === 0) {
+          failed += 1;
+          continue;
+        }
+        try {
+          const enrichment = await genElaboration.mutateAsync({
+            cardText,
+            language,
+          });
+          setDrafts((prev) =>
+            prev.map((d) =>
+              d.id === draft.id ? { ...d, why: enrichment.why, example: enrichment.example } : d,
+            ),
+          );
+          succeeded += 1;
+        } catch (err) {
+          // Elaboration is purely additive — surface a single aggregated
+          // toast at the end rather than spamming the user per-card.
+          console.warn("[ai] elaboration failed for one card", err);
+          failed += 1;
+        }
+      }
+    } finally {
+      setIsElaborating(false);
+    }
+    if (succeeded > 0) {
+      toast({
+        title: "Élaborations ajoutées",
+        description:
+          failed === 0
+            ? `${succeeded} carte${succeeded > 1 ? "s" : ""} enrichie${succeeded > 1 ? "s" : ""} avec « Pourquoi » + « Exemple ».`
+            : `${succeeded} enrichi${succeeded > 1 ? "es" : "e"}, ${failed} échec${failed > 1 ? "s" : ""}.`,
+      });
+    } else if (failed > 0) {
+      toast({
+        title: "Élaborations échouées",
+        description: "Aucune élaboration n'a pu être générée pour ce lot.",
+        variant: "destructive",
+      });
     }
   }
 
@@ -238,10 +322,17 @@ export function AiGenerator() {
     try {
       // Sequential — see file header for the rationale.
       for (const draft of drafts) {
-        const fields: Record<string, unknown> =
+        const baseFields: Record<string, unknown> =
           draft.template === "cloze"
             ? { text: draft.text.trim() }
             : { front: draft.front.trim(), back: draft.back.trim() };
+        // Vague 5 — only attach why/example when they actually carry text.
+        // `validate_fields` ignores unknown keys for basic/cloze, so this
+        // is safe to do unconditionally, but skipping empties keeps notes
+        // free of junk strings for cards the user opted out of enriching.
+        const fields: Record<string, unknown> = { ...baseFields };
+        if (draft.why.trim().length > 0) fields.why = draft.why.trim();
+        if (draft.example.trim().length > 0) fields.example = draft.example.trim();
         try {
           await createNote.mutateAsync({
             deckId,
@@ -431,12 +522,38 @@ export function AiGenerator() {
             </div>
           </div>
 
+          <div className="flex items-start gap-2 rounded-md border border-dashed bg-muted/20 p-3">
+            <input
+              id={elaborationCheckboxId}
+              type="checkbox"
+              checked={includeElaboration}
+              onChange={(e) => setIncludeElaboration(e.target.checked)}
+              disabled={isGenerating || isElaborating}
+              className="mt-0.5 h-4 w-4 rounded border-input"
+            />
+            <div className="space-y-0.5">
+              <Label htmlFor={elaborationCheckboxId} className="cursor-pointer text-sm">
+                Inclure « Pourquoi » et « Exemples » auto-générés
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Pour chaque carte, un appel supplémentaire à Claude produit une justification courte
+                (elaborative interrogation) et 1-2 exemples concrets — coût IA légèrement plus
+                élevé.
+              </p>
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Button type="button" onClick={handleGenerate} disabled={!canGenerate}>
+            <Button type="button" onClick={handleGenerate} disabled={!canGenerate || isElaborating}>
               {isGenerating ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Génération…
+                </>
+              ) : isElaborating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Enrichissement…
                 </>
               ) : (
                 <>
@@ -450,7 +567,7 @@ export function AiGenerator() {
                 type="button"
                 variant="ghost"
                 onClick={resetAll}
-                disabled={isCreatingAll || isGenerating}
+                disabled={isCreatingAll || isGenerating || isElaborating}
               >
                 Réinitialiser
               </Button>
@@ -553,6 +670,9 @@ function DraftCard({ draft, index, disabled, onChange, onRemove }: DraftCardProp
   const frontId = useId();
   const backId = useId();
   const textId = useId();
+  const whyId = useId();
+  const exampleId = useId();
+  const hasElaboration = draft.why.length > 0 || draft.example.length > 0;
 
   return (
     <Card>
@@ -565,6 +685,11 @@ function DraftCard({ draft, index, disabled, onChange, onRemove }: DraftCardProp
             <Badge variant={draft.template === "cloze" ? "default" : "outline"}>
               {draft.template === "cloze" ? "Cloze" : "Basic"}
             </Badge>
+            {hasElaboration && (
+              <Badge variant="outline" className="border-primary/40 text-primary">
+                Enrichi
+              </Badge>
+            )}
             {draft.tags.map((tag) => (
               <Badge key={tag} variant="outline" className="font-normal">
                 {tag}
@@ -627,6 +752,37 @@ function DraftCard({ draft, index, disabled, onChange, onRemove }: DraftCardProp
               Syntaxe : <code>{`{{c1::mot caché}}`}</code> — utilise <code>c2</code>,{" "}
               <code>c3</code> pour plusieurs cartes à partir du même texte.
             </p>
+          </div>
+        )}
+
+        {hasElaboration && (
+          <div className="grid gap-3 rounded-md border border-dashed bg-muted/10 p-3 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor={whyId} className="text-xs uppercase tracking-wide">
+                Pourquoi
+              </Label>
+              <Textarea
+                id={whyId}
+                rows={2}
+                value={draft.why}
+                onChange={(e) => onChange({ why: e.target.value })}
+                disabled={disabled}
+                className="text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={exampleId} className="text-xs uppercase tracking-wide">
+                Exemple
+              </Label>
+              <Textarea
+                id={exampleId}
+                rows={2}
+                value={draft.example}
+                onChange={(e) => onChange({ example: e.target.value })}
+                disabled={disabled}
+                className="text-sm"
+              />
+            </div>
           </div>
         )}
       </CardContent>

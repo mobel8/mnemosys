@@ -67,6 +67,23 @@ interface ReviewCardProps {
    *  normalised similarity score so the parent can log it / nudge a
    *  rating decision. */
   onTypedAnswer?: (typed: string, score: number, verdict: TypeAnswerVerdict) => void;
+  /**
+   * Vague 5 — interleaved review mode. When `deckName` is provided, the
+   * card shows a small badge with the deck of origin so the learner stays
+   * oriented as the queue mixes contexts.
+   */
+  deckName?: string;
+}
+
+interface ElaborationFields {
+  why: string;
+  example: string;
+}
+
+function getElaboration(note: Note): ElaborationFields {
+  const why = typeof note.fields.why === "string" ? note.fields.why.trim() : "";
+  const example = typeof note.fields.example === "string" ? note.fields.example.trim() : "";
+  return { why, example };
 }
 
 const CLOZE_REGEX = /\{\{c(\d+)::([^}]+?)(?:::([^}]+?))?\}\}/g;
@@ -156,10 +173,23 @@ export function ReviewCard({
   cardOrd = 0,
   typeTheAnswerEnabled = false,
   onTypedAnswer,
+  deckName,
 }: ReviewCardProps) {
   const isAnswer = phase === "answer" || phase === "submitting";
   const isCloze = note.template === "cloze";
   const isOcclusion = note.template === "occlusion";
+  const elaboration = getElaboration(note);
+  // Vague 5 — interleaved mode taps into a synthetic `__deck_name` field
+  // (injected by `<InterleavedSession />`) when an explicit prop is absent.
+  // This keeps the badge plug-and-play without threading another prop
+  // through `ReviewSession`'s render path.
+  const resolvedDeckName =
+    deckName ?? (typeof note.fields.__deck_name === "string" ? note.fields.__deck_name.trim() : "");
+  const effectiveDeckName = resolvedDeckName.length > 0 ? resolvedDeckName : undefined;
+  // Only render the « Why / Example » strip on the answer face and only
+  // when at least one field has content — empty enrichments stay hidden.
+  const showElaboration =
+    isAnswer && (elaboration.why.length > 0 || elaboration.example.length > 0);
   // Type-the-answer only applies to basic / basic_reverse on the question
   // face. For cloze + occlusion the existing UI already requires retrieval
   // (cloze blank, mask reveal) so adding a typed prompt would double-count.
@@ -182,13 +212,15 @@ export function ReviewCard({
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -40 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className="flex w-full justify-center"
+          className="flex w-full flex-col items-center gap-3"
         >
+          {effectiveDeckName && <DeckBadge deckName={effectiveDeckName} />}
           <Card className="w-full max-w-2xl">
             <CardContent className="p-6">
               <OcclusionReviewView note={note} cardOrd={cardOrd} showAnswer={isAnswer} />
             </CardContent>
           </Card>
+          {showElaboration && <ElaborationStrip elaboration={elaboration} />}
         </motion.div>
       </AnimatePresence>
     );
@@ -207,6 +239,7 @@ export function ReviewCard({
         transition={{ duration: 0.2, ease: "easeOut" }}
         className="flex w-full flex-col items-center justify-center gap-4"
       >
+        {effectiveDeckName && <DeckBadge deckName={effectiveDeckName} />}
         <div
           className={cn(
             "relative w-full max-w-2xl",
@@ -304,7 +337,57 @@ export function ReviewCard({
             />
           </div>
         ) : null}
+
+        {showElaboration && <ElaborationStrip elaboration={elaboration} />}
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Internal — small presentational helpers (Vague 5)
+// ---------------------------------------------------------------------------
+
+function DeckBadge({ deckName }: { deckName: string }) {
+  return (
+    <span className="rounded-full border border-primary/30 bg-primary/5 px-3 py-0.5 text-xs font-medium text-primary">
+      {deckName}
+    </span>
+  );
+}
+
+/**
+ * Render the « Pourquoi / Exemple » strip below the answer face. Uses
+ * native `<details>` so we don't need an extra Disclosure dependency; both
+ * sections start open because the elaboration is the whole point of
+ * enabling the enrichment, but the learner can collapse them if a section
+ * is distracting.
+ */
+function ElaborationStrip({ elaboration }: { elaboration: ElaborationFields }) {
+  return (
+    <div className="grid w-full max-w-2xl gap-2 text-sm">
+      {elaboration.why.length > 0 && (
+        <details
+          open
+          className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2"
+          data-testid="elaboration-why"
+        >
+          <summary className="cursor-pointer select-none font-medium text-primary">
+            Pourquoi
+          </summary>
+          <p className="mt-1.5 whitespace-pre-wrap text-foreground/90">{elaboration.why}</p>
+        </details>
+      )}
+      {elaboration.example.length > 0 && (
+        <details
+          open
+          className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2"
+          data-testid="elaboration-example"
+        >
+          <summary className="cursor-pointer select-none font-medium text-primary">Exemple</summary>
+          <p className="mt-1.5 whitespace-pre-wrap text-foreground/90">{elaboration.example}</p>
+        </details>
+      )}
+    </div>
   );
 }

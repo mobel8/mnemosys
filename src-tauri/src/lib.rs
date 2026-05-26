@@ -89,6 +89,7 @@ pub fn run() {
             commands::cards::reset_card,
             // review
             commands::review::get_due_cards,
+            commands::review::get_interleaved_due_cards,
             commands::review::preview_next_states,
             commands::review::submit_review,
             // stats
@@ -110,6 +111,7 @@ pub fn run() {
             // ai (Vague A2.1)
             commands::ai::generate_cards_text,
             commands::ai::generate_cards_pdf,
+            commands::ai::generate_card_elaboration,
             // apkg (Vague A2.3)
             commands::apkg::import_apkg,
             // media (image-occlusion template)

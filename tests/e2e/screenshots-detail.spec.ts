@@ -4,9 +4,9 @@
  * the fold, AI generator with sample text, dark theme, etc.).
  */
 
-import { test, expect } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { expect, test } from "@playwright/test";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,7 +25,10 @@ test.describe("Detail captures", () => {
     const integrations = page.getByText(/Intégrations/i).first();
     await integrations.scrollIntoViewIfNeeded();
     await page.waitForTimeout(300);
-    await page.screenshot({ path: path.join(OUT, "05-settings-integrations.png"), fullPage: false });
+    await page.screenshot({
+      path: path.join(OUT, "05-settings-integrations.png"),
+      fullPage: false,
+    });
   });
 
   test("settings — import export (scrolled)", async ({ page }) => {
@@ -35,7 +38,10 @@ test.describe("Detail captures", () => {
     const data = page.getByRole("heading", { name: /^Données$/ });
     await data.scrollIntoViewIfNeeded();
     await page.waitForTimeout(300);
-    await page.screenshot({ path: path.join(OUT, "06-settings-import-export.png"), fullPage: false });
+    await page.screenshot({
+      path: path.join(OUT, "06-settings-import-export.png"),
+      fullPage: false,
+    });
   });
 
   test("dark theme — home", async ({ page }) => {

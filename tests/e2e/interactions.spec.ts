@@ -7,7 +7,7 @@
  * Runs against bare Vite (no Tauri host) — invoke errors are filtered.
  */
 
-import { test, expect, type Page, type ConsoleMessage } from "@playwright/test";
+import { type ConsoleMessage, expect, type Page, test } from "@playwright/test";
 
 const IGNORE_PATTERNS = [
   /Cannot read properties of undefined \(reading 'invoke'\)/,
@@ -52,7 +52,9 @@ test.describe("Interactive smoke", () => {
       await newDeckBtn.first().click();
       await page.waitForTimeout(300);
       // Type something in the name field.
-      const nameInput = page.locator('input[placeholder*="Vocabulaire"], input[id*="name"]').first();
+      const nameInput = page
+        .locator('input[placeholder*="Vocabulaire"], input[id*="name"]')
+        .first();
       if (await nameInput.count()) {
         await nameInput.fill("Test deck name");
         await page.waitForTimeout(200);
@@ -85,7 +87,9 @@ test.describe("Interactive smoke", () => {
       for (const e of errors) console.log(`[${e.route}] ${e.text}`);
       console.log("--------------------------\n");
     }
-    expect(errors.filter((e) => /ReferenceError|SyntaxError|TypeError/.test(e.text))).toHaveLength(0);
+    expect(errors.filter((e) => /ReferenceError|SyntaxError|TypeError/.test(e.text))).toHaveLength(
+      0,
+    );
   });
 
   test("settings page — every section mounts and Save buttons click without throwing", async ({
@@ -122,7 +126,9 @@ test.describe("Interactive smoke", () => {
       for (const e of errors) console.log(`[${e.route}] ${e.text}`);
       console.log("-----------------------------------\n");
     }
-    expect(errors.filter((e) => /ReferenceError|SyntaxError|TypeError/.test(e.text))).toHaveLength(0);
+    expect(errors.filter((e) => /ReferenceError|SyntaxError|TypeError/.test(e.text))).toHaveLength(
+      0,
+    );
   });
 
   test("ai-generate page — typing text + clicking buttons doesn't crash", async ({ page }) => {
@@ -154,6 +160,8 @@ test.describe("Interactive smoke", () => {
       for (const e of errors) console.log(`[${e.route}] ${e.text}`);
       console.log("--------------------------------------\n");
     }
-    expect(errors.filter((e) => /ReferenceError|SyntaxError|TypeError/.test(e.text))).toHaveLength(0);
+    expect(errors.filter((e) => /ReferenceError|SyntaxError|TypeError/.test(e.text))).toHaveLength(
+      0,
+    );
   });
 });

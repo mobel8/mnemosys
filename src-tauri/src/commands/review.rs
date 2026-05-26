@@ -51,6 +51,36 @@ pub fn get_due_cards(
     state.db.cards(&conn).due_cards(deck_id, now, limit)
 }
 
+/// Multi-deck interleaved due queue (Vague 5).
+///
+/// Returns up to `limit` cards drawn from the listed decks, shuffled so the
+/// learner mixes contexts within one session — Rohrer & Taylor 2015 reported
+/// roughly 2× retention on delayed tests vs blocked practice. `deck_ids`
+/// must be non-empty; an empty vec is returned otherwise.
+#[tauri::command]
+pub fn get_interleaved_due_cards(
+    state: State<'_, AppState>,
+    deck_ids: Vec<i64>,
+    limit: u32,
+) -> AppResult<Vec<CardWithNote>> {
+    if deck_ids.is_empty() {
+        return Err(AppError::Validation(
+            "deck_ids must contain at least one deck".to_string(),
+        ));
+    }
+    if limit == 0 {
+        return Err(AppError::Validation(
+            "limit must be at least 1".to_string(),
+        ));
+    }
+    let now = chrono::Utc::now().timestamp();
+    let conn = state.db.lock();
+    state
+        .db
+        .cards(&conn)
+        .due_cards_interleaved(&deck_ids, now, limit)
+}
+
 #[tauri::command]
 pub fn preview_next_states(
     state: State<'_, AppState>,

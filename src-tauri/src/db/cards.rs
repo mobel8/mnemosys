@@ -347,6 +347,129 @@ impl<'a> CardRepo<'a> {
         };
         Ok(n)
     }
+
+    /// Multi-deck interleaved due-card queue (Vague 5 — Rohrer & Taylor 2015).
+    ///
+    /// Same filter as [`due_cards`] (`suspended = 0` + `next_review <= now`),
+    /// but pulls from *every* deck listed in `deck_ids` and shuffles the
+    /// resulting queue before truncating to `limit`. Interleaved practice
+    /// boosts delayed-test retention by ~2× vs blocked practice, which is
+    /// why this lives as a separate code path rather than retrofitting the
+    /// existing single-deck `due_cards`.
+    ///
+    /// `deck_ids` must be non-empty; otherwise an empty vec is returned.
+    /// Shuffling uses a stdlib-only Fisher–Yates pass seeded from the
+    /// system clock — sufficiently random for human-perceived ordering
+    /// without pulling the `rand` crate.
+    pub fn due_cards_interleaved(
+        &self,
+        deck_ids: &[i64],
+        now: i64,
+        limit: u32,
+    ) -> AppResult<Vec<CardWithNote>> {
+        if deck_ids.is_empty() || limit == 0 {
+            return Ok(Vec::new());
+        }
+
+        // Build a parameter placeholder list of the right length. We can't
+        // bind a Vec<i64> as a single param with rusqlite's positional API,
+        // so we widen the IN(...) clause to N placeholders + concatenate
+        // the boxed params.
+        let placeholders: String = (1..=deck_ids.len())
+            .map(|i| format!("?{}", i))
+            .collect::<Vec<_>>()
+            .join(",");
+        let now_idx = deck_ids.len() + 1;
+        // We deliberately fetch more than `limit` before shuffling, then
+        // truncate — otherwise SQLite's natural ordering would bias the
+        // queue toward whichever deck has the smallest `next_review`.
+        // 1024 is a soft ceiling that keeps the memory cost trivial even
+        // for very deep multi-deck practice sessions.
+        let prefetch_cap: u32 = limit.saturating_mul(4).min(1024);
+        let sql = format!(
+            "SELECT id, note_id, deck_id, card_ord, state, stability, difficulty,
+                    last_review, next_review, elapsed_days, scheduled_days,
+                    reps, lapses, suspended, created_at, updated_at
+             FROM cards
+             WHERE suspended = 0
+               AND deck_id IN ({})
+               AND next_review IS NOT NULL
+               AND next_review <= ?{}
+             ORDER BY next_review ASC
+             LIMIT ?{}",
+            placeholders,
+            now_idx,
+            now_idx + 1
+        );
+
+        let mut stmt = self.conn.prepare(&sql)?;
+        let mut params_dyn: Vec<rusqlite::types::Value> = deck_ids
+            .iter()
+            .map(|d| rusqlite::types::Value::Integer(*d))
+            .collect();
+        params_dyn.push(rusqlite::types::Value::Integer(now));
+        params_dyn.push(rusqlite::types::Value::Integer(prefetch_cap as i64));
+
+        let rows = stmt.query_map(
+            rusqlite::params_from_iter(params_dyn.iter()),
+            row_to_card,
+        )?;
+
+        let mut cards = Vec::new();
+        for r in rows {
+            cards.push(r?);
+        }
+
+        // Fisher–Yates shuffle seeded from the system clock.
+        shuffle_in_place(&mut cards);
+
+        cards.truncate(limit as usize);
+
+        // Resolve each parent note. Done after the truncate so we don't pay
+        // the lookup cost for cards we'll throw away.
+        let notes_repo = notes::NoteRepo::new(self.conn);
+        let mut out = Vec::with_capacity(cards.len());
+        for card in cards {
+            let note = notes_repo.get(card.note_id)?;
+            out.push(CardWithNote { card, note });
+        }
+        Ok(out)
+    }
+}
+
+/// Fisher–Yates shuffle using a `SystemTime`-seeded xorshift32 PRNG.
+///
+/// We avoid pulling `rand` into the binary just for the interleaved-review
+/// path. The seed mixes seconds + nanoseconds + the slice's length so two
+/// shuffles called in quick succession on different inputs still diverge.
+/// The randomness quality is **not** cryptographic, but for queue ordering
+/// the human-perceived spread is what matters.
+fn shuffle_in_place<T>(items: &mut [T]) {
+    let len = items.len();
+    if len < 2 {
+        return;
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| (d.as_secs() ^ u64::from(d.subsec_nanos())) as u32)
+        .unwrap_or(0xDEAD_BEEF);
+    // Xor in the length so successive calls in the same nanosecond still
+    // produce different sequences for differently-sized inputs.
+    let mut state: u32 = now ^ (len as u32).wrapping_mul(0x9E37_79B9);
+    if state == 0 {
+        state = 0x1234_5678;
+    }
+    let mut next = || -> u32 {
+        // Xorshift32 — fast, no deps, mixes well enough for our purpose.
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        state
+    };
+    for i in (1..len).rev() {
+        let j = (next() as usize) % (i + 1);
+        items.swap(i, j);
+    }
 }
 
 fn row_to_card(row: &Row<'_>) -> rusqlite::Result<Card> {
