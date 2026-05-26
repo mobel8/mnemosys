@@ -58,6 +58,8 @@ const DEFAULTS: AppSettings = {
   tts_voice: null,
   tts_speed: null,
   anthropic_api_key: null,
+  supabase_url: null,
+  supabase_anon_key: null,
 };
 
 export function IntegrationsSection() {

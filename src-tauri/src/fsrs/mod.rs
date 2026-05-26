@@ -11,12 +11,14 @@
 //! - DTOs: [`MemoryStateDTO`], [`NextStatesDTO`], [`NextStateDTO`],
 //!   [`ReviewOutcome`], [`Rating`]
 
+pub mod optimize;
 pub mod params;
 pub mod scheduler;
 
 #[cfg(test)]
 mod tests;
 
+pub use optimize::{optimize_params_from_history, MIN_REVIEWS_FOR_OPTIM};
 pub use params::{DEFAULT_DESIRED_RETENTION, DEFAULT_PARAMS, FSRS_VERSION};
 pub use scheduler::{
     CardScheduler, MemoryStateDTO, NextStateDTO, NextStatesDTO, Rating, ReviewOutcome,

@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 2;
+pub const CURRENT_VERSION: i32 = 3;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -77,6 +77,41 @@ END;
 INSERT INTO notes_fts(notes_fts) VALUES('rebuild');
 "#;
 
+/// v3 — Session 3 cloud sync scaffolding.
+///
+/// Adds a nullable `remote_id TEXT` column to `decks`, `notes`, `cards`. The
+/// column stores the UUID assigned by the Supabase backend so the local row
+/// can be mapped to its remote counterpart across devices. A `NULL` value
+/// means « not synced yet ». A unique index lets us upsert by `remote_id`
+/// without scanning.
+///
+/// Also creates `sync_state`, a singleton table (`CHECK(id = 1)`) holding the
+/// last successful sync timestamp and the active `user_id`. This row is the
+/// cursor for the delta-based sync cycle described in
+/// `docs/SESSION_3_SYNC.md`.
+///
+/// SQLite caveat: `ALTER TABLE ADD COLUMN` is supported and idempotent only
+/// if we guard against re-adding the column on a partially-migrated DB. The
+/// migration runner uses `PRAGMA user_version` to skip already-applied
+/// migrations, so the `ALTER` runs exactly once per upgrade.
+const SCHEMA_V3: &str = r#"
+ALTER TABLE decks ADD COLUMN remote_id TEXT;
+ALTER TABLE notes ADD COLUMN remote_id TEXT;
+ALTER TABLE cards ADD COLUMN remote_id TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_decks_remote_id ON decks(remote_id) WHERE remote_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_remote_id ON notes(remote_id) WHERE remote_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_remote_id ON cards(remote_id) WHERE remote_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS sync_state (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    last_sync_at INTEGER,
+    user_id TEXT
+);
+
+INSERT OR IGNORE INTO sync_state (id, last_sync_at, user_id) VALUES (1, NULL, NULL);
+"#;
+
 /// Apply all pending migrations to `conn`.
 ///
 /// Reads `PRAGMA user_version` and applies migrations in order. Each migration
@@ -109,6 +144,11 @@ pub fn run(conn: &Connection) -> AppResult<()> {
         apply_migration(conn, 2, SCHEMA_V2)?;
     }
 
+    // v3 — sync scaffolding (`remote_id` columns + `sync_state` table).
+    if current < 3 {
+        apply_migration(conn, 3, SCHEMA_V3)?;
+    }
+
     Ok(())
 }
 
@@ -133,4 +173,61 @@ fn apply_migration(conn: &Connection, version: i32, sql: &str) -> AppResult<()> 
     conn.execute_batch("COMMIT;")?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `Database::for_test` runs every migration. v3 must surface
+    /// `remote_id` on the three content tables and seed a single
+    /// `sync_state` row.
+    #[test]
+    fn migrations_apply_v3_columns_and_state() {
+        let db = crate::db::Database::for_test();
+        let conn = db.lock();
+
+        let user_version: i32 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("read user_version");
+        assert_eq!(user_version, CURRENT_VERSION);
+
+        // Each of decks/notes/cards must have a `remote_id` column.
+        for table in ["decks", "notes", "cards"] {
+            let mut stmt = conn
+                .prepare(&format!("PRAGMA table_info({})", table))
+                .expect("prepare table_info");
+            let cols: Vec<String> = stmt
+                .query_map([], |r| r.get::<_, String>(1))
+                .expect("query")
+                .filter_map(Result::ok)
+                .collect();
+            assert!(
+                cols.iter().any(|c| c == "remote_id"),
+                "{} should have a remote_id column",
+                table
+            );
+        }
+
+        // Singleton `sync_state` row exists with NULL last_sync_at.
+        let (row_id, last_sync_at, user_id): (i64, Option<i64>, Option<String>) = conn
+            .query_row(
+                "SELECT id, last_sync_at, user_id FROM sync_state WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .expect("sync_state singleton must exist");
+        assert_eq!(row_id, 1);
+        assert!(last_sync_at.is_none());
+        assert!(user_id.is_none());
+    }
+
+    /// Re-running migrations on an already-up-to-date connection is a no-op
+    /// and never explodes (idempotence guard for the in-process upgrade flow).
+    #[test]
+    fn migrations_are_idempotent() {
+        let db = crate::db::Database::for_test();
+        let conn = db.lock();
+        run(&conn).expect("second run should be a no-op");
+    }
 }

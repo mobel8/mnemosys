@@ -35,6 +35,9 @@ import {
   type NoteTemplate,
   type Rating,
   type ReviewResult,
+  type SyncLoginOutput,
+  type SyncReport,
+  type SyncStatus,
   type TodayStats,
   type TTSResult,
   type TTSVoice,
@@ -54,6 +57,7 @@ export const queryKeys = {
   retentionByDay: (days: number) => ["retention-by-day", days] as const,
   settings: ["settings"] as const,
   ttsCacheSize: ["tts-cache-size"] as const,
+  syncStatus: ["sync-status"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -479,6 +483,74 @@ export function useImportApkg(
       qc.invalidateQueries({ queryKey: ["cards-in-deck"] });
       qc.invalidateQueries({ queryKey: ["due-cards"] });
       qc.invalidateQueries({ queryKey: queryKeys.todayStats });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Session 3 — Cloud sync (Supabase scaffolding)
+// ---------------------------------------------------------------------------
+
+/** Snapshot used by the Settings UI to pick which sub-form to render. */
+export function useSyncStatus(opts?: Partial<UseQueryOptions<SyncStatus>>) {
+  return useQuery<SyncStatus>({
+    queryKey: queryKeys.syncStatus,
+    queryFn: () => api.sync.status(),
+    ...opts,
+  });
+}
+
+/**
+ * Mutation: log in to Supabase. Invalidates the sync-status query so the
+ * UI flips to « logged in » without an explicit refetch.
+ */
+export function useSyncLogin(
+  opts?: UseMutationOptions<SyncLoginOutput, Error, { email: string; password: string }>,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ email, password }) => api.sync.login(email, password),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.syncStatus });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/** Mutation: clear the local session + best-effort server-side revoke. */
+export function useSyncLogout(opts?: UseMutationOptions<void, Error, void>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.sync.logout(),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.syncStatus });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/**
+ * Mutation: run one full sync cycle. Invalidates every entity that the cycle
+ * could have mutated (decks, notes, cards, stats) plus the sync status so
+ * `last_sync_at` refreshes in the UI.
+ */
+export function useSyncNow(opts?: UseMutationOptions<SyncReport, Error, void>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.sync.now(),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.decks });
+      qc.invalidateQueries({ queryKey: ["deck-stats"] });
+      qc.invalidateQueries({ queryKey: ["cards-in-deck"] });
+      qc.invalidateQueries({ queryKey: ["due-cards"] });
+      qc.invalidateQueries({ queryKey: queryKeys.todayStats });
+      qc.invalidateQueries({ queryKey: ["reviews-by-day"] });
+      qc.invalidateQueries({ queryKey: ["retention-by-day"] });
+      qc.invalidateQueries({ queryKey: queryKeys.syncStatus });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

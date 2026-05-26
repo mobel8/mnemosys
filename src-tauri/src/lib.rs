@@ -22,6 +22,7 @@ pub mod commands;
 pub mod db;
 pub mod error;
 pub mod fsrs;
+pub mod sync;
 pub mod tts;
 
 use tauri::Manager;
@@ -38,6 +39,12 @@ pub fn run() {
         // the DB layer and exposes #[tauri::command] handlers.
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
+        // Auto-updater (Session 4). The plugin is registered unconditionally
+        // so a release build can hot-swap binaries when a manifest server
+        // becomes available, but it stays dormant until the `endpoints` /
+        // `pubkey` fields in `tauri.conf.json::plugins.updater` point at a
+        // real server. See `docs/SESSION_4_RELEASE.md` for the workflow.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // Resolve `<app_data_dir>/mnemosys.db`. `app_data_dir()` on
             // Linux gives `~/.local/share/<bundle id>`; we create the
@@ -105,6 +112,14 @@ pub fn run() {
             commands::apkg::import_apkg,
             // media (image-occlusion template)
             commands::media::copy_image_to_app_data,
+            // sync (Session 3 — Supabase cloud sync scaffolding)
+            commands::sync::sync_login,
+            commands::sync::sync_logout,
+            commands::sync::sync_status,
+            commands::sync::sync_now,
+            // fsrs optimizer (Session 4)
+            commands::fsrs_optimizer::get_total_reviews_count,
+            commands::fsrs_optimizer::optimize_fsrs_params,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

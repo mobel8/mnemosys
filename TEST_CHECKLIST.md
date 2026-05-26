@@ -247,11 +247,77 @@ Pour chaque bug trouvé, copie-colle ce template et remplis :
 
 ---
 
+## 10. Session 2 — Génération IA, TTS, APKG, image-occlusion, reset_card
+
+### 10.1 Génération IA
+
+- [ ] Sans clé Anthropic : page **Génération IA** s'affiche, mais cliquer « Générer » → toast clair *« Clé API manquante »* + lien vers Settings
+- [ ] Avec clé Anthropic configurée dans **Paramètres → Intégrations** : « Générer » avec un texte (≥ 100 caractères) renvoie au moins 1 carte en < 15 s
+- [ ] Onglet PDF : choisir un PDF court → texte extrait → génération OK
+- [ ] Chaque carte brouillon est éditable (recto/verso/cloze) ; cliquer le `×` la retire
+- [ ] « Valider et créer N cartes » → toast récap + redirection vers le deck cible → les cartes sont bien créées (vérifier en passant en review)
+
+### 10.2 TTS (synthèse vocale)
+
+- [ ] Sans clé OpenAI : bouton 🔊 cliqué → toast clair *« Clé API manquante »*
+- [ ] Avec clé OpenAI : 🔊 sur la face d'une carte joue l'audio en < 5 s la 1re fois
+- [ ] Re-cliquer le même bouton est instantané (cache hit)
+- [ ] Changer la voix dans **Paramètres → Intégrations** modifie la voix utilisée pour les prochains clics
+- [ ] **Paramètres → Cache TTS** affiche la taille en Kio/Mio ; bouton « Vider le cache » remet à 0 o
+- [ ] Sur une carte cloze, le bouton 🔊 strip les marqueurs `{{c1::…}}` côté question, les remplace côté réponse
+
+### 10.3 Import APKG
+
+- [ ] **Paramètres → Données → « Importer un paquet Anki (.apkg) »** ouvre le file picker filtré sur `.apkg`
+- [ ] Import d'un `.apkg` Basic + Cloze réel → toast récap avec N decks / M notes / K cartes
+- [ ] Re-importer le même fichier → skip wholesale (deck name déjà existant) → mentionné dans le toast
+- [ ] Modèles non supportés (custom Anki) sont comptés en `notes_skipped` et signalés
+- [ ] Les cartes importées partent en `new` (l'historique Anki est dropped)
+
+### 10.4 Image-occlusion
+
+- [ ] Onglet **« Image-occlusion »** dans NoteEditor → bouton « Choisir une image » ouvre le file picker (PNG/JPG)
+- [ ] Image affichée dans le canvas, dessiner 3 rectangles → 3 masques numérotés apparaissent
+- [ ] Saisir un label pour chaque masque ; bouton « Supprimer » retire un masque
+- [ ] « Créer N cartes » → 3 cartes créées dans le deck, l'image est copiée vers `~/.local/share/com.mnemosys.app/occlusion-media/`
+- [ ] En review d'une carte image-occlusion : avant flip, tous les masques sont tracés, celui de la carte courante est saturé ; après flip, l'image entière est révélée + label
+
+### 10.5 Reset card
+
+- [ ] Detail d'un deck → carte non-`new` → menu `⋯` → **« Réinitialiser (FSRS) »** visible
+- [ ] Confirmation → toast → l'état repasse en `new`, stability/difficulty/next_review effacés
+- [ ] Stats → la review historique de cette carte est conservée (les compteurs `reviews_done_today` ne changent pas)
+
+---
+
+## 11. Session 3 — Sync cloud (scaffolding)
+
+- [ ] Sans `supabase_url` configurée : **Paramètres → Synchronisation cloud** affiche le message *« La sync cloud est désactivée »* + champ URL
+- [ ] Renseigner une URL fictive + clé anon → champs email/password + bouton « Se connecter »
+- [ ] « Se connecter » avec credentials invalides → toast d'erreur métier (pas de crash)
+- [ ] Si tu as un vrai projet Supabase : login OK → email affiché + bouton « Se déconnecter » + « Synchroniser maintenant »
+- [ ] `cd src-tauri && cargo test sync` : tous les tests LWW / delta / apply passent
+
+---
+
+## 12. Session 4 — FSRS Optimizer + CI + License
+
+- [ ] Avec < 1000 reviews dans la DB : **Paramètres → Optimizer FSRS** affiche le message « Continue tes révisions, l'optimizer demande au moins 1000 reviews »
+- [ ] Avec ≥ 1000 reviews : bouton « Calibrer FSRS » + warning sur l'impact
+- [ ] Cliquer le bouton recalcule les 21 paramètres et toast récap (les futures sessions utilisent les nouveaux params)
+- [ ] `LICENSE` à la racine contient le texte MIT et la mention `2026 Mnemosys contributors`
+- [ ] `README.md` mentionne « MIT (see LICENSE) » dans la section License
+- [ ] `.github/workflows/ci.yml` est syntaxiquement valide (`python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"`)
+- [ ] CI : pushed le repo sur GitHub, vérifier que les jobs `frontend`, `backend`, `build` (matrix linux/macos/windows) tournent et passent
+- [ ] `tauri-plugin-updater` est configuré dans `tauri.conf.json` avec un endpoint placeholder ; pas d'erreur au boot de l'app
+
+---
+
 ## Verdict final
 
-- [ ] Tout fonctionne sans bug majeur → **Session 1 validée**, on peut lancer Session 2 (IA card gen)
-- [ ] Bugs mineurs (cosmétiques, edge cases) → noter, prioriser, mais Session 2 peut démarrer en parallèle
-- [ ] Bugs critiques (crash, data loss, FSRS incorrect) → **fix avant Session 2**
+- [ ] Sessions 1–4 validées → tag v0.4.0, packaging release, première itération de production
+- [ ] Bugs mineurs (cosmétiques, edge cases) → tracker, prioriser
+- [ ] Bugs critiques (crash, data loss, FSRS incorrect) → bloquant pour la release
 
 ---
 

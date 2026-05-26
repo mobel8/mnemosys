@@ -57,6 +57,19 @@ pub struct AppSettings {
     /// OS keychain via `tauri-plugin-stronghold` or `keyring`.
     #[serde(default)]
     pub anthropic_api_key: Option<String>,
+
+    // --- Session 3 (cloud sync) ---------------------------------------------
+    /// Base URL of the user's Supabase project (e.g.
+    /// `https://abcdef.supabase.co`). `None` keeps the sync subsystem
+    /// dormant — every `sync_*` command returns `AppError::Validation` until
+    /// this is filled in.
+    #[serde(default)]
+    pub supabase_url: Option<String>,
+    /// Supabase project anon (public) key. Required alongside `supabase_url`
+    /// because the REST gateway demands an `apikey` header even for
+    /// authenticated calls. `None` -> sync stays dormant.
+    #[serde(default)]
+    pub supabase_anon_key: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -73,6 +86,9 @@ impl Default for AppSettings {
             tts_speed: None,
             // AI defaults: same — no key persisted until the user sets one.
             anthropic_api_key: None,
+            // Sync stays dormant out of the box.
+            supabase_url: None,
+            supabase_anon_key: None,
         }
     }
 }

@@ -160,6 +160,11 @@ export interface AppSettings {
   tts_speed: number | null;
   /** Anthropic API key for AI card generation. `null` falls back to env var. */
   anthropic_api_key: string | null;
+  // --- Session 3 (cloud sync) ---
+  /** Base URL of the user's Supabase project (e.g. `https://abc.supabase.co`). */
+  supabase_url: string | null;
+  /** Project anon (public) key, required for every PostgREST + Auth call. */
+  supabase_anon_key: string | null;
 }
 
 /**
@@ -213,6 +218,50 @@ export interface ConversionResult {
   stats: ConversionStats;
   /** Names of Anki decks that were skipped because Mnemosys already had that name. */
   skipped_decks: string[];
+}
+
+// --- Session 3: cloud sync -----------------------------------------------
+
+/**
+ * Persisted JWT bundle returned by `sync_login`. Mirrors the Rust struct of
+ * the same name. Tokens live in `sync_session.json`.
+ */
+export interface SyncSession {
+  user_id: string;
+  email: string;
+  access_token: string;
+  refresh_token: string;
+  /** Absolute unix-seconds deadline of `access_token`. */
+  expires_at: number;
+}
+
+/** Server-side output of `sync_login` — wraps the session so future fields can be added without breaking. */
+export interface SyncLoginOutput {
+  session: SyncSession;
+}
+
+/** Lightweight snapshot driving the Settings UI. */
+export interface SyncStatus {
+  /** `true` when both `supabase_url` and `supabase_anon_key` are set. */
+  configured: boolean;
+  /** `true` when a non-expired session lives in the local store. */
+  logged_in: boolean;
+  email: string | null;
+  last_sync_at: number | null;
+}
+
+/** Summary returned by `sync_now`. */
+export interface SyncReport {
+  decks_pushed: number;
+  decks_pulled: number;
+  notes_pushed: number;
+  notes_pulled: number;
+  cards_pushed: number;
+  cards_pulled: number;
+  reviews_pushed: number;
+  reviews_pulled: number;
+  /** unix-seconds timestamp written back to `sync_state.last_sync_at`. */
+  finished_at: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -339,5 +388,26 @@ export const api = {
      */
     copyImageToAppData: (sourcePath: string) =>
       invoke<string>("copy_image_to_app_data", { sourcePath }),
+  },
+  sync: {
+    /**
+     * Trade an email + password for a Supabase JWT and persist it in
+     * `sync_session.json`. Returns the freshly-minted session.
+     *
+     * Errors:
+     *   - `Validation`: sync not configured (URL/anon key missing) or
+     *     Supabase returned a non-2xx response (wrong password, etc.).
+     */
+    login: (email: string, password: string) =>
+      invoke<SyncLoginOutput>("sync_login", { email, password }),
+    /** Wipe the local session and best-effort revoke server-side. */
+    logout: () => invoke<void>("sync_logout"),
+    /** Lightweight status snapshot. Cheap; the UI calls it on every settings open. */
+    status: () => invoke<SyncStatus>("sync_status"),
+    /**
+     * Run one full sync cycle (push → pull → resolve). Returns row counters
+     * so the caller can show a useful toast. Requires `logged_in === true`.
+     */
+    now: () => invoke<SyncReport>("sync_now"),
   },
 };

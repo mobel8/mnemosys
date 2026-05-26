@@ -27,6 +27,10 @@ tauri-plugin-dialog = "2"
 # entirely in favour of sqlx (requires rewriting A2 repositories).
 tauri-plugin-store = "2"
 tauri-plugin-notification = "2"
+# Auto-updater (Session 4). Inert until a real `endpoints` URL + signing
+# pubkey are provided via `tauri.conf.json::plugins.updater`. See
+# `docs/SESSION_4_RELEASE.md` for the key-generation + hosting workflow.
+tauri-plugin-updater = "2"
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
