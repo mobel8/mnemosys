@@ -22,6 +22,7 @@ pub mod commands;
 pub mod db;
 pub mod error;
 pub mod fsrs;
+pub mod scheduler;
 pub mod sync;
 pub mod tts;
 

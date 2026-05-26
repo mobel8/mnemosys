@@ -22,6 +22,17 @@ import { invoke } from "@tauri-apps/api/core";
 export type CardState = "new" | "learning" | "review" | "relearning";
 export type NoteTemplate = "basic" | "basic_reverse" | "cloze" | "occlusion";
 
+/**
+ * Scheduling algorithm a deck uses (Vague 4). Stored on the deck row so
+ * cards inside one deck always agree on which algorithm to run, while
+ * different decks can mix and match.
+ *
+ * - `fsrs6`   — default, adaptive 21-parameter engine (predicts retention).
+ * - `sm2`     — classic Anki-style SuperMemo-2 (deterministic, EF-based).
+ * - `leitner` — 5-box system (forgiving, very simple).
+ */
+export type SchedulerKind = "fsrs6" | "sm2" | "leitner";
+
 /** One rectangular mask in an image-occlusion note. Coordinates are in
  *  source-image pixels (matching `natural_width` / `natural_height` in the
  *  same fields blob). `label` is the answer the learner must recall. */
@@ -49,6 +60,8 @@ export interface Deck {
   description: string | null;
   color: string;
   desired_retention: number;
+  /** Scheduling algorithm used by this deck — see {@link SchedulerKind}. */
+  scheduler_kind: SchedulerKind;
   created_at: number;
   updated_at: number;
 }
@@ -60,6 +73,8 @@ export interface DeckPatch {
   description?: string | null;
   color?: string;
   desired_retention?: number;
+  /** Switch the scheduling algorithm. Existing cards are not reset. */
+  scheduler_kind?: SchedulerKind;
 }
 
 export interface DeckStats {
@@ -360,12 +375,15 @@ export const api = {
       description?: string | null;
       color: string;
       desiredRetention?: number;
+      /** Scheduling algorithm — defaults server-side to FSRS-6 when omitted. */
+      schedulerKind?: SchedulerKind;
     }) =>
       invoke<Deck>("create_deck", {
         name: data.name,
         description: data.description ?? null,
         color: data.color,
         desiredRetention: data.desiredRetention ?? null,
+        schedulerKind: data.schedulerKind ?? null,
       }),
     update: (id: number, patch: DeckPatch) => invoke<Deck>("update_deck", { id, patch }),
     delete: (id: number) => invoke<void>("delete_deck", { id }),

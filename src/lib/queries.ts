@@ -37,6 +37,7 @@ import {
   type NoteTemplate,
   type Rating,
   type ReviewResult,
+  type SchedulerKind,
   type SyncLoginOutput,
   type SyncReport,
   type SyncStatus,
@@ -197,6 +198,7 @@ export function useCreateDeck(
       description?: string | null;
       color: string;
       desiredRetention?: number;
+      schedulerKind?: SchedulerKind;
     }
   >,
 ) {

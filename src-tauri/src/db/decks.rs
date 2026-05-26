@@ -3,11 +3,14 @@
 //! Decks group notes/cards. The active deck list is shown on the home page
 //! and stats power the per-deck dashboard.
 
+use std::str::FromStr;
+
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, AppResult};
+use crate::scheduler::SchedulerKind;
 
 /// A deck row, fully materialised.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,6 +20,10 @@ pub struct Deck {
     pub description: Option<String>,
     pub color: String,
     pub desired_retention: f64,
+    /// Algorithm used to schedule this deck's cards. Persisted as a TEXT
+    /// column (`'fsrs6'` / `'sm2'` / `'leitner'`). See
+    /// [`crate::scheduler`] for details.
+    pub scheduler_kind: SchedulerKind,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -30,6 +37,10 @@ pub struct DeckPatch {
     pub description: Option<Option<String>>,
     pub color: Option<String>,
     pub desired_retention: Option<f64>,
+    /// Switch this deck's scheduling algorithm. Existing cards keep their
+    /// stored `stability` / `difficulty`; the new algorithm re-interprets
+    /// those fields on the next review — see [`crate::scheduler`].
+    pub scheduler_kind: Option<SchedulerKind>,
 }
 
 /// Aggregated counts used by the deck dashboard.
@@ -83,7 +94,7 @@ impl<'a> DeckRepo<'a> {
     /// All decks, alphabetical by name.
     pub fn list(&self) -> AppResult<Vec<Deck>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, description, color, desired_retention, created_at, updated_at
+            "SELECT id, name, description, color, desired_retention, scheduler_kind, created_at, updated_at
              FROM decks
              ORDER BY name COLLATE NOCASE ASC",
         )?;
@@ -100,7 +111,7 @@ impl<'a> DeckRepo<'a> {
         let deck = self
             .conn
             .query_row(
-                "SELECT id, name, description, color, desired_retention, created_at, updated_at
+                "SELECT id, name, description, color, desired_retention, scheduler_kind, created_at, updated_at
                  FROM decks WHERE id = ?1",
                 params![id],
                 row_to_deck,
@@ -110,12 +121,17 @@ impl<'a> DeckRepo<'a> {
     }
 
     /// Insert a new deck. `name` must be unique (DB-enforced).
+    ///
+    /// `scheduler_kind` defaults to FSRS-6 when `None` is passed — matches
+    /// the SQL column default and stays backwards-compatible with
+    /// callers that pre-date Vague 4.
     pub fn create(
         &self,
         name: &str,
         description: Option<&str>,
         color: &str,
         desired_retention: f64,
+        scheduler_kind: Option<SchedulerKind>,
     ) -> AppResult<Deck> {
         if name.trim().is_empty() {
             return Err(AppError::Validation("deck name must not be empty".into()));
@@ -125,11 +141,12 @@ impl<'a> DeckRepo<'a> {
                 "desired_retention must be in [0.5, 0.99]".into(),
             ));
         }
+        let kind = scheduler_kind.unwrap_or_default();
         let now = Utc::now().timestamp();
         self.conn.execute(
-            "INSERT INTO decks (name, description, color, desired_retention, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
-            params![name, description, color, desired_retention, now],
+            "INSERT INTO decks (name, description, color, desired_retention, scheduler_kind, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+            params![name, description, color, desired_retention, kind.as_str(), now],
         )?;
         let id = self.conn.last_insert_rowid();
         self.get(id)
@@ -176,6 +193,15 @@ impl<'a> DeckRepo<'a> {
             self.conn.execute(
                 "UPDATE decks SET desired_retention = ?1, updated_at = ?2 WHERE id = ?3",
                 params![retention, now, id],
+            )?;
+        }
+        if let Some(kind) = patch.scheduler_kind {
+            // CHECK constraint on the column guards against invalid values.
+            // Switching algorithms does NOT reset existing cards — see the
+            // crate-level docs on `scheduler` for the trade-off.
+            self.conn.execute(
+                "UPDATE decks SET scheduler_kind = ?1, updated_at = ?2 WHERE id = ?3",
+                params![kind.as_str(), now, id],
             )?;
         }
         self.get(id)
@@ -300,13 +326,22 @@ impl<'a> DeckRepo<'a> {
 }
 
 fn row_to_deck(row: &Row<'_>) -> rusqlite::Result<Deck> {
+    let kind_str: String = row.get(5)?;
+    let scheduler_kind = SchedulerKind::from_str(&kind_str).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(
+            5,
+            rusqlite::types::Type::Text,
+            Box::new(std::io::Error::other(e.to_string())),
+        )
+    })?;
     Ok(Deck {
         id: row.get(0)?,
         name: row.get(1)?,
         description: row.get(2)?,
         color: row.get(3)?,
         desired_retention: row.get(4)?,
-        created_at: row.get(5)?,
-        updated_at: row.get(6)?,
+        scheduler_kind,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
     })
 }

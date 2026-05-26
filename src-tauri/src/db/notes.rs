@@ -446,7 +446,7 @@ mod tests {
         let conn = db.lock();
         let deck = db
             .decks(&conn)
-            .create("Bio", None, "#3b82f6", 0.9)
+            .create("Bio", None, "#3b82f6", 0.9, None)
             .unwrap();
 
         let fields = json!({
@@ -494,7 +494,7 @@ mod tests {
     fn occlusion_rejects_empty_masks() {
         let db = Database::for_test();
         let conn = db.lock();
-        let deck = db.decks(&conn).create("X", None, "#3b82f6", 0.9).unwrap();
+        let deck = db.decks(&conn).create("X", None, "#3b82f6", 0.9, None).unwrap();
 
         let err = db
             .notes(&conn)
@@ -517,7 +517,7 @@ mod tests {
     fn occlusion_rejects_missing_image_path() {
         let db = Database::for_test();
         let conn = db.lock();
-        let deck = db.decks(&conn).create("Y", None, "#3b82f6", 0.9).unwrap();
+        let deck = db.decks(&conn).create("Y", None, "#3b82f6", 0.9, None).unwrap();
 
         let err = db
             .notes(&conn)

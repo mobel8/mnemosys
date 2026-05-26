@@ -88,6 +88,7 @@ pub fn load_demo_decks_inner(db: &Database) -> AppResult<usize> {
             deck_data.description.as_deref(),
             &deck_data.color,
             deck_data.desired_retention,
+            None,
         )?;
 
         // NoteRepo::create wraps each insertion in its own transaction and

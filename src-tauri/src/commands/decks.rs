@@ -10,6 +10,7 @@ use crate::app_state::AppState;
 use crate::db::{Deck, DeckMastery, DeckPatch, DeckStats};
 use crate::error::AppResult;
 use crate::fsrs::DEFAULT_DESIRED_RETENTION;
+use crate::scheduler::SchedulerKind;
 
 #[tauri::command]
 pub fn list_decks(state: State<'_, AppState>) -> AppResult<Vec<Deck>> {
@@ -30,13 +31,14 @@ pub fn create_deck(
     description: Option<String>,
     color: String,
     desired_retention: Option<f64>,
+    scheduler_kind: Option<SchedulerKind>,
 ) -> AppResult<Deck> {
     let retention = desired_retention.unwrap_or(DEFAULT_DESIRED_RETENTION as f64);
     let conn = state.db.lock();
     state
         .db
         .decks(&conn)
-        .create(&name, description.as_deref(), &color, retention)
+        .create(&name, description.as_deref(), &color, retention, scheduler_kind)
 }
 
 #[tauri::command]

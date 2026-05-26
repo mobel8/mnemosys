@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 6;
+pub const CURRENT_VERSION: i32 = 7;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -153,6 +153,55 @@ const SCHEMA_V5: &str = include_str!("schema_v5.sql");
 /// (d≈0.52); sleep deprivation meta-analysis (g≈0.621).
 const SCHEMA_V6: &str = include_str!("schema_v6.sql");
 
+/// v7 — Pluggable schedulers (Vague 4): per-deck algorithm choice.
+///
+/// Adds a `scheduler_kind` column to `decks` storing one of `'fsrs6'`
+/// (default, the existing FSRS-6 engine), `'sm2'` (the classic Anki
+/// SuperMemo-2 algorithm) or `'leitner'` (5-box Leitner system). The
+/// CHECK constraint pins the accepted values so an out-of-band write
+/// (e.g. a manual SQL session) cannot wedge the scheduler dispatcher.
+///
+/// `ALTER TABLE … ADD COLUMN` cannot embed a CHECK constraint pointing at
+/// the *new* column on SQLite, so we apply the constraint at the column
+/// level via the standard 12-step recipe: build a new table, copy rows,
+/// swap names. Foreign keys pointing at `decks(id)` survive because the
+/// rowids stay the same when we COPY with explicit `id`.
+const SCHEMA_V7: &str = r#"
+-- We follow the 12-step recipe instead of plain ALTER TABLE because we
+-- want a CHECK constraint on the new column. `decks` has incoming FKs
+-- from `notes` and `cards`; with `foreign_keys=ON` we must defer the FK
+-- check inside this transaction or copy rows with the same primary keys
+-- (which we do). `defer_foreign_keys=ON` is the cleanest hammer.
+PRAGMA defer_foreign_keys = ON;
+
+CREATE TABLE decks_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    color TEXT NOT NULL DEFAULT '#3b82f6',
+    desired_retention REAL NOT NULL DEFAULT 0.9,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    remote_id TEXT,
+    scheduler_kind TEXT NOT NULL DEFAULT 'fsrs6'
+        CHECK(scheduler_kind IN ('fsrs6', 'sm2', 'leitner'))
+);
+
+INSERT INTO decks_new (id, name, description, color, desired_retention,
+                       created_at, updated_at, remote_id, scheduler_kind)
+SELECT id, name, description, color, desired_retention,
+       created_at, updated_at, remote_id, 'fsrs6'
+FROM decks;
+
+DROP TABLE decks;
+ALTER TABLE decks_new RENAME TO decks;
+
+-- The unique index on remote_id was dropped together with the old table;
+-- recreate it from the v3 spec.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_decks_remote_id
+    ON decks(remote_id) WHERE remote_id IS NOT NULL;
+"#;
+
 /// Apply all pending migrations to `conn`.
 ///
 /// Reads `PRAGMA user_version` and applies migrations in order. Each migration
@@ -203,6 +252,11 @@ pub fn run(conn: &Connection) -> AppResult<()> {
     // v6 — Vague 3 neuro: optional `wellness_logs` table.
     if current < 6 {
         apply_migration(conn, 6, SCHEMA_V6)?;
+    }
+
+    // v7 — Vague 4 pluggable schedulers: per-deck `scheduler_kind` column.
+    if current < 7 {
+        apply_migration(conn, 7, SCHEMA_V7)?;
     }
 
     Ok(())

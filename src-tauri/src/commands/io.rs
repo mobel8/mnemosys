@@ -186,6 +186,7 @@ pub fn apply_import(db: &Database, import: ExportFile) -> AppResult<ImportResult
             deck_data.description.as_deref(),
             &deck_data.color,
             deck_data.desired_retention,
+            None,
         )?;
 
         let card_count_before: i64 = conn
@@ -250,7 +251,7 @@ mod tests {
         let conn = db.lock();
         let deck_a = db
             .decks(&conn)
-            .create("Spanish", Some("vocab"), "#3b82f6", 0.9)
+            .create("Spanish", Some("vocab"), "#3b82f6", 0.9, None)
             .unwrap();
         db.notes(&conn)
             .create(
@@ -271,7 +272,7 @@ mod tests {
 
         let deck_b = db
             .decks(&conn)
-            .create("Capitals", None, "#ef4444", 0.92)
+            .create("Capitals", None, "#ef4444", 0.92, None)
             .unwrap();
         db.notes(&conn)
             .create(
@@ -351,7 +352,7 @@ mod tests {
             let conn = dst_db.lock();
             dst_db
                 .decks(&conn)
-                .create("Spanish", None, "#3b82f6", 0.9)
+                .create("Spanish", None, "#3b82f6", 0.9, None)
                 .unwrap();
         }
 

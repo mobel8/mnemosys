@@ -93,6 +93,7 @@ pub fn convert_to_mnemosys(db: &Database, anki: AnkiCollection) -> AppResult<Con
             anki_deck.description.as_deref(),
             color,
             0.9,
+            None,
         )?;
         deck_id_map.insert(anki_deck.id, new_deck.id);
     }

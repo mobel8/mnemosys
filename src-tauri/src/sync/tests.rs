@@ -67,7 +67,7 @@ fn extract_notes_carries_parent_deck_remote_id() {
 
     let deck = db
         .decks(&conn)
-        .create("Anatomy", None, "#fff", 0.9)
+        .create("Anatomy", None, "#fff", 0.9, None)
         .expect("deck");
     conn.execute(
         "UPDATE decks SET remote_id = 'deck-uuid' WHERE id = ?1",
@@ -94,7 +94,7 @@ fn extract_reviews_skips_unsynced_parent_cards() {
     let db = Database::for_test();
     let conn = db.lock();
 
-    let deck = db.decks(&conn).create("D", None, "#fff", 0.9).unwrap();
+    let deck = db.decks(&conn).create("D", None, "#fff", 0.9, None).unwrap();
     let note = db
         .notes(&conn)
         .create(
@@ -288,7 +288,7 @@ fn apply_reviews_unions_by_card_and_reviewed_at() {
     let db = Database::for_test();
     let conn = db.lock();
 
-    let deck = db.decks(&conn).create("D", None, "#fff", 0.9).unwrap();
+    let deck = db.decks(&conn).create("D", None, "#fff", 0.9, None).unwrap();
     conn.execute(
         "UPDATE decks SET remote_id = 'd-uuid' WHERE id = ?1",
         params![deck.id],
@@ -374,7 +374,7 @@ fn apply_cards_inserts_when_parents_exist() {
     let db = Database::for_test();
     let conn = db.lock();
     // Seed parent deck + note.
-    let deck = db.decks(&conn).create("D", None, "#fff", 0.9).unwrap();
+    let deck = db.decks(&conn).create("D", None, "#fff", 0.9, None).unwrap();
     conn.execute(
         "UPDATE decks SET remote_id = 'd2' WHERE id = ?1",
         params![deck.id],

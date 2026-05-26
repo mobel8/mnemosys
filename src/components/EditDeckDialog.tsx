@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { DECK_COLORS } from "@/components/CreateDeckDialog";
+import { SchedulerPicker } from "@/components/SchedulerPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,7 +23,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 import { useUpdateDeck } from "@/lib/queries";
-import type { Deck } from "@/lib/tauri";
+import type { Deck, SchedulerKind } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
 interface EditDeckDialogProps {
@@ -36,6 +37,7 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
   const [description, setDescription] = useState(deck.description ?? "");
   const [color, setColor] = useState(deck.color);
   const [retention, setRetention] = useState(deck.desired_retention);
+  const [schedulerKind, setSchedulerKind] = useState<SchedulerKind>(deck.scheduler_kind);
 
   // Reset local form whenever the deck changes or the dialog re-opens with
   // fresh data, so the user sees the current persisted values rather than
@@ -46,6 +48,7 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
       setDescription(deck.description ?? "");
       setColor(deck.color);
       setRetention(deck.desired_retention);
+      setSchedulerKind(deck.scheduler_kind);
     }
   }, [deck, open]);
 
@@ -80,6 +83,7 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
         description: description.trim() ? description.trim() : null,
         color,
         desired_retention: retention,
+        scheduler_kind: schedulerKind,
       },
     });
   }
@@ -152,6 +156,16 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
               onValueChange={(v) => setRetention(v[0] ?? 0.9)}
             />
           </div>
+
+          <SchedulerPicker
+            value={schedulerKind}
+            onChange={setSchedulerKind}
+            helperText={
+              schedulerKind !== deck.scheduler_kind
+                ? "Changer l'algorithme ne réinitialise pas les cartes — la nouvelle méthode reprend là où l'ancienne s'est arrêtée."
+                : undefined
+            }
+          />
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

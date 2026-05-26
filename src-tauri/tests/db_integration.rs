@@ -9,6 +9,9 @@ use chrono::{Duration, Utc};
 use mnemosys_lib::db::{
     cards::CardState, decks::DeckPatch, notes::NoteTemplate, reviews::NewReview, Database,
 };
+use mnemosys_lib::scheduler::{
+    self, leitner::LeitnerScheduler, sm2::Sm2Scheduler, Scheduler, SchedulerKind,
+};
 use serde_json::json;
 
 // ---- helpers ---------------------------------------------------------------
@@ -19,7 +22,7 @@ fn fresh_db_with_deck() -> (Database, i64) {
     let conn = db.lock();
     let deck = db
         .decks(&conn)
-        .create("Default", None, "#3b82f6", 0.9)
+        .create("Default", None, "#3b82f6", 0.9, None)
         .expect("create deck");
     (db.clone(), deck.id)
 }
@@ -32,7 +35,7 @@ fn create_deck_returns_deck_with_id() {
     let conn = db.lock();
     let deck = db
         .decks(&conn)
-        .create("Spanish", Some("Vocab"), "#ff0000", 0.92)
+        .create("Spanish", Some("Vocab"), "#ff0000", 0.92, None)
         .expect("create deck");
     assert!(deck.id > 0);
     assert_eq!(deck.name, "Spanish");
@@ -46,9 +49,9 @@ fn list_decks_alphabetical() {
     let db = Database::for_test();
     let conn = db.lock();
     let repo = db.decks(&conn);
-    repo.create("Charlie", None, "#000000", 0.9).unwrap();
-    repo.create("alpha", None, "#000000", 0.9).unwrap();
-    repo.create("Bravo", None, "#000000", 0.9).unwrap();
+    repo.create("Charlie", None, "#000000", 0.9, None).unwrap();
+    repo.create("alpha", None, "#000000", 0.9, None).unwrap();
+    repo.create("Bravo", None, "#000000", 0.9, None).unwrap();
 
     let decks = repo.list().unwrap();
     let names: Vec<&str> = decks.iter().map(|d| d.name.as_str()).collect();
@@ -68,6 +71,7 @@ fn update_deck_partial() {
                 description: Some(Some("new description".into())),
                 color: None,
                 desired_retention: Some(0.85),
+                scheduler_kind: None,
             },
         )
         .expect("update");
@@ -728,4 +732,178 @@ fn fsrs_params_seeded_on_init() {
         .unwrap();
     let after = db.params(&conn).get().unwrap();
     assert_eq!(after, new_vec);
+}
+
+// ---- pluggable schedulers (Vague 4) ---------------------------------------
+
+/// Helper: insert a basic note in `deck_id` and return its lone card row,
+/// re-fetched so the caller has the most up-to-date state.
+fn seed_one_card(db: &Database, deck_id: i64) -> mnemosys_lib::db::Card {
+    let conn = db.lock();
+    db.notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::Basic,
+            json!({ "front": "Q", "back": "A" }),
+            vec![],
+        )
+        .unwrap();
+    db.cards(&conn)
+        .list_in_deck(deck_id, 10, 0)
+        .unwrap()
+        .pop()
+        .unwrap()
+        .card
+}
+
+#[test]
+fn sm2_first_review_good_creates_6_day_interval() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let card = seed_one_card(&db, deck_id);
+
+    let s = Sm2Scheduler;
+    let out = s.next_review(&card, 3, 1_700_000_000).unwrap();
+    assert_eq!(out.scheduled_days, 6, "SM-2 'Good' on a new card → 6 days");
+    assert_eq!(out.state, CardState::Review);
+    assert!(out.stability == 0.0);
+    assert!(out.difficulty > 0.0, "EF must be seeded to the default");
+}
+
+#[test]
+fn sm2_again_resets_to_relearning() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let card = seed_one_card(&db, deck_id);
+
+    // Pretend the card had been Good'd a few times so we're testing the
+    // mature-review branch, not the new-card branch.
+    let mut mature = card;
+    mature.state = CardState::Review;
+    mature.reps = 4;
+    mature.scheduled_days = 25;
+    mature.difficulty = Some(2.5);
+
+    let s = Sm2Scheduler;
+    let out = s.next_review(&mature, 1, 1_700_000_000).unwrap();
+    assert_eq!(out.state, CardState::Relearning);
+    assert_eq!(out.scheduled_days, 0, "Again pulls the card back to today");
+    assert!(out.difficulty <= 2.5, "EF must drop after Again");
+}
+
+#[test]
+fn leitner_box_progression_easy_skips_two_boxes() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let card = seed_one_card(&db, deck_id);
+
+    // Card sitting at box 1 (interval=3) when graded Easy should jump to
+    // box 3 (interval=14) — Easy means +2.
+    let mut review_card = card;
+    review_card.state = CardState::Review;
+    review_card.reps = 2;
+    review_card.difficulty = Some(1.0);
+
+    let s = LeitnerScheduler;
+    let out = s.next_review(&review_card, 4, 1_700_000_000).unwrap();
+    assert_eq!(out.difficulty as i64, 3, "box 1 + Easy(+2) = box 3");
+    assert_eq!(out.scheduled_days, 14, "box 3 → 14 days");
+    assert_eq!(out.state, CardState::Review);
+}
+
+#[test]
+fn leitner_again_resets_to_box_zero() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let card = seed_one_card(&db, deck_id);
+
+    let mut mature = card;
+    mature.state = CardState::Review;
+    mature.reps = 5;
+    mature.difficulty = Some(4.0); // top box
+
+    let s = LeitnerScheduler;
+    let out = s.next_review(&mature, 1, 1_700_000_000).unwrap();
+    assert_eq!(out.difficulty as i64, 0);
+    assert_eq!(out.scheduled_days, 1, "box 0 → 1 day");
+    assert_eq!(out.state, CardState::Relearning);
+}
+
+#[test]
+fn deck_scheduler_kind_defaults_to_fsrs6() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let conn = db.lock();
+    let deck = db.decks(&conn).get(deck_id).unwrap();
+    assert_eq!(deck.scheduler_kind, SchedulerKind::Fsrs6);
+}
+
+#[test]
+fn deck_scheduler_kind_persists() {
+    let db = Database::for_test();
+    let conn = db.lock();
+
+    let deck = db
+        .decks(&conn)
+        .create(
+            "SM2 Deck",
+            None,
+            "#3b82f6",
+            0.9,
+            Some(SchedulerKind::Sm2),
+        )
+        .expect("create");
+    assert_eq!(deck.scheduler_kind, SchedulerKind::Sm2);
+
+    let refreshed = db.decks(&conn).get(deck.id).unwrap();
+    assert_eq!(refreshed.scheduler_kind, SchedulerKind::Sm2);
+
+    // list() must also return the kind correctly.
+    let listed = db
+        .decks(&conn)
+        .list()
+        .unwrap()
+        .into_iter()
+        .find(|d| d.id == deck.id)
+        .unwrap();
+    assert_eq!(listed.scheduler_kind, SchedulerKind::Sm2);
+}
+
+#[test]
+fn update_deck_scheduler_kind() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let conn = db.lock();
+
+    // Pre-condition: defaults to FSRS-6.
+    let before = db.decks(&conn).get(deck_id).unwrap();
+    assert_eq!(before.scheduler_kind, SchedulerKind::Fsrs6);
+
+    // Switch to Leitner.
+    let updated = db
+        .decks(&conn)
+        .update(
+            deck_id,
+            DeckPatch {
+                scheduler_kind: Some(SchedulerKind::Leitner),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(updated.scheduler_kind, SchedulerKind::Leitner);
+
+    // And persisted across a fresh read.
+    let again = db.decks(&conn).get(deck_id).unwrap();
+    assert_eq!(again.scheduler_kind, SchedulerKind::Leitner);
+}
+
+#[test]
+fn scheduler_dispatcher_round_trip() {
+    // The dispatcher must produce the same outcome as the algorithm
+    // called directly. Sanity check that `from_kind` doesn't mis-wire.
+    let (db, deck_id) = fresh_db_with_deck();
+    let card = seed_one_card(&db, deck_id);
+
+    let fsrs = mnemosys_lib::fsrs::CardScheduler::with_defaults().unwrap();
+    let dispatcher = scheduler::from_kind(SchedulerKind::Sm2, &fsrs);
+    let via_dispatch = dispatcher.next_review(&card, 3, 1_700_000_000).unwrap();
+    let direct = Sm2Scheduler.next_review(&card, 3, 1_700_000_000).unwrap();
+
+    assert_eq!(via_dispatch.scheduled_days, direct.scheduled_days);
+    assert_eq!(via_dispatch.state, direct.state);
+    assert!((via_dispatch.difficulty - direct.difficulty).abs() < 1e-9);
 }

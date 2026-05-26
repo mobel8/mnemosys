@@ -29,7 +29,16 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(async () => null),
 }));
 
-let decksData: { id: number; name: string; color: string; description: string | null; desired_retention: number; created_at: number; updated_at: number }[] = [];
+let decksData: {
+  id: number;
+  name: string;
+  color: string;
+  description: string | null;
+  desired_retention: number;
+  scheduler_kind: "fsrs6" | "sm2" | "leitner";
+  created_at: number;
+  updated_at: number;
+}[] = [];
 
 vi.mock("@/lib/queries", () => ({
   useDecks: () => ({ data: decksData, isLoading: false }),
@@ -77,8 +86,8 @@ describe("AiGenerator", () => {
 
   it("populates the deck selector when decks are available", () => {
     decksData = [
-      { id: 1, name: "Spanish", color: "#3b82f6", description: null, desired_retention: 0.9, created_at: 0, updated_at: 0 },
-      { id: 2, name: "Biology", color: "#10b981", description: null, desired_retention: 0.9, created_at: 0, updated_at: 0 },
+      { id: 1, name: "Spanish", color: "#3b82f6", description: null, desired_retention: 0.9, scheduler_kind: "fsrs6", created_at: 0, updated_at: 0 },
+      { id: 2, name: "Biology", color: "#10b981", description: null, desired_retention: 0.9, scheduler_kind: "fsrs6", created_at: 0, updated_at: 0 },
     ];
     render(<AiGenerator />);
     const select = screen.getByLabelText(/Deck cible/i);
@@ -87,14 +96,14 @@ describe("AiGenerator", () => {
   });
 
   it("keeps the 'Générer' button disabled while the textarea is empty", () => {
-    decksData = [{ id: 1, name: "Spanish", color: "#3b82f6", description: null, desired_retention: 0.9, created_at: 0, updated_at: 0 }];
+    decksData = [{ id: 1, name: "Spanish", color: "#3b82f6", description: null, desired_retention: 0.9, scheduler_kind: "fsrs6", created_at: 0, updated_at: 0 }];
     render(<AiGenerator />);
     const btn = screen.getByRole("button", { name: /Générer/i });
     expect(btn).toBeDisabled();
   });
 
   it("calls the text-generation mutation with the typed payload", async () => {
-    decksData = [{ id: 7, name: "Lang", color: "#3b82f6", description: null, desired_retention: 0.9, created_at: 0, updated_at: 0 }];
+    decksData = [{ id: 7, name: "Lang", color: "#3b82f6", description: null, desired_retention: 0.9, scheduler_kind: "fsrs6", created_at: 0, updated_at: 0 }];
     generateMutateAsync.mockResolvedValueOnce([]);
 
     render(<AiGenerator />);
@@ -114,7 +123,7 @@ describe("AiGenerator", () => {
   });
 
   it("renders generated drafts and lets the user drop one", async () => {
-    decksData = [{ id: 7, name: "Lang", color: "#3b82f6", description: null, desired_retention: 0.9, created_at: 0, updated_at: 0 }];
+    decksData = [{ id: 7, name: "Lang", color: "#3b82f6", description: null, desired_retention: 0.9, scheduler_kind: "fsrs6", created_at: 0, updated_at: 0 }];
     generateMutateAsync.mockResolvedValueOnce([
       { template: "basic", fields: { front: "Q1", back: "A1" }, tags: [] },
       { template: "basic", fields: { front: "Q2", back: "A2" }, tags: ["bio"] },

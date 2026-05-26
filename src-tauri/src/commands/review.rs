@@ -8,16 +8,20 @@
 //!    updated [`Card`] along with the chosen interval so the UI can render
 //!    a "next review in N days" toast.
 //!
-//! All scheduling math goes through the [`CardScheduler`](crate::fsrs::CardScheduler)
-//! held in [`AppState`].
+//! Scheduling math goes through [`crate::scheduler::Scheduler`], whose
+//! concrete impl is picked per-deck based on `decks.scheduler_kind`
+//! (Vague 4). FSRS-6 wraps the long-lived
+//! [`CardScheduler`](crate::fsrs::CardScheduler) held in [`AppState`];
+//! SM-2 and Leitner are deterministic and need no global state.
 
 use serde::Serialize;
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::db::{Card, CardState, CardWithNote, NewReview, UserStats};
+use crate::db::{Card, CardWithNote, NewReview, UserStats};
 use crate::error::{AppError, AppResult};
-use crate::fsrs::{MemoryStateDTO, NextStatesDTO, Rating};
+use crate::fsrs::{MemoryStateDTO, NextStateDTO, NextStatesDTO};
+use crate::scheduler::{self, SchedulerOutcome};
 
 /// Result returned by [`submit_review`]: the updated card row + the scheduled
 /// interval the user just earned. The interval is also derivable from
@@ -52,16 +56,17 @@ pub fn preview_next_states(
     state: State<'_, AppState>,
     card_id: i64,
 ) -> AppResult<NextStatesDTO> {
-    let (current_mem, elapsed_days) = {
+    let now = chrono::Utc::now().timestamp();
+    let (card, kind) = {
         let conn = state.db.lock();
         let card = state.db.cards(&conn).get(card_id)?;
-        let mem = memory_state(&card);
-        let now = chrono::Utc::now().timestamp();
-        let elapsed = elapsed_days_since(card.last_review, now);
-        (mem, elapsed)
+        let deck = state.db.decks(&conn).get(card.deck_id)?;
+        (card, deck.scheduler_kind)
     };
-    let scheduler = state.scheduler.lock().expect("scheduler mutex poisoned");
-    scheduler.next_states(current_mem, elapsed_days)
+    let fsrs = state.scheduler.lock().expect("scheduler mutex poisoned");
+    let dispatcher = scheduler::from_kind(kind, &fsrs);
+    let preview = dispatcher.preview(&card, now)?;
+    Ok(preview_to_dto(&preview))
 }
 
 #[tauri::command]
@@ -72,7 +77,6 @@ pub fn submit_review(
     review_time_ms: u32,
     confidence: Option<u8>,
 ) -> AppResult<ReviewResultDTO> {
-    let rating_enum = Rating::from_u8(rating)?;
     // Validate the optional confidence in [1, 5]. None is always fine —
     // the toggle in Settings stays off by default.
     let confidence_i64 = match confidence {
@@ -88,27 +92,29 @@ pub fn submit_review(
 
     let conn = state.db.lock();
     let card = state.db.cards(&conn).get(card_id)?;
-
-    let current_mem = memory_state(&card);
-    let elapsed_days = elapsed_days_since(card.last_review, now);
+    let deck = state.db.decks(&conn).get(card.deck_id)?;
 
     let state_before = card.state;
     let stability_before = card.stability;
     let difficulty_before = card.difficulty;
 
     let outcome = {
-        let scheduler = state.scheduler.lock().expect("scheduler mutex poisoned");
-        scheduler.apply_review(current_mem, elapsed_days, rating_enum)?
+        let fsrs = state.scheduler.lock().expect("scheduler mutex poisoned");
+        let dispatcher = scheduler::from_kind(deck.scheduler_kind, &fsrs);
+        dispatcher.next_review(&card, rating, now)?
     };
 
-    let state_after = next_card_state(state_before, rating_enum);
+    // The interval the UI receives is `max(0, scheduled_days)` — SM-2's
+    // "again" path stores 0 days (relearn now) which we surface as a 0-day
+    // toast. Negative values cannot occur (each algorithm clamps).
+    let scheduled_days_u32 = outcome.scheduled_days.max(0) as u32;
 
     let updated_card = state.db.cards(&conn).update_after_review(
         card_id,
-        state_after,
-        outcome.memory.stability as f64,
-        outcome.memory.difficulty as f64,
-        outcome.scheduled_days as i64,
+        outcome.state,
+        outcome.stability,
+        outcome.difficulty,
+        outcome.scheduled_days,
         now,
     )?;
 
@@ -117,13 +123,13 @@ pub fn submit_review(
             card_id,
             rating: rating as i64,
             state_before,
-            state_after,
+            state_after: outcome.state,
             stability_before,
-            stability_after: outcome.memory.stability as f64,
+            stability_after: outcome.stability,
             difficulty_before,
-            difficulty_after: outcome.memory.difficulty as f64,
-            elapsed_days: elapsed_days as i64,
-            scheduled_days: outcome.scheduled_days as i64,
+            difficulty_after: outcome.difficulty,
+            elapsed_days: outcome.elapsed_days,
+            scheduled_days: outcome.scheduled_days,
             review_time: review_time_ms as i64,
             confidence: confidence_i64,
         },
@@ -144,7 +150,7 @@ pub fn submit_review(
 
     Ok(ReviewResultDTO {
         card: updated_card,
-        scheduled_days: outcome.scheduled_days,
+        scheduled_days: scheduled_days_u32,
         user_stats,
         newly_unlocked,
     })
@@ -227,39 +233,29 @@ fn update_gamification(
 
 // ---- helpers ---------------------------------------------------------------
 
-fn memory_state(card: &Card) -> Option<MemoryStateDTO> {
-    match (card.stability, card.difficulty) {
-        (Some(s), Some(d)) => Some(MemoryStateDTO {
-            stability: s as f32,
-            difficulty: d as f32,
-        }),
-        _ => None,
+/// Translate a [`scheduler::RatingPreview`] (algorithm-agnostic) into the
+/// existing [`NextStatesDTO`] shape the frontend already understands.
+///
+/// The DTO uses `stability` / `difficulty` floats — for SM-2 those
+/// correspond to `(0.0, EF)` and for Leitner to `(0.0, box_index)`.
+/// The UI doesn't care about the interpretation; it shows `interval_days`
+/// only.
+fn preview_to_dto(preview: &scheduler::RatingPreview) -> NextStatesDTO {
+    NextStatesDTO {
+        again: outcome_to_dto(&preview.again),
+        hard: outcome_to_dto(&preview.hard),
+        good: outcome_to_dto(&preview.good),
+        easy: outcome_to_dto(&preview.easy),
     }
 }
 
-/// Days between `last_review` (unix seconds, may be None) and `now` (unix
-/// seconds), clamped to 0 for new cards or future timestamps.
-fn elapsed_days_since(last_review: Option<i64>, now: i64) -> u32 {
-    match last_review {
-        Some(ts) => {
-            let secs = (now - ts).max(0);
-            (secs / 86_400) as u32
-        }
-        None => 0,
+fn outcome_to_dto(o: &SchedulerOutcome) -> NextStateDTO {
+    NextStateDTO {
+        memory: MemoryStateDTO {
+            stability: o.stability as f32,
+            difficulty: o.difficulty as f32,
+        },
+        interval_days: o.scheduled_days as f32,
     }
 }
 
-/// New card lifecycle state, computed from the prior state and the rating.
-/// Mirrors how Anki / FSRS-compatible apps move cards across buckets.
-fn next_card_state(before: CardState, rating: Rating) -> CardState {
-    match (before, rating) {
-        // A miss on any non-new card sends it back to relearning.
-        (CardState::New, Rating::Again) => CardState::Learning,
-        (_, Rating::Again) => CardState::Relearning,
-        // First successful answer graduates a new card into "learning".
-        (CardState::New, _) => CardState::Learning,
-        // Successful learning/relearning steps graduate to long-term review.
-        (CardState::Learning, _) | (CardState::Relearning, _) => CardState::Review,
-        (CardState::Review, _) => CardState::Review,
-    }
-}
