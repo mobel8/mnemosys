@@ -9,10 +9,12 @@
 //! - `basic_reverse` → `{ "front": "...", "back": "..." }` (two cards: 0=F→B, 1=B→F)
 //! - `cloze`         → `{ "text": "The {{c1::capital}} of {{c2::France}} is Paris" }`
 
+use std::collections::BTreeSet;
+use std::str::FromStr;
+
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
 
 use crate::error::{AppError, AppResult};
 
@@ -34,8 +36,12 @@ impl NoteTemplate {
             NoteTemplate::Cloze => "cloze",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> AppResult<Self> {
+impl FromStr for NoteTemplate {
+    type Err = AppError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "basic" => Ok(NoteTemplate::Basic),
             "basic_reverse" => Ok(NoteTemplate::BasicReverse),

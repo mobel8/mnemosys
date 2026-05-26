@@ -4,6 +4,8 @@
 //! and to feed the future FSRS optimizer (agent A3). The log is **append-only**
 //! by convention — there's no `update` method.
 
+use std::str::FromStr;
+
 use rusqlite::{params, Connection, Row};
 use serde::{Deserialize, Serialize};
 

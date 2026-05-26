@@ -5,6 +5,8 @@
 //! columns (`stability`, `difficulty`, `next_review`, …) are nullable for
 //! brand-new cards and populated by the FSRS scheduler (agent A3).
 
+use std::str::FromStr;
+
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
@@ -32,8 +34,12 @@ impl CardState {
             CardState::Relearning => "relearning",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> AppResult<Self> {
+impl FromStr for CardState {
+    type Err = AppError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "new" => Ok(CardState::New),
             "learning" => Ok(CardState::Learning),

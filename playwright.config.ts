@@ -24,10 +24,15 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
+  // Auto-start the Vite dev server so `playwright test` works in one shot.
+  // We invoke vite directly (not via pnpm) to skip the package manager
+  // overhead — cuts cold-start by ~5s on slower runners.
   webServer: {
-    command: "pnpm dev",
+    command: "./node_modules/.bin/vite --port 1420",
     url: "http://localhost:1420",
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 180_000,
+    stdout: "ignore",
+    stderr: "pipe",
   },
 });
