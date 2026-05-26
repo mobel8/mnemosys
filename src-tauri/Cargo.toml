@@ -53,6 +53,24 @@ fsrs = "5.2"
 # Logging (for diagnostics; agents may add tracing later)
 log = "0.4"
 
+# HTTP client for Claude API (Vague A2.1).
+# - rustls-tls keeps build hermetic (no system OpenSSL dependency).
+# - `stream` reserved for future streaming responses; `json` for `.json()`/`.json::<T>()`.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+
+# PDF text extraction. Pure-Rust crate, no native system bindings required.
+pdf-extract = "0.10"
+
+# Hashing — TTS cache keys (Vague A2.2). Deterministic SHA-256 over
+# `text + voice + speed` so repeated synth requests are a free disk hit.
+sha2 = "0.10"
+
+# ZIP archive parser (Vague A2.3 — Anki .apkg importer). `.apkg` files are
+# plain ZIP archives bundling `collection.anki2` (SQLite) + media. Default
+# features disabled to drop the heavy crypto/lzma/zstd transitive deps —
+# Anki only uses DEFLATE-compressed entries.
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]

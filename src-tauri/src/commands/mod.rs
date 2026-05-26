@@ -5,6 +5,8 @@
 //! take a `tauri::State<'_, AppState>` (and sometimes a `tauri::AppHandle`
 //! for plugin access) and return [`AppResult<T>`].
 
+pub mod ai;
+pub mod apkg;
 pub mod cards;
 pub mod decks;
 pub mod demo;
@@ -12,3 +14,4 @@ pub mod io;
 pub mod review;
 pub mod settings;
 pub mod stats;
+pub mod tts;

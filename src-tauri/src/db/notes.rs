@@ -362,7 +362,7 @@ mod tests {
     #[test]
     fn extract_cloze_ords_ignores_plain_braces() {
         assert!(extract_cloze_ords("Just some {text} with no cloze").is_empty());
-        assert!(extract_cloze_ords("{{c1::}}").iter().any(|&n| n == 1));
+        assert!(extract_cloze_ords("{{c1::}}").contains(&1));
         assert!(extract_cloze_ords("{{c::wrong}}").is_empty());
     }
 }

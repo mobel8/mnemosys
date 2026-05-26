@@ -4,6 +4,9 @@
 //! - [`error`]     — shared `AppError` and `AppResult` types.
 //! - [`db`]        — SQLite layer (rusqlite).
 //! - [`fsrs`]      — FSRS-6 scheduler wrapper.
+//! - [`ai`]        — Claude-powered flashcard generation (Vague A2.1).
+//! - [`tts`]       — text-to-speech (OpenAI + on-disk cache, Vague A2.2).
+//! - [`apkg`]      — Anki `.apkg` importer (Vague A2.3).
 //! - [`commands`]  — Tauri `#[command]` handlers (frontend-facing API).
 //! - [`app_state`] — `AppState` bundling DB + scheduler, registered via
 //!   `app.manage(...)` in [`run`].
@@ -12,11 +15,14 @@
 //! shared `AppState` from `<app_data_dir>/mnemosys.db`, and wires every
 //! Tauri command into the invoke handler.
 
+pub mod ai;
+pub mod apkg;
 pub mod app_state;
 pub mod commands;
 pub mod db;
 pub mod error;
 pub mod fsrs;
+pub mod tts;
 
 use tauri::Manager;
 
@@ -87,6 +93,15 @@ pub fn run() {
             // import / export
             commands::io::export_json,
             commands::io::import_json,
+            // tts (Vague A2.2)
+            commands::tts::synthesize_audio,
+            commands::tts::clear_tts_cache,
+            commands::tts::get_tts_cache_size,
+            // ai (Vague A2.1)
+            commands::ai::generate_cards_text,
+            commands::ai::generate_cards_pdf,
+            // apkg (Vague A2.3)
+            commands::apkg::import_apkg,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
