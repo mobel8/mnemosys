@@ -30,6 +30,15 @@ vi.mock("@/lib/queries", () => ({
     },
     isPending: false,
   }),
+  // `<NoteEditor>` now embeds `<TtsButton>` which pulls the user's voice
+  // setting via `useSettingsQuery` and submits TTS through
+  // `useSynthesizeAudio`. Both must be present on the mock or React errors
+  // out before the editor mounts.
+  useSettingsQuery: () => ({ data: undefined, isLoading: false }),
+  useSynthesizeAudio: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
 }));
 
 import { ClozePreview, parseClozes, uniqueClozeNumbers } from "@/components/ClozePreview";

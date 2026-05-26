@@ -18,6 +18,7 @@
 
 import { AboutSection } from "@/components/settings/AboutSection";
 import { ImportExportSection } from "@/components/settings/ImportExportSection";
+import { IntegrationsSection } from "@/components/settings/IntegrationsSection";
 import { ReviewSettingsSection } from "@/components/settings/ReviewSettingsSection";
 import { ThemeSection } from "@/components/settings/ThemeSection";
 
@@ -33,6 +34,7 @@ export default function SettingsPage() {
 
       <ThemeSection />
       <ReviewSettingsSection />
+      <IntegrationsSection />
       <ImportExportSection />
       <AboutSection />
     </div>

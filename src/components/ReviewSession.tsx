@@ -305,7 +305,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       />
 
       <div className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-8">
-        <ReviewCard note={current.note} phase={phase} />
+        <ReviewCard note={current.note} phase={phase} cardOrd={current.card.card_ord} />
         <ReviewControls
           phase={phase}
           cardId={current.card.id}

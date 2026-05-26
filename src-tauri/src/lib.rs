@@ -77,6 +77,7 @@ pub fn run() {
             commands::cards::update_note,
             commands::cards::delete_note,
             commands::cards::suspend_card,
+            commands::cards::reset_card,
             // review
             commands::review::get_due_cards,
             commands::review::preview_next_states,
@@ -102,6 +103,8 @@ pub fn run() {
             commands::ai::generate_cards_pdf,
             // apkg (Vague A2.3)
             commands::apkg::import_apkg,
+            // media (image-occlusion template)
+            commands::media::copy_image_to_app_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

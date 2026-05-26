@@ -18,6 +18,10 @@ const DEFAULTS: AppSettings = {
   daily_new_limit: 20,
   daily_review_limit: 200,
   show_next_interval: true,
+  openai_api_key: null,
+  tts_voice: null,
+  tts_speed: null,
+  anthropic_api_key: null,
 };
 
 interface SettingsState extends AppSettings {

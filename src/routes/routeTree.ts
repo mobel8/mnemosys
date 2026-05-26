@@ -15,6 +15,7 @@
  */
 
 import { Route as rootRoute } from "./__root";
+import { Route as aiGenerateRoute } from "./ai-generate";
 import { Route as decksDeckIdRoute } from "./decks.$deckId";
 import { Route as decksDeckIdNewCardRoute } from "./decks.$deckId.new-card";
 import { Route as indexRoute } from "./index";
@@ -27,6 +28,7 @@ export const routeTree = rootRoute.addChildren([
   decksDeckIdRoute,
   decksDeckIdNewCardRoute,
   reviewDeckIdRoute,
+  aiGenerateRoute,
   statsRoute,
   settingsRoute,
 ]);

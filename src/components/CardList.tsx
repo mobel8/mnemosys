@@ -18,6 +18,7 @@ import {
   MoreHorizontal,
   PauseCircle,
   PlayCircle,
+  RotateCcw,
   Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -31,7 +32,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/use-toast";
-import { useCardsInDeck, useDeleteNote, useSearchNotes, useSuspendCard } from "@/lib/queries";
+import {
+  useCardsInDeck,
+  useDeleteNote,
+  useResetCard,
+  useSearchNotes,
+  useSuspendCard,
+} from "@/lib/queries";
 import type { CardState, CardWithNote, Note, NoteTemplate } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +58,8 @@ function templateLabel(template: NoteTemplate) {
       return "Reverse";
     case "cloze":
       return "Cloze";
+    case "occlusion":
+      return "Image-occlusion";
   }
 }
 
@@ -73,6 +82,19 @@ function noteFrontPreview(note: Note): string {
     const text = typeof fields.text === "string" ? fields.text : "";
     // Replace cloze tags with their hidden text for a readable preview.
     return text.replace(/\{\{c\d+::(.*?)(?:::.*?)?\}\}/g, "$1") || "(vide)";
+  }
+  if (note.template === "occlusion") {
+    const masks = Array.isArray(fields.masks) ? (fields.masks as unknown[]) : [];
+    const labels = masks
+      .map((m) =>
+        typeof m === "object" && m && typeof (m as { label?: unknown }).label === "string"
+          ? ((m as { label: string }).label || "").trim()
+          : "",
+      )
+      .filter((l) => l.length > 0);
+    if (labels.length > 0)
+      return `Image-occlusion : ${labels.slice(0, 3).join(", ")}${labels.length > 3 ? "…" : ""}`;
+    return `Image-occlusion (${masks.length} masque${masks.length > 1 ? "s" : ""})`;
   }
   const front = typeof fields.front === "string" ? fields.front : "";
   return front || "(vide)";
@@ -225,6 +247,21 @@ function CardRow({ row }: { row: DisplayRow }) {
       });
     },
   });
+  const resetCard = useResetCard({
+    onSuccess: () => {
+      toast({
+        title: "Carte réinitialisée",
+        description: "La carte repart en « new ». L'historique des reviews est conservé.",
+      });
+    },
+    onError: (err) => {
+      toast({
+        title: "Reset impossible",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
     <tr
@@ -303,6 +340,21 @@ function CardRow({ row }: { row: DisplayRow }) {
                     <PauseCircle className="h-4 w-4" /> Suspendre
                   </>
                 )}
+              </DropdownMenuItem>
+            )}
+            {card && card.state !== "new" && (
+              <DropdownMenuItem
+                onSelect={() => {
+                  if (
+                    window.confirm(
+                      "Réinitialiser cette carte ? Elle repart en « new ». L'historique des reviews est conservé.",
+                    )
+                  ) {
+                    resetCard.mutate(card.id);
+                  }
+                }}
+              >
+                <RotateCcw className="h-4 w-4" /> Réinitialiser (FSRS)
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />

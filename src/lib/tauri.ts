@@ -20,7 +20,26 @@ import { invoke } from "@tauri-apps/api/core";
 // ---------------------------------------------------------------------------
 
 export type CardState = "new" | "learning" | "review" | "relearning";
-export type NoteTemplate = "basic" | "basic_reverse" | "cloze";
+export type NoteTemplate = "basic" | "basic_reverse" | "cloze" | "occlusion";
+
+/** One rectangular mask in an image-occlusion note. Coordinates are in
+ *  source-image pixels (matching `natural_width` / `natural_height` in the
+ *  same fields blob). `label` is the answer the learner must recall. */
+export interface OcclusionMask {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label?: string;
+}
+
+/** `fields` payload for `template === "occlusion"` notes. */
+export interface OcclusionFields {
+  image_path: string;
+  natural_width: number;
+  natural_height: number;
+  masks: OcclusionMask[];
+}
 /** Rating sent to `submit_review`: 1 = Again, 2 = Hard, 3 = Good, 4 = Easy. */
 export type Rating = 1 | 2 | 3 | 4;
 
@@ -132,6 +151,15 @@ export interface AppSettings {
   daily_new_limit: number;
   daily_review_limit: number;
   show_next_interval: boolean;
+  // --- Session 2 additions ---
+  /** OpenAI API key for TTS. `null` falls back to `OPENAI_API_KEY` env var. */
+  openai_api_key: string | null;
+  /** Default TTS voice slug. `null` falls back to `"nova"` in the UI. */
+  tts_voice: string | null;
+  /** Default TTS playback rate (0.25..=4.0). `null` falls back to `1.0`. */
+  tts_speed: number | null;
+  /** Anthropic API key for AI card generation. `null` falls back to env var. */
+  anthropic_api_key: string | null;
 }
 
 /**
@@ -143,6 +171,47 @@ export interface ImportResult {
   notes_imported: number;
   cards_created: number;
   /** Names of decks skipped because the same name already exists locally. */
+  skipped_decks: string[];
+}
+
+// --- Session 2: AI card generation ---------------------------------------
+
+export type AICardTemplate = "basic" | "cloze";
+
+/** One card returned by the Claude generator. Shape of `fields` depends on `template`. */
+export interface GeneratedCard {
+  template: AICardTemplate;
+  /** For `basic`: `{ front, back }`. For `cloze`: `{ text }` with `{{c1::…}}`. */
+  fields: Record<string, unknown>;
+  tags: string[];
+}
+
+// --- Session 2: TTS ------------------------------------------------------
+
+export type TTSVoice = "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" | "coral" | "sage";
+
+export interface TTSResult {
+  /** Absolute path on disk. Pass through `convertFileSrc()` before `<audio src>`. */
+  path: string;
+  /** `true` if served from local cache (no API call). */
+  cached: boolean;
+  size_bytes: number;
+}
+
+// --- Session 2: APKG import ----------------------------------------------
+
+export interface ConversionStats {
+  decks_imported: number;
+  notes_imported: number;
+  /** Notes dropped (unsupported model, parent deck skipped, missing required field, …). */
+  notes_skipped: number;
+  /** Anki "orphan" notes (no `cards` row pointing at them). */
+  cards_skipped_no_anki_card: number;
+}
+
+export interface ConversionResult {
+  stats: ConversionStats;
+  /** Names of Anki decks that were skipped because Mnemosys already had that name. */
   skipped_decks: string[];
 }
 
@@ -196,6 +265,11 @@ export const api = {
     deleteNote: (id: number) => invoke<void>("delete_note", { id }),
     suspendCard: (id: number, suspended: boolean) =>
       invoke<void>("suspend_card", { id, suspended }),
+    /**
+     * Reset a card to its pristine `new` state. Clears every FSRS scheduling
+     * field but **does not** delete the `reviews` history.
+     */
+    resetCard: (id: number) => invoke<Card>("reset_card", { id }),
   },
   review: {
     dueCards: (deckId: number | null, limit: number) =>
@@ -233,5 +307,37 @@ export const api = {
      * Decks whose name already exists are skipped wholesale.
      */
     importJson: (path: string) => invoke<ImportResult>("import_json", { path }),
+    /**
+     * Import an Anki `.apkg` file. Anki decks whose name already exists in
+     * Mnemosys are skipped wholesale (their names are reported back).
+     * Anki review history is dropped — imported cards start in `new`.
+     */
+    importApkg: (path: string) => invoke<ConversionResult>("import_apkg", { path }),
+  },
+  ai: {
+    /** Generate up to `maxCards` cards from a raw text blob. `language` is a hint. */
+    generateCardsText: (text: string, maxCards: number, language: string) =>
+      invoke<GeneratedCard[]>("generate_cards_text", { text, maxCards, language }),
+    /** Generate cards from a PDF on disk. */
+    generateCardsPdf: (pdfPath: string, maxCards: number, language: string) =>
+      invoke<GeneratedCard[]>("generate_cards_pdf", { pdfPath, maxCards, language }),
+  },
+  tts: {
+    /** Synthesise speech. Hits cache first; otherwise calls OpenAI. */
+    synthesize: (text: string, voice: TTSVoice, speed?: number) =>
+      invoke<TTSResult>("synthesize_audio", { text, voice, speed: speed ?? null }),
+    /** Wipe every cached `*.mp3` from the TTS cache directory. */
+    clearCache: () => invoke<void>("clear_tts_cache"),
+    /** Total bytes occupied by the TTS cache directory. */
+    cacheSize: () => invoke<number>("get_tts_cache_size"),
+  },
+  media: {
+    /**
+     * Copy an image into the per-app occlusion-media folder so it can be
+     * served back via `convertFileSrc()`. Idempotent: identical bytes share
+     * the same destination filename (content-addressed prefix).
+     */
+    copyImageToAppData: (sourcePath: string) =>
+      invoke<string>("copy_image_to_app_data", { sourcePath }),
   },
 };

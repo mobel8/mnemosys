@@ -75,6 +75,21 @@ vi.mock("@/lib/queries", () => ({
     },
     isPending: false,
   }),
+  // Added when the .apkg import landed in Session 2. The existing JSON
+  // round-trip tests don't exercise this path, so a no-op mock is enough.
+  useImportApkg: () => ({
+    mutateAsync: () =>
+      Promise.resolve({
+        stats: {
+          decks_imported: 0,
+          notes_imported: 0,
+          notes_skipped: 0,
+          cards_skipped_no_anki_card: 0,
+        },
+        skipped_decks: [],
+      }),
+    isPending: false,
+  }),
 }));
 
 import { ImportExportSection } from "@/components/settings/ImportExportSection";

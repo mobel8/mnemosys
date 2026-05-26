@@ -205,6 +205,40 @@ impl<'a> CardRepo<'a> {
         self.get(id)
     }
 
+    /// Reset a card to its pristine `new` state.
+    ///
+    /// Clears every scheduling field (`stability`, `difficulty`, `last_review`,
+    /// `next_review`, `elapsed_days`, `scheduled_days`, `reps`, `lapses`) and
+    /// flips `state` back to `new`. Useful when a learner wants to "forget"
+    /// what FSRS knows about a card and start fresh — typically because they
+    /// edited the prompt heavily or want to relearn from scratch.
+    ///
+    /// Does NOT touch the `reviews` history table: the journal stays intact
+    /// so stats reflect the actual learning effort. If the caller wants the
+    /// historical reviews gone too, they should delete the note.
+    pub fn reset(&self, id: i64) -> AppResult<Card> {
+        let now = Utc::now().timestamp();
+        let affected = self.conn.execute(
+            "UPDATE cards
+             SET state = 'new',
+                 stability = NULL,
+                 difficulty = NULL,
+                 last_review = NULL,
+                 next_review = NULL,
+                 elapsed_days = 0,
+                 scheduled_days = 0,
+                 reps = 0,
+                 lapses = 0,
+                 updated_at = ?1
+             WHERE id = ?2",
+            params![now, id],
+        )?;
+        if affected == 0 {
+            return Err(AppError::NotFound(format!("card id={}", id)));
+        }
+        self.get(id)
+    }
+
     pub fn suspend(&self, id: i64, suspended: bool) -> AppResult<()> {
         let now = Utc::now().timestamp();
         let affected = self.conn.execute(

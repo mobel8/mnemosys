@@ -1,7 +1,7 @@
 /**
  * Visual representation of the card currently being graded.
  *
- * Handles three templates:
+ * Handles four templates:
  *   - "basic"          → `{ front, back }`
  *   - "basic_reverse"  → `{ front, back }` (rendered identically; the back
  *                        side is created server-side as a separate card row,
@@ -9,6 +9,10 @@
  *   - "cloze"          → `{ text }` with `{{c1::answer}}` markers. The
  *                        first cloze deletion is hidden on the question
  *                        side and highlighted on the answer side.
+ *   - "occlusion"      → image + N masks (one card per mask). Delegated to
+ *                        `<OcclusionReviewView>`; we *skip* the flip animation
+ *                        for this template because the visual diff between
+ *                        question and answer is the mask overlay itself.
  *
  * Animation: a horizontal flip via framer-motion. The whole front+back
  * payload is wrapped in a `motion.div` whose `rotateY` toggles between
@@ -20,15 +24,41 @@
  */
 
 import { AnimatePresence, motion } from "framer-motion";
+import { OcclusionReviewView } from "@/components/OcclusionReviewView";
+import { TtsButton } from "@/components/TtsButton";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Note } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
+
+/**
+ * Strip cloze markup so TTS narrates plain prose. Replaces `{{c1::answer}}`
+ * (with optional `::hint`) by the answer, and `{{c2::...}}` etc by the answer
+ * too — synthesising the same text on both faces is fine because the audio
+ * cache key includes the text, so question vs answer use distinct entries.
+ */
+function clozeToSpoken(text: string, mode: "question" | "answer"): string {
+  // Re-create a local regex to avoid sharing `lastIndex` with the renderer above.
+  const re = /\{\{c(\d+)::([^}]+?)(?:::([^}]+?))?\}\}/g;
+  let firstNumber: number | null = null;
+  return text.replace(re, (_full, num: string, answer: string, hint: string | undefined) => {
+    const n = Number(num);
+    if (firstNumber === null) firstNumber = n;
+    // On the question face, blank out the *first* cloze; otherwise reveal.
+    if (mode === "question" && n === firstNumber) {
+      return hint ?? "blank";
+    }
+    return answer;
+  });
+}
 
 type Phase = "question" | "answer" | "submitting" | "done";
 
 interface ReviewCardProps {
   note: Note;
   phase: Phase;
+  /** 0-based ordinal of the underlying card row. Only meaningful for
+   *  templates whose notes mint multiple cards (cloze, occlusion). */
+  cardOrd?: number;
 }
 
 const CLOZE_REGEX = /\{\{c(\d+)::([^}]+?)(?:::([^}]+?))?\}\}/g;
@@ -112,9 +142,34 @@ function getClozeText(note: Note): string {
   return typeof note.fields.text === "string" ? note.fields.text : "";
 }
 
-export function ReviewCard({ note, phase }: ReviewCardProps) {
+export function ReviewCard({ note, phase, cardOrd = 0 }: ReviewCardProps) {
   const isAnswer = phase === "answer" || phase === "submitting";
   const isCloze = note.template === "cloze";
+  const isOcclusion = note.template === "occlusion";
+
+  // Image-occlusion has its own "before/after flip" visual (mask shown vs
+  // mask hidden). We render it as a single card without the 3D flip so the
+  // image isn't briefly mirrored mid-rotation.
+  if (isOcclusion) {
+    return (
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={note.id}
+          initial={{ opacity: 0, x: 40 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -40 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className="flex w-full justify-center"
+        >
+          <Card className="w-full max-w-2xl">
+            <CardContent className="p-6">
+              <OcclusionReviewView note={note} cardOrd={cardOrd} showAnswer={isAnswer} />
+            </CardContent>
+          </Card>
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
 
   const cloze = isCloze ? renderCloze(getClozeText(note)) : null;
   const basic = !isCloze ? getBasicFields(note) : null;
@@ -153,6 +208,13 @@ export function ReviewCard({ note, phase }: ReviewCardProps) {
               style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
               aria-hidden={isAnswer ? true : undefined}
             >
+              <div className="absolute right-3 top-3 z-10">
+                <TtsButton
+                  text={
+                    cloze ? clozeToSpoken(getClozeText(note), "question") : (basic?.front ?? "")
+                  }
+                />
+              </div>
               <CardContent className="flex min-h-[280px] flex-col items-center justify-center p-10">
                 {cloze ? (
                   <div
@@ -180,6 +242,11 @@ export function ReviewCard({ note, phase }: ReviewCardProps) {
               }}
               aria-hidden={isAnswer ? undefined : true}
             >
+              <div className="absolute right-3 top-3 z-10">
+                <TtsButton
+                  text={cloze ? clozeToSpoken(getClozeText(note), "answer") : (basic?.back ?? "")}
+                />
+              </div>
               <CardContent className="flex min-h-[280px] flex-col items-stretch gap-4 p-10">
                 {cloze ? (
                   <div

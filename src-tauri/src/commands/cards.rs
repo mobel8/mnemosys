@@ -7,7 +7,7 @@
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::db::{CardWithNote, Note, NoteTemplate};
+use crate::db::{Card, CardWithNote, Note, NoteTemplate};
 use crate::error::AppResult;
 
 #[tauri::command]
@@ -67,4 +67,14 @@ pub fn suspend_card(
 ) -> AppResult<()> {
     let conn = state.db.lock();
     state.db.cards(&conn).suspend(id, suspended)
+}
+
+/// Reset a card to `new`, clearing every FSRS scheduling field.
+///
+/// The `reviews` history is intentionally preserved so retention stats stay
+/// truthful. Returns the freshly-reset card so the UI can re-render it.
+#[tauri::command]
+pub fn reset_card(state: State<'_, AppState>, id: i64) -> AppResult<Card> {
+    let conn = state.db.lock();
+    state.db.cards(&conn).reset(id)
 }

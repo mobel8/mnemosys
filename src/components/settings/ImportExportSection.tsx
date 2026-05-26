@@ -21,13 +21,13 @@
  */
 
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { Download, Loader2, Upload } from "lucide-react";
+import { Download, FileArchive, Loader2, Upload } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
-import { useDecks, useExportJson, useImportJson } from "@/lib/queries";
+import { useDecks, useExportJson, useImportApkg, useImportJson } from "@/lib/queries";
 
 /**
  * Build the default filename used by the save dialog — easy for the user
@@ -44,6 +44,7 @@ export function ImportExportSection() {
 
   const exportMut = useExportJson();
   const importMut = useImportJson();
+  const importApkgMut = useImportApkg();
 
   // Selection state for the export sub-section. We start empty so a stray
   // click on the export button can't accidentally dump the whole DB.
@@ -123,6 +124,51 @@ export function ImportExportSection() {
     } catch (err) {
       toast({
         title: "Import impossible",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleImportApkg() {
+    try {
+      const picked = await open({
+        multiple: false,
+        directory: false,
+        filters: [{ name: "Anki Package", extensions: ["apkg"] }],
+      });
+      if (!picked) return;
+      const path = typeof picked === "string" ? picked : picked[0];
+      if (!path) return;
+      const report = await importApkgMut.mutateAsync({ path });
+
+      const { stats, skipped_decks } = report;
+      const parts = [
+        `${stats.decks_imported} deck${stats.decks_imported > 1 ? "s" : ""}`,
+        `${stats.notes_imported} note${stats.notes_imported > 1 ? "s" : ""}`,
+      ];
+      const droppedBits: string[] = [];
+      if (stats.notes_skipped > 0) {
+        droppedBits.push(
+          `${stats.notes_skipped} note${stats.notes_skipped > 1 ? "s" : ""} ignorée${stats.notes_skipped > 1 ? "s" : ""}`,
+        );
+      }
+      if (stats.cards_skipped_no_anki_card > 0) {
+        droppedBits.push(`${stats.cards_skipped_no_anki_card} orphelin(s)`);
+      }
+      if (skipped_decks.length > 0) {
+        droppedBits.push(
+          `${skipped_decks.length} deck${skipped_decks.length > 1 ? "s" : ""} déjà existant${skipped_decks.length > 1 ? "s" : ""} : ${skipped_decks.join(", ")}`,
+        );
+      }
+      const droppedSuffix = droppedBits.length > 0 ? ` — ${droppedBits.join(" · ")}` : "";
+      toast({
+        title: "Import Anki terminé",
+        description: `${parts.join(", ")} importé(s)${droppedSuffix}.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Import Anki impossible",
         description: err instanceof Error ? err.message : String(err),
         variant: "destructive",
       });
@@ -222,19 +268,38 @@ export function ImportExportSection() {
             Choisis un fichier <code>.json</code> exporté depuis Mnemosys. Les decks dont le nom
             existe déjà localement seront ignorés (aucune fusion automatique).
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleImport}
-            disabled={importMut.isPending}
-          >
-            {importMut.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Upload className="h-4 w-4" />
-            )}
-            Importer un fichier Mnemosys (.json)
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleImport}
+              disabled={importMut.isPending}
+            >
+              {importMut.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              Importer un fichier Mnemosys (.json)
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleImportApkg}
+              disabled={importApkgMut.isPending}
+            >
+              {importApkgMut.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileArchive className="h-4 w-4" />
+              )}
+              Importer un paquet Anki (.apkg)
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            L'import Anki crée de nouveaux decks. L'historique de révision Anki n'est pas conservé
+            (les cartes repartent en « new »).
+          </p>
         </section>
       </CardContent>
     </Card>

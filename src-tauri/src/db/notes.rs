@@ -8,6 +8,11 @@
 //! - `basic`         → `{ "front": "...", "back": "..." }`
 //! - `basic_reverse` → `{ "front": "...", "back": "..." }` (two cards: 0=F→B, 1=B→F)
 //! - `cloze`         → `{ "text": "The {{c1::capital}} of {{c2::France}} is Paris" }`
+//! - `occlusion`     → `{ "image_path": "/abs/path", "natural_width": 800,
+//!                       "natural_height": 600,
+//!                       "masks": [{ "x": 0, "y": 0, "width": 100, "height": 50,
+//!                                   "label": "optional" }, ...] }`
+//!                    One card per mask (`card_ord = mask_index`).
 
 use std::collections::BTreeSet;
 use std::str::FromStr;
@@ -26,6 +31,7 @@ pub enum NoteTemplate {
     Basic,
     BasicReverse,
     Cloze,
+    Occlusion,
 }
 
 impl NoteTemplate {
@@ -34,6 +40,7 @@ impl NoteTemplate {
             NoteTemplate::Basic => "basic",
             NoteTemplate::BasicReverse => "basic_reverse",
             NoteTemplate::Cloze => "cloze",
+            NoteTemplate::Occlusion => "occlusion",
         }
     }
 }
@@ -46,6 +53,7 @@ impl FromStr for NoteTemplate {
             "basic" => Ok(NoteTemplate::Basic),
             "basic_reverse" => Ok(NoteTemplate::BasicReverse),
             "cloze" => Ok(NoteTemplate::Cloze),
+            "occlusion" => Ok(NoteTemplate::Occlusion),
             other => Err(AppError::Database(format!(
                 "invalid note template '{}'",
                 other
@@ -119,6 +127,8 @@ impl<'a> NoteRepo<'a> {
     /// - `BasicReverse` → 2 cards (ord=0 front→back, ord=1 back→front)
     /// - `Cloze`        → one card per unique `{{cN::…}}` index found in the
     ///   `text` field; if no cloze is found, returns a `Validation` error.
+    /// - `Occlusion`    → one card per entry in `fields.masks` (a JSON array).
+    ///   Empty or missing `masks` is rejected with a `Validation` error.
     pub fn create(
         &self,
         deck_id: i64,
@@ -283,6 +293,54 @@ fn validate_fields(template: NoteTemplate, fields: &serde_json::Value) -> AppRes
                 ));
             }
         }
+        NoteTemplate::Occlusion => {
+            let image_path = obj
+                .get("image_path")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| {
+                    AppError::Validation("occlusion note requires an 'image_path' string".into())
+                })?;
+            if image_path.trim().is_empty() {
+                return Err(AppError::Validation(
+                    "occlusion note 'image_path' must not be empty".into(),
+                ));
+            }
+            let masks = obj
+                .get("masks")
+                .and_then(|v| v.as_array())
+                .ok_or_else(|| {
+                    AppError::Validation("occlusion note requires a 'masks' array".into())
+                })?;
+            if masks.is_empty() {
+                return Err(AppError::Validation(
+                    "occlusion note must declare at least one mask".into(),
+                ));
+            }
+            for (idx, mask) in masks.iter().enumerate() {
+                let m = mask.as_object().ok_or_else(|| {
+                    AppError::Validation(format!("mask #{} must be a JSON object", idx))
+                })?;
+                for key in ["x", "y", "width", "height"] {
+                    let v = m.get(key).and_then(|v| v.as_f64()).ok_or_else(|| {
+                        AppError::Validation(format!("mask #{} missing numeric '{}'", idx, key))
+                    })?;
+                    if !v.is_finite() {
+                        return Err(AppError::Validation(format!(
+                            "mask #{} '{}' must be a finite number",
+                            idx, key
+                        )));
+                    }
+                }
+                let w = m.get("width").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let h = m.get("height").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                if w <= 0.0 || h <= 0.0 {
+                    return Err(AppError::Validation(format!(
+                        "mask #{} width/height must be > 0",
+                        idx
+                    )));
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -307,6 +365,20 @@ fn ords_for_template(
                 ));
             }
             Ok(ords.into_iter().map(|n| n as i64).collect())
+        }
+        NoteTemplate::Occlusion => {
+            let masks = fields
+                .get("masks")
+                .and_then(|v| v.as_array())
+                .ok_or_else(|| {
+                    AppError::Validation("occlusion note requires a 'masks' array".into())
+                })?;
+            if masks.is_empty() {
+                return Err(AppError::Validation(
+                    "occlusion note must declare at least one mask".into(),
+                ));
+            }
+            Ok((0..masks.len() as i64).collect())
         }
     }
 }
@@ -352,6 +424,8 @@ pub(crate) fn extract_cloze_ords(text: &str) -> Vec<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::Database;
+    use serde_json::json;
 
     #[test]
     fn extract_cloze_ords_finds_unique_sorted() {
@@ -364,5 +438,98 @@ mod tests {
         assert!(extract_cloze_ords("Just some {text} with no cloze").is_empty());
         assert!(extract_cloze_ords("{{c1::}}").contains(&1));
         assert!(extract_cloze_ords("{{c::wrong}}").is_empty());
+    }
+
+    #[test]
+    fn occlusion_creates_one_card_per_mask() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let deck = db
+            .decks(&conn)
+            .create("Bio", None, "#3b82f6", 0.9)
+            .unwrap();
+
+        let fields = json!({
+            "image_path": "/tmp/cell.png",
+            "natural_width": 800,
+            "natural_height": 600,
+            "masks": [
+                { "x": 10.0, "y": 20.0, "width": 100.0, "height": 50.0, "label": "Mitochondrie" },
+                { "x": 200.0, "y": 80.0, "width": 80.0, "height": 80.0, "label": "Noyau" },
+                { "x": 300.0, "y": 200.0, "width": 60.0, "height": 60.0, "label": "" }
+            ]
+        });
+
+        let note = db
+            .notes(&conn)
+            .create(deck.id, NoteTemplate::Occlusion, fields, vec![])
+            .expect("note creation");
+        assert_eq!(note.template, NoteTemplate::Occlusion);
+
+        // 3 masks → 3 cards with ords 0, 1, 2.
+        let card_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM cards WHERE note_id = ?1",
+                rusqlite::params![note.id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(card_count, 3);
+
+        let ords: Vec<i64> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT card_ord FROM cards WHERE note_id = ?1 ORDER BY card_ord ASC",
+                )
+                .unwrap();
+            stmt.query_map(rusqlite::params![note.id], |r| r.get::<_, i64>(0))
+                .unwrap()
+                .map(|r| r.unwrap())
+                .collect()
+        };
+        assert_eq!(ords, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn occlusion_rejects_empty_masks() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let deck = db.decks(&conn).create("X", None, "#3b82f6", 0.9).unwrap();
+
+        let err = db
+            .notes(&conn)
+            .create(
+                deck.id,
+                NoteTemplate::Occlusion,
+                json!({
+                    "image_path": "/tmp/x.png",
+                    "natural_width": 1,
+                    "natural_height": 1,
+                    "masks": []
+                }),
+                vec![],
+            )
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+    }
+
+    #[test]
+    fn occlusion_rejects_missing_image_path() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let deck = db.decks(&conn).create("Y", None, "#3b82f6", 0.9).unwrap();
+
+        let err = db
+            .notes(&conn)
+            .create(
+                deck.id,
+                NoteTemplate::Occlusion,
+                json!({
+                    "masks": [{ "x": 1.0, "y": 1.0, "width": 10.0, "height": 10.0 }]
+                }),
+                vec![],
+            )
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
     }
 }

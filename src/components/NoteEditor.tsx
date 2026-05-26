@@ -1,14 +1,16 @@
 /**
  * Multi-template note editor used by the "Add card" page.
  *
- * Three tabs map to the three note templates supported by the Rust backend:
+ * Four tabs map to the four note templates supported by the Rust backend:
  *   - `basic`: front + back
  *   - `basic_reverse`: front + back, generates two cards
  *   - `cloze`: single text field with `{{c1::...}}` syntax + live preview
+ *   - `occlusion`: image + N rectangular masks, generates one card per mask
  *
  * Tags are entered as chips (Enter or comma to commit, backspace on empty
  * input removes the last). Keyboard shortcuts:
- *   - Ctrl/Cmd + Enter → submit
+ *   - Ctrl/Cmd + Enter → submit (text templates only — the occlusion editor
+ *     owns its own submit button because its inputs aren't textareas).
  *
  * On a successful submit we toast and reset; "Save and continue" reuses the
  * tag list but clears the fields and refocuses the first input.
@@ -16,6 +18,8 @@
 
 import { useRef, useState } from "react";
 import { ClozePreview, uniqueClozeNumbers } from "@/components/ClozePreview";
+import { OcclusionEditor } from "@/components/OcclusionEditor";
+import { TtsButton } from "@/components/TtsButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -111,17 +115,22 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
       }
       return { ok: true, fields: { front: f, back: b } };
     }
-    const text = clozeText.trim();
-    const numbers = uniqueClozeNumbers(text);
-    if (text.length === 0 || numbers.length === 0) {
-      toast({
-        title: "Cloze invalide",
-        description: "Ajoute au moins un {{c1::texte}} pour créer une carte.",
-        variant: "destructive",
-      });
-      return { ok: false };
+    if (template === "cloze") {
+      const text = clozeText.trim();
+      const numbers = uniqueClozeNumbers(text);
+      if (text.length === 0 || numbers.length === 0) {
+        toast({
+          title: "Cloze invalide",
+          description: "Ajoute au moins un {{c1::texte}} pour créer une carte.",
+          variant: "destructive",
+        });
+        return { ok: false };
+      }
+      return { ok: true, fields: { text } };
     }
-    return { ok: true, fields: { text } };
+    // "occlusion" is handled by the dedicated editor (early return above),
+    // so this branch should be unreachable.
+    return { ok: false };
   }
 
   function submit(continueAfter: boolean) {
@@ -181,6 +190,27 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
   }
 
   const isCloze = template === "cloze";
+  const isOcclusion = template === "occlusion";
+
+  // The occlusion editor owns its own image picker + masks UI + submit
+  // button, so we render it standalone (no <form>, no submit/tag rows below).
+  if (isOcclusion) {
+    return (
+      <div className="space-y-6">
+        <Tabs value={template} onValueChange={handleTemplateChange}>
+          <TabsList>
+            <TabsTrigger value="basic">Basic</TabsTrigger>
+            <TabsTrigger value="basic_reverse">Basic + Reverse</TabsTrigger>
+            <TabsTrigger value="cloze">Cloze</TabsTrigger>
+            <TabsTrigger value="occlusion">Image-occlusion</TabsTrigger>
+          </TabsList>
+          <TabsContent value="occlusion" className="space-y-4">
+            <OcclusionEditor deckId={deckId} onSaved={() => onAdded?.()} />
+          </TabsContent>
+        </Tabs>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-6">
@@ -189,11 +219,15 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
           <TabsTrigger value="basic">Basic</TabsTrigger>
           <TabsTrigger value="basic_reverse">Basic + Reverse</TabsTrigger>
           <TabsTrigger value="cloze">Cloze</TabsTrigger>
+          <TabsTrigger value="occlusion">Image-occlusion</TabsTrigger>
         </TabsList>
 
         <TabsContent value="basic" className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="front">Front</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="front">Front</Label>
+              <TtsButton text={front} />
+            </div>
             <Textarea
               id="front"
               ref={frontRef}
@@ -206,7 +240,10 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="back">Back</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="back">Back</Label>
+              <TtsButton text={back} />
+            </div>
             <Textarea
               id="back"
               value={back}
@@ -223,7 +260,10 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
             Génère <strong>deux cartes</strong> : Front → Back <em>et</em> Back → Front.
           </p>
           <div className="space-y-2">
-            <Label htmlFor="front-rev">Front</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="front-rev">Front</Label>
+              <TtsButton text={front} />
+            </div>
             <Textarea
               id="front-rev"
               ref={frontRef}
@@ -235,7 +275,10 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="back-rev">Back</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="back-rev">Back</Label>
+              <TtsButton text={back} />
+            </div>
             <Textarea
               id="back-rev"
               value={back}
@@ -250,7 +293,10 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
         <TabsContent value="cloze" className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="cloze-text">Texte</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="cloze-text">Texte</Label>
+                <TtsButton text={clozeText.replace(/\{\{c\d+::([^}]+?)(?:::[^}]+?)?\}\}/g, "$1")} />
+              </div>
               <Textarea
                 id="cloze-text"
                 ref={clozeRef}

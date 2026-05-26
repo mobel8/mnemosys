@@ -22,11 +22,13 @@ import {
   api,
   type Card,
   type CardWithNote,
+  type ConversionResult,
   type DayCount,
   type DayRetention,
   type Deck,
   type DeckPatch,
   type DeckStats,
+  type GeneratedCard,
   type ImportResult,
   type NextStates,
   type Note,
@@ -34,6 +36,8 @@ import {
   type Rating,
   type ReviewResult,
   type TodayStats,
+  type TTSResult,
+  type TTSVoice,
 } from "@/lib/tauri";
 
 export const queryKeys = {
@@ -49,6 +53,7 @@ export const queryKeys = {
   reviewsByDay: (days: number) => ["reviews-by-day", days] as const,
   retentionByDay: (days: number) => ["retention-by-day", days] as const,
   settings: ["settings"] as const,
+  ttsCacheSize: ["tts-cache-size"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -279,6 +284,21 @@ export function useSuspendCard(
   });
 }
 
+/** Mutation: reset a card to `new` (FSRS-wise). Reviews history is preserved. */
+export function useResetCard(opts?: UseMutationOptions<Card, Error, number>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => api.cards.resetCard(id),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: ["cards-in-deck"] });
+      qc.invalidateQueries({ queryKey: ["due-cards"] });
+      qc.invalidateQueries({ queryKey: ["deck-stats"] });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
 export function useSubmitReview(
   opts?: UseMutationOptions<
     ReviewResult,
@@ -358,6 +378,107 @@ export function useImportJson(opts?: UseMutationOptions<ImportResult, Error, { p
       qc.invalidateQueries({ queryKey: queryKeys.todayStats });
       qc.invalidateQueries({ queryKey: ["reviews-by-day"] });
       qc.invalidateQueries({ queryKey: ["retention-by-day"] });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Session 2 — AI, TTS, APKG
+// ---------------------------------------------------------------------------
+
+/**
+ * Mutation: generate flashcards from a text blob via Claude. Caller is then
+ * expected to validate/edit and persist them through `useCreateNote`.
+ * No cache invalidation — generation is stateless.
+ */
+export function useGenerateCardsFromText(
+  opts?: UseMutationOptions<
+    GeneratedCard[],
+    Error,
+    { text: string; maxCards: number; language: string }
+  >,
+) {
+  return useMutation({
+    mutationFn: ({ text, maxCards, language }) =>
+      api.ai.generateCardsText(text, maxCards, language),
+    ...opts,
+  });
+}
+
+/** Same as `useGenerateCardsFromText` but feeds Claude a PDF path. */
+export function useGenerateCardsFromPdf(
+  opts?: UseMutationOptions<
+    GeneratedCard[],
+    Error,
+    { pdfPath: string; maxCards: number; language: string }
+  >,
+) {
+  return useMutation({
+    mutationFn: ({ pdfPath, maxCards, language }) =>
+      api.ai.generateCardsPdf(pdfPath, maxCards, language),
+    ...opts,
+  });
+}
+
+/**
+ * Mutation: synthesise (or cache-hit) speech. Result includes the on-disk
+ * path; pass through `convertFileSrc()` before assigning to `<audio src>`.
+ * Invalidates the cache-size query when the call was a miss.
+ */
+export function useSynthesizeAudio(
+  opts?: UseMutationOptions<TTSResult, Error, { text: string; voice: TTSVoice; speed?: number }>,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ text, voice, speed }) => api.tts.synthesize(text, voice, speed),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      if (!data.cached) {
+        qc.invalidateQueries({ queryKey: queryKeys.ttsCacheSize });
+      }
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useClearTtsCache(opts?: UseMutationOptions<void, Error, void>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.tts.clearCache(),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.ttsCacheSize });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useTtsCacheSize(opts?: Partial<UseQueryOptions<number>>) {
+  return useQuery<number>({
+    queryKey: queryKeys.ttsCacheSize,
+    queryFn: () => api.tts.cacheSize(),
+    ...opts,
+  });
+}
+
+/**
+ * Mutation: import an Anki `.apkg`. Anki decks whose name already exists in
+ * Mnemosys are skipped wholesale; their names appear in `skipped_decks`.
+ */
+export function useImportApkg(
+  opts?: UseMutationOptions<ConversionResult, Error, { path: string }>,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ path }) => api.io.importApkg(path),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.decks });
+      qc.invalidateQueries({ queryKey: ["deck-stats"] });
+      qc.invalidateQueries({ queryKey: ["cards-in-deck"] });
+      qc.invalidateQueries({ queryKey: ["due-cards"] });
+      qc.invalidateQueries({ queryKey: queryKeys.todayStats });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

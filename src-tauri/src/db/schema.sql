@@ -13,7 +13,7 @@ CREATE TABLE decks (
 CREATE TABLE notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     deck_id INTEGER NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
-    template TEXT NOT NULL CHECK(template IN ('basic', 'basic_reverse', 'cloze')),
+    template TEXT NOT NULL CHECK(template IN ('basic', 'basic_reverse', 'cloze', 'occlusion')),
     fields TEXT NOT NULL,
     tags TEXT NOT NULL DEFAULT '[]',
     created_at INTEGER NOT NULL,

@@ -337,6 +337,76 @@ fn deck_stats_counts_by_state() {
 }
 
 #[test]
+fn reset_card_clears_fsrs_state_and_preserves_reviews() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let conn = db.lock();
+    db.notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::Basic,
+            json!({ "front": "Q", "back": "A" }),
+            vec![],
+        )
+        .unwrap();
+    let card_id = db
+        .cards(&conn)
+        .list_in_deck(deck_id, 10, 0)
+        .unwrap()
+        .pop()
+        .unwrap()
+        .card
+        .id;
+
+    // Simulate a single review pass so the card has non-zero FSRS state.
+    let now = 1_700_000_000_i64;
+    db.cards(&conn)
+        .update_after_review(card_id, CardState::Review, 5.0, 5.0, 5, now)
+        .unwrap();
+    db.reviews(&conn)
+        .insert(
+            NewReview {
+                card_id,
+                rating: 3,
+                state_before: CardState::New,
+                state_after: CardState::Review,
+                stability_before: None,
+                stability_after: 5.0,
+                difficulty_before: None,
+                difficulty_after: 5.0,
+                elapsed_days: 0,
+                scheduled_days: 5,
+                review_time: 1_500,
+            },
+            now,
+        )
+        .unwrap();
+
+    // Sanity check: card now has scheduling fields populated.
+    let before = db.cards(&conn).get(card_id).unwrap();
+    assert_eq!(before.state, CardState::Review);
+    assert!(before.stability.is_some());
+    assert_eq!(before.scheduled_days, 5);
+    assert_eq!(before.reps, 1);
+
+    // Reset.
+    let after = db.cards(&conn).reset(card_id).unwrap();
+    assert_eq!(after.state, CardState::New);
+    assert!(after.stability.is_none(), "stability must be cleared");
+    assert!(after.difficulty.is_none(), "difficulty must be cleared");
+    assert!(after.last_review.is_none(), "last_review must be cleared");
+    assert!(after.next_review.is_none(), "next_review must be cleared");
+    assert_eq!(after.elapsed_days, 0);
+    assert_eq!(after.scheduled_days, 0);
+    assert_eq!(after.reps, 0);
+    assert_eq!(after.lapses, 0);
+
+    // Reviews history must survive — that's the whole point of reset vs delete.
+    let reviews_after = db.reviews(&conn).list_for_card(card_id).unwrap();
+    assert_eq!(reviews_after.len(), 1);
+    assert_eq!(reviews_after[0].card_id, card_id);
+}
+
+#[test]
 fn fsrs_params_seeded_on_init() {
     let db = Database::for_test();
     let conn = db.lock();
