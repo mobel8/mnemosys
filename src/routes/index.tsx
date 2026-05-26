@@ -7,9 +7,10 @@
 
 import { createRoute } from "@tanstack/react-router";
 import { BookOpen, ClipboardList, Plus, Sparkles, TrendingUp } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CreateDeckDialog } from "@/components/CreateDeckDialog";
 import { DeckGrid } from "@/components/DeckGrid";
+import { FirstRunWizard, isFirstRunPending } from "@/components/FirstRunWizard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/components/ui/use-toast";
@@ -41,9 +42,21 @@ function IndexPage() {
     },
   });
   const [createOpen, setCreateOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const deckList = decks.data ?? [];
   const isEmpty = !decks.isLoading && deckList.length === 0;
+
+  // Show the first-run wizard once the decks query resolves and reports an
+  // empty collection — but only if the user hasn't dismissed it before.
+  // We gate on `decks.isSuccess` so a loading or error state doesn't
+  // briefly flash the wizard before we know the deck list is genuinely
+  // empty.
+  useEffect(() => {
+    if (decks.isSuccess && deckList.length === 0 && isFirstRunPending()) {
+      setWizardOpen(true);
+    }
+  }, [decks.isSuccess, deckList.length]);
 
   return (
     <div className="space-y-8 p-6">
@@ -108,6 +121,7 @@ function IndexPage() {
       </section>
 
       <CreateDeckDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <FirstRunWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
     </div>
   );
 }

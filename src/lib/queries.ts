@@ -27,6 +27,7 @@ import {
   type Deck,
   type DeckPatch,
   type DeckStats,
+  type ImportResult,
   type NextStates,
   type Note,
   type NoteTemplate,
@@ -321,6 +322,42 @@ export function useLoadDemo(opts?: UseMutationOptions<number, Error, void>) {
     ...opts,
     onSuccess: (data, variables, onMutateResult, context) => {
       qc.invalidateQueries({ queryKey: queryKeys.decks });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/**
+ * Mutation: serialise the selected decks to a JSON file at `path`. Returns
+ * the number of notes written. No cache invalidation needed — exporting
+ * doesn't change DB state.
+ */
+export function useExportJson(
+  opts?: UseMutationOptions<number, Error, { deckIds: number[]; path: string }>,
+) {
+  return useMutation({
+    mutationFn: ({ deckIds, path }) => api.io.exportJson(deckIds, path),
+    ...opts,
+  });
+}
+
+/**
+ * Mutation: ingest a Mnemosys JSON export. Invalidates every deck / card /
+ * stats query because the import can mint arbitrary new rows across the DB.
+ */
+export function useImportJson(opts?: UseMutationOptions<ImportResult, Error, { path: string }>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ path }) => api.io.importJson(path),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.decks });
+      qc.invalidateQueries({ queryKey: ["deck-stats"] });
+      qc.invalidateQueries({ queryKey: ["cards-in-deck"] });
+      qc.invalidateQueries({ queryKey: ["due-cards"] });
+      qc.invalidateQueries({ queryKey: queryKeys.todayStats });
+      qc.invalidateQueries({ queryKey: ["reviews-by-day"] });
+      qc.invalidateQueries({ queryKey: ["retention-by-day"] });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

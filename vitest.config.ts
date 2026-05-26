@@ -2,8 +2,12 @@ import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+// Vitest 2 ships its own copy of Vite 5 whose Plugin type differs from the
+// Vite 7 installed at the workspace root. The plugin works at runtime; we
+// just need to silence the structural mismatch at compile time.
 export default defineConfig({
-  plugins: [react()],
+  // biome-ignore lint/suspicious/noExplicitAny: type collision between two vite versions
+  plugins: [react() as any],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

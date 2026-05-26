@@ -1,14 +1,36 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type PluginOption } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+// Read version from package.json at build time so the About page can
+// surface it without a runtime fetch. Falls back to a sentinel so the
+// page always renders something useful.
+const pkgVersion = (() => {
+  try {
+    const pkg = JSON.parse(readFileSync(path.join(dirname, "package.json"), "utf8")) as {
+      version?: string;
+    };
+    return pkg.version ?? "0.0.0-dev";
+  } catch {
+    return "0.0.0-dev";
+  }
+})();
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  // Vite 7 + @tailwindcss/vite 4 + @vitejs/plugin-react 5 have a Plugin type
+  // mismatch (FalsyPlugin vs false). Cast through unknown to keep both.
+  plugins: [react(), tailwindcss()] as unknown as PluginOption[],
+
+  define: {
+    "import.meta.env.PACKAGE_VERSION": JSON.stringify(pkgVersion),
+  },
 
   resolve: {
     alias: {

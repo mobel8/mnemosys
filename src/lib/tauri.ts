@@ -134,6 +134,18 @@ export interface AppSettings {
   show_next_interval: boolean;
 }
 
+/**
+ * Per-import summary returned by `import_json`. Mirrors `ImportResult`
+ * (snake_case) on the Rust side.
+ */
+export interface ImportResult {
+  decks_imported: number;
+  notes_imported: number;
+  cards_created: number;
+  /** Names of decks skipped because the same name already exists locally. */
+  skipped_decks: string[];
+}
+
 // ---------------------------------------------------------------------------
 // API surface
 // ---------------------------------------------------------------------------
@@ -207,5 +219,19 @@ export const api = {
   settings: {
     get: () => invoke<AppSettings>("get_settings"),
     save: (settings: AppSettings) => invoke<void>("save_settings", { settings }),
+  },
+  io: {
+    /**
+     * Export the listed decks (and all their notes) as a single JSON file
+     * at `path`. Returns the number of notes written so the caller can show
+     * a toast without re-reading the file.
+     */
+    exportJson: (deckIds: number[], path: string) =>
+      invoke<number>("export_json", { deckIds, path }),
+    /**
+     * Read a Mnemosys JSON export and ingest it into the live database.
+     * Decks whose name already exists are skipped wholesale.
+     */
+    importJson: (path: string) => invoke<ImportResult>("import_json", { path }),
   },
 };

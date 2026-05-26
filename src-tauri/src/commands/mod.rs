@@ -8,6 +8,7 @@
 pub mod cards;
 pub mod decks;
 pub mod demo;
+pub mod io;
 pub mod review;
 pub mod settings;
 pub mod stats;

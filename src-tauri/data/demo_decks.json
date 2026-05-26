@@ -1,0 +1,6648 @@
+{
+  "version": 1,
+  "decks": [
+    {
+      "name": "Vocabulary EN→FR",
+      "description": "500 mots anglais courants avec leur traduction française. Niveaux CEFR A1 à B2.",
+      "color": "#3b82f6",
+      "desired_retention": 0.9,
+      "notes": [
+        {
+          "template": "basic",
+          "fields": {
+            "front": "water",
+            "back": "eau"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "bread",
+            "back": "pain"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "day",
+            "back": "jour"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "night",
+            "back": "nuit"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "house",
+            "back": "maison"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "car",
+            "back": "voiture"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "man",
+            "back": "homme"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "woman",
+            "back": "femme"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "child",
+            "back": "enfant"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "boy",
+            "back": "garçon"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "girl",
+            "back": "fille"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "family",
+            "back": "famille"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "mother",
+            "back": "mère"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "father",
+            "back": "père"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "brother",
+            "back": "frère"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "sister",
+            "back": "sœur"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "friend",
+            "back": "ami"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "school",
+            "back": "école"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "book",
+            "back": "livre"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "table",
+            "back": "table"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "chair",
+            "back": "chaise"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "door",
+            "back": "porte"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "window",
+            "back": "fenêtre"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "street",
+            "back": "rue"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "city",
+            "back": "ville"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "country",
+            "back": "pays"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "food",
+            "back": "nourriture"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "milk",
+            "back": "lait"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "coffee",
+            "back": "café"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "tea",
+            "back": "thé"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "apple",
+            "back": "pomme"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "egg",
+            "back": "œuf"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "cheese",
+            "back": "fromage"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "meat",
+            "back": "viande"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "fish",
+            "back": "poisson"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "dog",
+            "back": "chien"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "cat",
+            "back": "chat"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "bird",
+            "back": "oiseau"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "tree",
+            "back": "arbre"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "flower",
+            "back": "fleur"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "sun",
+            "back": "soleil"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "moon",
+            "back": "lune"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "sky",
+            "back": "ciel"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "sea",
+            "back": "mer"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "rain",
+            "back": "pluie"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "snow",
+            "back": "neige"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "year",
+            "back": "année"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "month",
+            "back": "mois"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "week",
+            "back": "semaine"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "hour",
+            "back": "heure"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "minute",
+            "back": "minute"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "morning",
+            "back": "matin"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "evening",
+            "back": "soir"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "name",
+            "back": "nom"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "number",
+            "back": "numéro"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "money",
+            "back": "argent"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "work",
+            "back": "travail"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "time",
+            "back": "temps"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "place",
+            "back": "endroit"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "thing",
+            "back": "chose"
+          },
+          "tags": ["level-a1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to be",
+            "back": "être"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to have",
+            "back": "avoir"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to do",
+            "back": "faire"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to say",
+            "back": "dire"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to go",
+            "back": "aller"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to come",
+            "back": "venir"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to see",
+            "back": "voir"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to know",
+            "back": "savoir"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to want",
+            "back": "vouloir"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to take",
+            "back": "prendre"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to give",
+            "back": "donner"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to make",
+            "back": "faire (fabriquer)"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to put",
+            "back": "mettre"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to find",
+            "back": "trouver"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to think",
+            "back": "penser"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to look",
+            "back": "regarder"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to eat",
+            "back": "manger"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to drink",
+            "back": "boire"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to sleep",
+            "back": "dormir"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to read",
+            "back": "lire"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to write",
+            "back": "écrire"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to speak",
+            "back": "parler"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to listen",
+            "back": "écouter"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to hear",
+            "back": "entendre"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to walk",
+            "back": "marcher"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to run",
+            "back": "courir"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to sit",
+            "back": "s'asseoir"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to stand",
+            "back": "se tenir debout"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to open",
+            "back": "ouvrir"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to close",
+            "back": "fermer"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to buy",
+            "back": "acheter"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to sell",
+            "back": "vendre"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to pay",
+            "back": "payer"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to ask",
+            "back": "demander"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to answer",
+            "back": "répondre"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to help",
+            "back": "aider"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to play",
+            "back": "jouer"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to work",
+            "back": "travailler"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to live",
+            "back": "vivre"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to love",
+            "back": "aimer"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to like",
+            "back": "apprécier"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to call",
+            "back": "appeler"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to wait",
+            "back": "attendre"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to learn",
+            "back": "apprendre"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to understand",
+            "back": "comprendre"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to begin",
+            "back": "commencer"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to finish",
+            "back": "finir"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to leave",
+            "back": "partir"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to arrive",
+            "back": "arriver"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to use",
+            "back": "utiliser"
+          },
+          "tags": ["level-a1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "big",
+            "back": "grand"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "small",
+            "back": "petit"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "good",
+            "back": "bon"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "bad",
+            "back": "mauvais"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "new",
+            "back": "nouveau"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "old",
+            "back": "vieux"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "young",
+            "back": "jeune"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "happy",
+            "back": "heureux"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "sad",
+            "back": "triste"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "hot",
+            "back": "chaud"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "cold",
+            "back": "froid"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "easy",
+            "back": "facile"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "difficult",
+            "back": "difficile"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "beautiful",
+            "back": "beau"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "ugly",
+            "back": "laid"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "fast",
+            "back": "rapide"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "slow",
+            "back": "lent"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "rich",
+            "back": "riche"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "poor",
+            "back": "pauvre"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "tired",
+            "back": "fatigué"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "open",
+            "back": "ouvert"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "closed",
+            "back": "fermé"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "wrong",
+            "back": "faux"
+          },
+          "tags": ["level-a1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "yes",
+            "back": "oui"
+          },
+          "tags": ["level-a1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "no",
+            "back": "non"
+          },
+          "tags": ["level-a1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "here",
+            "back": "ici"
+          },
+          "tags": ["level-a1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "there",
+            "back": "là"
+          },
+          "tags": ["level-a1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "now",
+            "back": "maintenant"
+          },
+          "tags": ["level-a1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "today",
+            "back": "aujourd'hui"
+          },
+          "tags": ["level-a1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "tomorrow",
+            "back": "demain"
+          },
+          "tags": ["level-a1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "yesterday",
+            "back": "hier"
+          },
+          "tags": ["level-a1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "always",
+            "back": "toujours"
+          },
+          "tags": ["level-a1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "never",
+            "back": "jamais"
+          },
+          "tags": ["level-a1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "in",
+            "back": "dans"
+          },
+          "tags": ["level-a1", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "on",
+            "back": "sur"
+          },
+          "tags": ["level-a1", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "under",
+            "back": "sous"
+          },
+          "tags": ["level-a1", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "with",
+            "back": "avec"
+          },
+          "tags": ["level-a1", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "for",
+            "back": "pour"
+          },
+          "tags": ["level-a1", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "from",
+            "back": "de (provenance)"
+          },
+          "tags": ["level-a1", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to",
+            "back": "à"
+          },
+          "tags": ["level-a1", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "airport",
+            "back": "aéroport"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "station",
+            "back": "gare"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "ticket",
+            "back": "billet"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "hotel",
+            "back": "hôtel"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "room",
+            "back": "chambre"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "kitchen",
+            "back": "cuisine"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "bathroom",
+            "back": "salle de bain"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "bedroom",
+            "back": "chambre à coucher"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "garden",
+            "back": "jardin"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "park",
+            "back": "parc"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "hospital",
+            "back": "hôpital"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "doctor",
+            "back": "médecin"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "nurse",
+            "back": "infirmière"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "teacher",
+            "back": "enseignant"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "student",
+            "back": "étudiant"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "class",
+            "back": "cours"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "lesson",
+            "back": "leçon"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "answer",
+            "back": "réponse"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "question",
+            "back": "question"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "problem",
+            "back": "problème"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "idea",
+            "back": "idée"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "story",
+            "back": "histoire"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "song",
+            "back": "chanson"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "music",
+            "back": "musique"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "film",
+            "back": "film"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "game",
+            "back": "jeu"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "sport",
+            "back": "sport"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "ball",
+            "back": "balle"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "team",
+            "back": "équipe"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "party",
+            "back": "fête"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "birthday",
+            "back": "anniversaire"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "present",
+            "back": "cadeau"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "breakfast",
+            "back": "petit-déjeuner"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "lunch",
+            "back": "déjeuner"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "dinner",
+            "back": "dîner"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "vegetable",
+            "back": "légume"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "fruit",
+            "back": "fruit"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "orange",
+            "back": "orange"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "banana",
+            "back": "banane"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "potato",
+            "back": "pomme de terre"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "tomato",
+            "back": "tomate"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "sugar",
+            "back": "sucre"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "salt",
+            "back": "sel"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "clothes",
+            "back": "vêtements"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "shirt",
+            "back": "chemise"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "trousers",
+            "back": "pantalon"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "shoe",
+            "back": "chaussure"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "hat",
+            "back": "chapeau"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "jacket",
+            "back": "veste"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "bag",
+            "back": "sac"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "key",
+            "back": "clé"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "phone",
+            "back": "téléphone"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "computer",
+            "back": "ordinateur"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "camera",
+            "back": "appareil photo"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "letter",
+            "back": "lettre"
+          },
+          "tags": ["level-a2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to bring",
+            "back": "apporter"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to send",
+            "back": "envoyer"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to receive",
+            "back": "recevoir"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to choose",
+            "back": "choisir"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to change",
+            "back": "changer"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to follow",
+            "back": "suivre"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to keep",
+            "back": "garder"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to lose",
+            "back": "perdre"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to win",
+            "back": "gagner"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to try",
+            "back": "essayer"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to need",
+            "back": "avoir besoin de"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to forget",
+            "back": "oublier"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to remember",
+            "back": "se souvenir"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to feel",
+            "back": "sentir"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to seem",
+            "back": "sembler"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to look like",
+            "back": "ressembler à"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to grow",
+            "back": "grandir"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to fall",
+            "back": "tomber"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to break",
+            "back": "casser"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to fix",
+            "back": "réparer"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to build",
+            "back": "construire"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to cook",
+            "back": "cuisiner"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to clean",
+            "back": "nettoyer"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to wash",
+            "back": "laver"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to dry",
+            "back": "sécher"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to cut",
+            "back": "couper"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to push",
+            "back": "pousser"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to pull",
+            "back": "tirer"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to throw",
+            "back": "lancer"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to catch",
+            "back": "attraper"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to drive",
+            "back": "conduire"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to fly",
+            "back": "voler"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to swim",
+            "back": "nager"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to climb",
+            "back": "grimper"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to jump",
+            "back": "sauter"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to laugh",
+            "back": "rire"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to cry",
+            "back": "pleurer"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to smile",
+            "back": "sourire"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to kiss",
+            "back": "embrasser"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to meet",
+            "back": "rencontrer"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to invite",
+            "back": "inviter"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to visit",
+            "back": "visiter"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to travel",
+            "back": "voyager"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to stay",
+            "back": "rester"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to wear",
+            "back": "porter (vêtement)"
+          },
+          "tags": ["level-a2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "interesting",
+            "back": "intéressant"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "boring",
+            "back": "ennuyeux"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "dangerous",
+            "back": "dangereux"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "safe",
+            "back": "sûr"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "clean",
+            "back": "propre"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "dirty",
+            "back": "sale"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "strong",
+            "back": "fort"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "weak",
+            "back": "faible"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "light",
+            "back": "léger"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "heavy",
+            "back": "lourd"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "dark",
+            "back": "sombre"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "bright",
+            "back": "lumineux"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "dry",
+            "back": "sec"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "wet",
+            "back": "mouillé"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "full",
+            "back": "plein"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "empty",
+            "back": "vide"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "free",
+            "back": "libre"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "busy",
+            "back": "occupé"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "angry",
+            "back": "en colère"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "calm",
+            "back": "calme"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "kind",
+            "back": "gentil"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "polite",
+            "back": "poli"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "rude",
+            "back": "impoli"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "famous",
+            "back": "célèbre"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "important",
+            "back": "important"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "popular",
+            "back": "populaire"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "strange",
+            "back": "étrange"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "similar",
+            "back": "similaire"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "different",
+            "back": "différent"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "same",
+            "back": "même"
+          },
+          "tags": ["level-a2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "often",
+            "back": "souvent"
+          },
+          "tags": ["level-a2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "sometimes",
+            "back": "parfois"
+          },
+          "tags": ["level-a2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "rarely",
+            "back": "rarement"
+          },
+          "tags": ["level-a2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "usually",
+            "back": "habituellement"
+          },
+          "tags": ["level-a2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "quickly",
+            "back": "rapidement"
+          },
+          "tags": ["level-a2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "slowly",
+            "back": "lentement"
+          },
+          "tags": ["level-a2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "carefully",
+            "back": "soigneusement"
+          },
+          "tags": ["level-a2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "really",
+            "back": "vraiment"
+          },
+          "tags": ["level-a2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "almost",
+            "back": "presque"
+          },
+          "tags": ["level-a2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "together",
+            "back": "ensemble"
+          },
+          "tags": ["level-a2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "alone",
+            "back": "seul"
+          },
+          "tags": ["level-a2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "everywhere",
+            "back": "partout"
+          },
+          "tags": ["level-a2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "between",
+            "back": "entre"
+          },
+          "tags": ["level-a2", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "behind",
+            "back": "derrière"
+          },
+          "tags": ["level-a2", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "in front of",
+            "back": "devant"
+          },
+          "tags": ["level-a2", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "next to",
+            "back": "à côté de"
+          },
+          "tags": ["level-a2", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "near",
+            "back": "près de"
+          },
+          "tags": ["level-a2", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "far from",
+            "back": "loin de"
+          },
+          "tags": ["level-a2", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "during",
+            "back": "pendant"
+          },
+          "tags": ["level-a2", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "without",
+            "back": "sans"
+          },
+          "tags": ["level-a2", "preposition"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "government",
+            "back": "gouvernement"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "president",
+            "back": "président"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "politics",
+            "back": "politique"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "election",
+            "back": "élection"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "law",
+            "back": "loi"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "right",
+            "back": "droit"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "freedom",
+            "back": "liberté"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "justice",
+            "back": "justice"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "crime",
+            "back": "crime"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "police",
+            "back": "police"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "court",
+            "back": "tribunal"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "judge",
+            "back": "juge"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "lawyer",
+            "back": "avocat"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "witness",
+            "back": "témoin"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "evidence",
+            "back": "preuve"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "economy",
+            "back": "économie"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "business",
+            "back": "entreprise"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "market",
+            "back": "marché"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "company",
+            "back": "société"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "industry",
+            "back": "industrie"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "factory",
+            "back": "usine"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "product",
+            "back": "produit"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "service",
+            "back": "service"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "customer",
+            "back": "client"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "employee",
+            "back": "employé"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "salary",
+            "back": "salaire"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "tax",
+            "back": "impôt"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "budget",
+            "back": "budget"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "environment",
+            "back": "environnement"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "pollution",
+            "back": "pollution"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "climate",
+            "back": "climat"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "forest",
+            "back": "forêt"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "ocean",
+            "back": "océan"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "mountain",
+            "back": "montagne"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "river",
+            "back": "rivière"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "desert",
+            "back": "désert"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "island",
+            "back": "île"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "planet",
+            "back": "planète"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "space",
+            "back": "espace"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "universe",
+            "back": "univers"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "research",
+            "back": "recherche"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "experiment",
+            "back": "expérience"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "technology",
+            "back": "technologie"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "invention",
+            "back": "invention"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "discovery",
+            "back": "découverte"
+          },
+          "tags": ["level-b1", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to achieve",
+            "back": "accomplir"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to accept",
+            "back": "accepter"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to refuse",
+            "back": "refuser"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to admit",
+            "back": "admettre"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to deny",
+            "back": "nier"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to suggest",
+            "back": "suggérer"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to recommend",
+            "back": "recommander"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to consider",
+            "back": "considérer"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to decide",
+            "back": "décider"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to discuss",
+            "back": "discuter"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to argue",
+            "back": "se disputer"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to agree",
+            "back": "être d'accord"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to disagree",
+            "back": "ne pas être d'accord"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to explain",
+            "back": "expliquer"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to describe",
+            "back": "décrire"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to mention",
+            "back": "mentionner"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to discover",
+            "back": "découvrir"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to develop",
+            "back": "développer"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to improve",
+            "back": "améliorer"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to increase",
+            "back": "augmenter"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to decrease",
+            "back": "diminuer"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to reduce",
+            "back": "réduire"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to manage",
+            "back": "gérer"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to control",
+            "back": "contrôler"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to allow",
+            "back": "permettre"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to prevent",
+            "back": "empêcher"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to avoid",
+            "back": "éviter"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to protect",
+            "back": "protéger"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to attack",
+            "back": "attaquer"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to defend",
+            "back": "défendre"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to fight",
+            "back": "combattre"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to escape",
+            "back": "s'échapper"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to suffer",
+            "back": "souffrir"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to recover",
+            "back": "récupérer"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to depend on",
+            "back": "dépendre de"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to belong to",
+            "back": "appartenir à"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to include",
+            "back": "inclure"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to exclude",
+            "back": "exclure"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to require",
+            "back": "exiger"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to provide",
+            "back": "fournir"
+          },
+          "tags": ["level-b1", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "available",
+            "back": "disponible"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "necessary",
+            "back": "nécessaire"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "possible",
+            "back": "possible"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "impossible",
+            "back": "impossible"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "essential",
+            "back": "essentiel"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "useful",
+            "back": "utile"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "useless",
+            "back": "inutile"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "efficient",
+            "back": "efficace"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "expensive",
+            "back": "cher"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "cheap",
+            "back": "bon marché"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "valuable",
+            "back": "précieux"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "worthless",
+            "back": "sans valeur"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "complex",
+            "back": "complexe"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "simple",
+            "back": "simple"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "specific",
+            "back": "spécifique"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "general",
+            "back": "général"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "particular",
+            "back": "particulier"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "common",
+            "back": "commun"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "rare",
+            "back": "rare"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "unique",
+            "back": "unique"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "public",
+            "back": "public"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "private",
+            "back": "privé"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "modern",
+            "back": "moderne"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "ancient",
+            "back": "ancien"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "recent",
+            "back": "récent"
+          },
+          "tags": ["level-b1", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "immediately",
+            "back": "immédiatement"
+          },
+          "tags": ["level-b1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "eventually",
+            "back": "finalement"
+          },
+          "tags": ["level-b1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "suddenly",
+            "back": "soudainement"
+          },
+          "tags": ["level-b1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "probably",
+            "back": "probablement"
+          },
+          "tags": ["level-b1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "certainly",
+            "back": "certainement"
+          },
+          "tags": ["level-b1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "perhaps",
+            "back": "peut-être"
+          },
+          "tags": ["level-b1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "recently",
+            "back": "récemment"
+          },
+          "tags": ["level-b1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "hardly",
+            "back": "à peine"
+          },
+          "tags": ["level-b1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "completely",
+            "back": "complètement"
+          },
+          "tags": ["level-b1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "clearly",
+            "back": "clairement"
+          },
+          "tags": ["level-b1", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "achievement",
+            "back": "réussite"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "advantage",
+            "back": "avantage"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "disadvantage",
+            "back": "inconvénient"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "opportunity",
+            "back": "opportunité"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "challenge",
+            "back": "défi"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "consequence",
+            "back": "conséquence"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "influence",
+            "back": "influence"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "impact",
+            "back": "impact"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "trend",
+            "back": "tendance"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "issue",
+            "back": "problème (sujet)"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "statement",
+            "back": "déclaration"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "argument",
+            "back": "argument"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "conclusion",
+            "back": "conclusion"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "assumption",
+            "back": "hypothèse"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "perspective",
+            "back": "perspective"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "attitude",
+            "back": "attitude"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "behaviour",
+            "back": "comportement"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "approach",
+            "back": "approche"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "strategy",
+            "back": "stratégie"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "framework",
+            "back": "cadre"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "infrastructure",
+            "back": "infrastructure"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "resource",
+            "back": "ressource"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "welfare",
+            "back": "bien-être"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "inequality",
+            "back": "inégalité"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "diversity",
+            "back": "diversité"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "heritage",
+            "back": "patrimoine"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "legacy",
+            "back": "héritage"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "threshold",
+            "back": "seuil"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "breakthrough",
+            "back": "percée"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "setback",
+            "back": "revers"
+          },
+          "tags": ["level-b2", "noun"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to acknowledge",
+            "back": "reconnaître"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to assume",
+            "back": "supposer"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to assess",
+            "back": "évaluer"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to enhance",
+            "back": "améliorer (renforcer)"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to overcome",
+            "back": "surmonter"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to undermine",
+            "back": "saper"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to emphasize",
+            "back": "souligner"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to underline",
+            "back": "souligner"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to highlight",
+            "back": "mettre en évidence"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to facilitate",
+            "back": "faciliter"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to hinder",
+            "back": "entraver"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to comply with",
+            "back": "se conformer à"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to contradict",
+            "back": "contredire"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to demonstrate",
+            "back": "démontrer"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to illustrate",
+            "back": "illustrer"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to imply",
+            "back": "impliquer"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to infer",
+            "back": "déduire"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to justify",
+            "back": "justifier"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to negotiate",
+            "back": "négocier"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to undertake",
+            "back": "entreprendre"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to perceive",
+            "back": "percevoir"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to interpret",
+            "back": "interpréter"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to outline",
+            "back": "exposer (les grandes lignes)"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to anticipate",
+            "back": "anticiper"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "to compensate",
+            "back": "compenser"
+          },
+          "tags": ["level-b2", "verb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "relevant",
+            "back": "pertinent"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "irrelevant",
+            "back": "non pertinent"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "significant",
+            "back": "significatif"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "substantial",
+            "back": "substantiel"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "controversial",
+            "back": "controversé"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "crucial",
+            "back": "crucial"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "inevitable",
+            "back": "inévitable"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "widespread",
+            "back": "répandu"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "comprehensive",
+            "back": "complet"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "thorough",
+            "back": "approfondi"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "vague",
+            "back": "vague"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "precise",
+            "back": "précis"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "reliable",
+            "back": "fiable"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "sustainable",
+            "back": "durable"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "feasible",
+            "back": "réalisable"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "predictable",
+            "back": "prévisible"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "ambiguous",
+            "back": "ambigu"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "redundant",
+            "back": "redondant"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "subsequent",
+            "back": "ultérieur"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "preliminary",
+            "back": "préliminaire"
+          },
+          "tags": ["level-b2", "adjective"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "nevertheless",
+            "back": "néanmoins"
+          },
+          "tags": ["level-b2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "furthermore",
+            "back": "de plus"
+          },
+          "tags": ["level-b2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "therefore",
+            "back": "par conséquent"
+          },
+          "tags": ["level-b2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "regardless",
+            "back": "indépendamment"
+          },
+          "tags": ["level-b2", "adverb"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "simultaneously",
+            "back": "simultanément"
+          },
+          "tags": ["level-b2", "adverb"]
+        }
+      ]
+    },
+    {
+      "name": "Capitales du monde",
+      "description": "195 capitales de pays. Cartes recto-verso (pays ↔ capitale).",
+      "color": "#10b981",
+      "desired_retention": 0.9,
+      "notes": [
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Afrique du Sud",
+            "back": "Pretoria"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Algérie",
+            "back": "Alger"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Angola",
+            "back": "Luanda"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Bénin",
+            "back": "Porto-Novo"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Botswana",
+            "back": "Gaborone"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Burkina Faso",
+            "back": "Ouagadougou"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Burundi",
+            "back": "Gitega"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Cameroun",
+            "back": "Yaoundé"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Cap-Vert",
+            "back": "Praia"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "République centrafricaine",
+            "back": "Bangui"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Comores",
+            "back": "Moroni"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "République du Congo",
+            "back": "Brazzaville"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "République démocratique du Congo",
+            "back": "Kinshasa"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Côte d'Ivoire",
+            "back": "Yamoussoukro"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Djibouti",
+            "back": "Djibouti"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Égypte",
+            "back": "Le Caire"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Érythrée",
+            "back": "Asmara"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Eswatini",
+            "back": "Mbabane"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Éthiopie",
+            "back": "Addis-Abeba"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Gabon",
+            "back": "Libreville"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Gambie",
+            "back": "Banjul"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Ghana",
+            "back": "Accra"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Guinée",
+            "back": "Conakry"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Guinée-Bissau",
+            "back": "Bissau"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Guinée équatoriale",
+            "back": "Malabo"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Kenya",
+            "back": "Nairobi"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Lesotho",
+            "back": "Maseru"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Libéria",
+            "back": "Monrovia"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Libye",
+            "back": "Tripoli"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Madagascar",
+            "back": "Antananarivo"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Malawi",
+            "back": "Lilongwe"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Mali",
+            "back": "Bamako"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Maroc",
+            "back": "Rabat"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Maurice",
+            "back": "Port-Louis"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Mauritanie",
+            "back": "Nouakchott"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Mozambique",
+            "back": "Maputo"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Namibie",
+            "back": "Windhoek"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Niger",
+            "back": "Niamey"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Nigeria",
+            "back": "Abuja"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Ouganda",
+            "back": "Kampala"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Rwanda",
+            "back": "Kigali"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Sao Tomé-et-Principe",
+            "back": "São Tomé"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Sénégal",
+            "back": "Dakar"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Seychelles",
+            "back": "Victoria"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Sierra Leone",
+            "back": "Freetown"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Somalie",
+            "back": "Mogadiscio"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Soudan",
+            "back": "Khartoum"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Soudan du Sud",
+            "back": "Djouba"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Tanzanie",
+            "back": "Dodoma"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Tchad",
+            "back": "N'Djamena"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Togo",
+            "back": "Lomé"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Tunisie",
+            "back": "Tunis"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Zambie",
+            "back": "Lusaka"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Zimbabwe",
+            "back": "Harare"
+          },
+          "tags": ["continent-africa"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Antigua-et-Barbuda",
+            "back": "Saint John's"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Argentine",
+            "back": "Buenos Aires"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Bahamas",
+            "back": "Nassau"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Barbade",
+            "back": "Bridgetown"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Belize",
+            "back": "Belmopan"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Bolivie",
+            "back": "Sucre"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Brésil",
+            "back": "Brasília"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Canada",
+            "back": "Ottawa"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Chili",
+            "back": "Santiago"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Colombie",
+            "back": "Bogota"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Costa Rica",
+            "back": "San José"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Cuba",
+            "back": "La Havane"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "République dominicaine",
+            "back": "Saint-Domingue"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Dominique",
+            "back": "Roseau"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Équateur",
+            "back": "Quito"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Salvador",
+            "back": "San Salvador"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "États-Unis",
+            "back": "Washington"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Grenade",
+            "back": "Saint-Georges"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Guatemala",
+            "back": "Guatemala"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Guyana",
+            "back": "Georgetown"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Haïti",
+            "back": "Port-au-Prince"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Honduras",
+            "back": "Tegucigalpa"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Jamaïque",
+            "back": "Kingston"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Mexique",
+            "back": "Mexico"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Nicaragua",
+            "back": "Managua"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Panama",
+            "back": "Panama"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Paraguay",
+            "back": "Asuncion"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Pérou",
+            "back": "Lima"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Saint-Kitts-et-Nevis",
+            "back": "Basseterre"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Sainte-Lucie",
+            "back": "Castries"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Saint-Vincent-et-les-Grenadines",
+            "back": "Kingstown"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Suriname",
+            "back": "Paramaribo"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Trinité-et-Tobago",
+            "back": "Port-d'Espagne"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Uruguay",
+            "back": "Montevideo"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Venezuela",
+            "back": "Caracas"
+          },
+          "tags": ["continent-americas"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Afghanistan",
+            "back": "Kaboul"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Arabie saoudite",
+            "back": "Riyad"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Arménie",
+            "back": "Erevan"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Azerbaïdjan",
+            "back": "Bakou"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Bahreïn",
+            "back": "Manama"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Bangladesh",
+            "back": "Dacca"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Bhoutan",
+            "back": "Thimphou"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Birmanie (Myanmar)",
+            "back": "Naypyidaw"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Brunei",
+            "back": "Bandar Seri Begawan"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Cambodge",
+            "back": "Phnom Penh"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Chine",
+            "back": "Pékin"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Chypre",
+            "back": "Nicosie"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Corée du Nord",
+            "back": "Pyongyang"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Corée du Sud",
+            "back": "Séoul"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Émirats arabes unis",
+            "back": "Abou Dabi"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Géorgie",
+            "back": "Tbilissi"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Inde",
+            "back": "New Delhi"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Indonésie",
+            "back": "Jakarta"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Irak",
+            "back": "Bagdad"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Iran",
+            "back": "Téhéran"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Israël",
+            "back": "Jérusalem"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Japon",
+            "back": "Tokyo"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Jordanie",
+            "back": "Amman"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Kazakhstan",
+            "back": "Astana"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Kirghizistan",
+            "back": "Bichkek"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Koweït",
+            "back": "Koweït"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Laos",
+            "back": "Vientiane"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Liban",
+            "back": "Beyrouth"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Malaisie",
+            "back": "Kuala Lumpur"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Maldives",
+            "back": "Malé"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Mongolie",
+            "back": "Oulan-Bator"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Népal",
+            "back": "Katmandou"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Oman",
+            "back": "Mascate"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Ouzbékistan",
+            "back": "Tachkent"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Pakistan",
+            "back": "Islamabad"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Palestine",
+            "back": "Jérusalem-Est"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Philippines",
+            "back": "Manille"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Qatar",
+            "back": "Doha"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Singapour",
+            "back": "Singapour"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Sri Lanka",
+            "back": "Sri Jayawardenapura Kotte"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Syrie",
+            "back": "Damas"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Tadjikistan",
+            "back": "Douchanbé"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Thaïlande",
+            "back": "Bangkok"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Timor oriental",
+            "back": "Dili"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Turkménistan",
+            "back": "Achgabat"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Turquie",
+            "back": "Ankara"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Vietnam",
+            "back": "Hanoï"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Yémen",
+            "back": "Sanaa"
+          },
+          "tags": ["continent-asia"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Albanie",
+            "back": "Tirana"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Allemagne",
+            "back": "Berlin"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Andorre",
+            "back": "Andorre-la-Vieille"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Autriche",
+            "back": "Vienne"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Belgique",
+            "back": "Bruxelles"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Biélorussie",
+            "back": "Minsk"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Bosnie-Herzégovine",
+            "back": "Sarajevo"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Bulgarie",
+            "back": "Sofia"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Croatie",
+            "back": "Zagreb"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Danemark",
+            "back": "Copenhague"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Espagne",
+            "back": "Madrid"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Estonie",
+            "back": "Tallinn"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Finlande",
+            "back": "Helsinki"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "France",
+            "back": "Paris"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Grèce",
+            "back": "Athènes"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Hongrie",
+            "back": "Budapest"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Irlande",
+            "back": "Dublin"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Islande",
+            "back": "Reykjavik"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Italie",
+            "back": "Rome"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Lettonie",
+            "back": "Riga"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Liechtenstein",
+            "back": "Vaduz"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Lituanie",
+            "back": "Vilnius"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Luxembourg",
+            "back": "Luxembourg"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Macédoine du Nord",
+            "back": "Skopje"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Malte",
+            "back": "La Valette"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Moldavie",
+            "back": "Chișinău"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Monaco",
+            "back": "Monaco"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Monténégro",
+            "back": "Podgorica"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Norvège",
+            "back": "Oslo"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Pays-Bas",
+            "back": "Amsterdam"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Pologne",
+            "back": "Varsovie"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Portugal",
+            "back": "Lisbonne"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Roumanie",
+            "back": "Bucarest"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Royaume-Uni",
+            "back": "Londres"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Russie",
+            "back": "Moscou"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Saint-Marin",
+            "back": "Saint-Marin"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Saint-Siège (Vatican)",
+            "back": "Cité du Vatican"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Serbie",
+            "back": "Belgrade"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Slovaquie",
+            "back": "Bratislava"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Slovénie",
+            "back": "Ljubljana"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Suède",
+            "back": "Stockholm"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Suisse",
+            "back": "Berne"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Tchéquie",
+            "back": "Prague"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Ukraine",
+            "back": "Kiev"
+          },
+          "tags": ["continent-europe"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Australie",
+            "back": "Canberra"
+          },
+          "tags": ["continent-oceania"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Fidji",
+            "back": "Suva"
+          },
+          "tags": ["continent-oceania"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Îles Marshall",
+            "back": "Majuro"
+          },
+          "tags": ["continent-oceania"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Îles Salomon",
+            "back": "Honiara"
+          },
+          "tags": ["continent-oceania"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Kiribati",
+            "back": "Tarawa-Sud"
+          },
+          "tags": ["continent-oceania"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Micronésie",
+            "back": "Palikir"
+          },
+          "tags": ["continent-oceania"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Nauru",
+            "back": "Yaren"
+          },
+          "tags": ["continent-oceania"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Nouvelle-Zélande",
+            "back": "Wellington"
+          },
+          "tags": ["continent-oceania"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Palaos",
+            "back": "Ngerulmud"
+          },
+          "tags": ["continent-oceania"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Papouasie-Nouvelle-Guinée",
+            "back": "Port Moresby"
+          },
+          "tags": ["continent-oceania"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Samoa",
+            "back": "Apia"
+          },
+          "tags": ["continent-oceania"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Tonga",
+            "back": "Nukualofa"
+          },
+          "tags": ["continent-oceania"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Tuvalu",
+            "back": "Funafuti"
+          },
+          "tags": ["continent-oceania"]
+        },
+        {
+          "template": "basic_reverse",
+          "fields": {
+            "front": "Vanuatu",
+            "back": "Port-Vila"
+          },
+          "tags": ["continent-oceania"]
+        }
+      ]
+    },
+    {
+      "name": "JS/TS Fundamentals",
+      "description": "Concepts essentiels JavaScript et TypeScript pour développeurs.",
+      "color": "#f59e0b",
+      "desired_retention": 0.9,
+      "notes": [
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is the difference between `var`, `let`, and `const` in JavaScript?",
+            "back": "`var` is function-scoped and hoisted. `let` is block-scoped, can be reassigned. `const` is block-scoped and cannot be reassigned (but objects can still be mutated)."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "`{{c1::const}}` declares a block-scoped variable that cannot be reassigned."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "`{{c1::let}}` declares a block-scoped variable; unlike `var`, it is not hoisted to function scope."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What does the strict equality operator `===` check?",
+            "back": "It checks both value AND type without performing any type coercion. `5 === '5'` is `false`, while `5 == '5'` is `true`."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "The strict equality operator is `{{c1::===}}`; the loose (coercing) equality operator is `{{c2::==}}`."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is the ternary operator syntax in JS?",
+            "back": "`condition ? valueIfTrue : valueIfFalse` — a one-line conditional expression."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Template literals use {{c1::backticks}} and embed expressions with `{{c2::${...}}}`."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is the nullish coalescing operator?",
+            "back": "`??` returns the right operand only when the left is `null` or `undefined`. Unlike `||`, it does NOT treat `0`, `''` or `false` as missing."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Optional chaining uses `{{c1::?.}}` to safely access nested properties that may be null/undefined."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What does `typeof null` return in JavaScript?",
+            "back": "`'object'` — this is a long-standing bug from the original implementation, kept for backward compatibility."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "`typeof null` returns `{{c1::'object'}}`, a historical quirk of JavaScript."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is the difference between `null` and `undefined`?",
+            "back": "`undefined` means a variable has been declared but not assigned. `null` is an explicit \"no value\" assigned by the programmer."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "A `for...{{c1::of}}` loop iterates over values of iterables; a `for...{{c2::in}}` loop iterates over enumerable keys."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What does the `void` operator do?",
+            "back": "`void expr` evaluates `expr` and returns `undefined`. Commonly used as `void 0` for a safe `undefined` literal."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "JavaScript has {{c1::7}} primitive types: string, number, boolean, null, undefined, symbol, and bigint."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is automatic semicolon insertion (ASI)?",
+            "back": "JS engines automatically insert semicolons at statement ends. It can cause bugs, e.g. `return` followed by a newline returns `undefined`."
+          },
+          "tags": ["topic-syntax"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is a closure in JavaScript?",
+            "back": "A closure is a function that retains access to variables from its enclosing scope even after that scope has finished executing."
+          },
+          "tags": ["topic-functions"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "An {{c1::IIFE}} (Immediately Invoked Function Expression) is a function executed right after it is defined: `(function(){ ... })()`."
+          },
+          "tags": ["topic-functions"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is the difference between a regular function and an arrow function regarding `this`?",
+            "back": "Arrow functions do NOT have their own `this`; they inherit it lexically from the enclosing scope. Regular functions get a new `this` based on how they are called."
+          },
+          "tags": ["topic-functions"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Arrow functions use the syntax `{{c1::(args) => expr}}` and inherit `this` lexically."
+          },
+          "tags": ["topic-functions"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What do `.call()`, `.apply()`, and `.bind()` do?",
+            "back": "All set the `this` value of a function. `.call(thisArg, ...args)` invokes immediately with args. `.apply(thisArg, [args])` invokes with an array of args. `.bind(thisArg)` returns a new bound function without invoking it."
+          },
+          "tags": ["topic-functions"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Function parameters can have default values: `function greet(name = {{c1::'World'}}) { ... }`."
+          },
+          "tags": ["topic-functions"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is a rest parameter?",
+            "back": "`...args` in a function signature collects remaining arguments into a real array. Replaces the legacy `arguments` object."
+          },
+          "tags": ["topic-functions"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "The rest parameter syntax `{{c1::...args}}` collects an arbitrary number of arguments into an array."
+          },
+          "tags": ["topic-functions"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is currying?",
+            "back": "Transforming a function that takes N args into a chain of N functions taking 1 arg each. E.g. `add(2, 3)` becomes `add(2)(3)`."
+          },
+          "tags": ["topic-functions"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "A {{c1::higher-order}} function is one that takes another function as argument or returns one."
+          },
+          "tags": ["topic-functions"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is the difference between function declarations and function expressions regarding hoisting?",
+            "back": "Function declarations are fully hoisted (you can call them before they appear). Function expressions assigned to `var`/`let`/`const` are not — only the binding is hoisted."
+          },
+          "tags": ["topic-functions"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "A pure function has no {{c1::side effects}} and always returns the same output for the same input."
+          },
+          "tags": ["topic-functions"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is a Promise in JavaScript?",
+            "back": "An object representing the eventual completion (or failure) of an asynchronous operation. It is in one of three states: pending, fulfilled, or rejected."
+          },
+          "tags": ["topic-async"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "A Promise is in one of three states: {{c1::pending}}, {{c2::fulfilled}}, or {{c3::rejected}}."
+          },
+          "tags": ["topic-async"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What does `async` mean in front of a function declaration?",
+            "back": "It makes the function automatically return a Promise. You can use `await` inside it to pause until other Promises resolve."
+          },
+          "tags": ["topic-async"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "The `{{c1::await}}` keyword pauses an `async` function until a Promise settles, returning its fulfilled value."
+          },
+          "tags": ["topic-async"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is the difference between `Promise.all()` and `Promise.allSettled()`?",
+            "back": "`Promise.all()` rejects as soon as any input promise rejects. `Promise.allSettled()` waits for all to settle and returns an array of results with `status` and `value`/`reason`."
+          },
+          "tags": ["topic-async"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "`Promise.{{c1::race}}()` resolves or rejects with the first settled promise from the input iterable."
+          },
+          "tags": ["topic-async"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is the event loop in JavaScript?",
+            "back": "The mechanism that processes the call stack and task/microtask queues. Synchronous code runs on the stack; microtasks (Promise callbacks) run after each task, before the next macrotask."
+          },
+          "tags": ["topic-async"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Promise callbacks (`.then`) run in the {{c1::microtask}} queue, which is drained before the next macrotask."
+          },
+          "tags": ["topic-async"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "How do you handle errors in async/await code?",
+            "back": "Wrap awaited calls in a `try { ... } catch (err) { ... }` block. Rejected Promises become thrown exceptions inside async functions."
+          },
+          "tags": ["topic-async"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "To catch a rejected Promise outside async/await, chain a `{{c1::.catch}}()` handler at the end."
+          },
+          "tags": ["topic-async"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is the difference between `interface` and `type` in TypeScript?",
+            "back": "Both describe object shapes. `interface` can be reopened (declaration merging) and is preferred for public APIs. `type` is more flexible — it can describe unions, intersections, mapped types, and conditional types."
+          },
+          "tags": ["topic-types"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "TypeScript's `{{c1::unknown}}` type is the type-safe counterpart to `any`: you must narrow it before use."
+          },
+          "tags": ["topic-types"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What does the TypeScript `never` type represent?",
+            "back": "A value that can never occur — used for functions that always throw or never return, and for exhaustive-check assertions in `switch` statements."
+          },
+          "tags": ["topic-types"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "A {{c1::union}} type `A | B` means a value can be of type A OR B; an {{c2::intersection}} type `A & B` means it must satisfy both."
+          },
+          "tags": ["topic-types"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is a TypeScript generic?",
+            "back": "A type-level parameter that lets a function/class/interface work with multiple types while preserving type information. Example: `function id<T>(x: T): T { return x; }`."
+          },
+          "tags": ["topic-types"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "The utility type `{{c1::Partial<T>}}` makes all properties of T optional."
+          },
+          "tags": ["topic-types"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What does the TypeScript utility type `Pick<T, K>` do?",
+            "back": "Constructs a new type by picking the set of properties `K` (keys) from `T`. Example: `Pick<User, 'id' | 'name'>`."
+          },
+          "tags": ["topic-types"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "`{{c1::Readonly<T>}}` makes every property of T immutable; `{{c2::Required<T>}}` makes every property required."
+          },
+          "tags": ["topic-types"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is type narrowing in TypeScript?",
+            "back": "The process by which TypeScript refines a union type to a more specific one based on control-flow checks (`typeof`, `instanceof`, equality, `in` operator, custom type guards)."
+          },
+          "tags": ["topic-types"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "A {{c1::type guard}} is a function whose return type is a `value is Type` predicate, narrowing the input type."
+          },
+          "tags": ["topic-types"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What does `Array.prototype.map()` do?",
+            "back": "Creates a new array by applying a callback to each element. Does NOT mutate the original."
+          },
+          "tags": ["topic-arrays"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "`Array.prototype.{{c1::filter}}()` returns a new array containing only elements where the callback returns truthy."
+          },
+          "tags": ["topic-arrays"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is the difference between `forEach`, `map`, and `reduce`?",
+            "back": "`forEach` runs a callback per element and returns `undefined`. `map` builds a new array of equal length. `reduce` folds elements into a single accumulator value."
+          },
+          "tags": ["topic-arrays"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "`Array.prototype.{{c1::reduce}}(fn, initial)` accumulates values into a single result."
+          },
+          "tags": ["topic-arrays"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "How do you create a shallow copy of an array?",
+            "back": "Use the spread syntax `[...arr]`, `arr.slice()`, or `Array.from(arr)`. All copy the top level but share nested references."
+          },
+          "tags": ["topic-arrays"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "The spread syntax `{{c1::...arr}}` expands an iterable into individual elements."
+          },
+          "tags": ["topic-arrays"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What does `Array.prototype.flat()` do?",
+            "back": "Returns a new array with all sub-array elements concatenated up to a given depth (default 1). `[[1,2],[3]].flat()` -> `[1,2,3]`."
+          },
+          "tags": ["topic-arrays"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "`Array.prototype.{{c1::find}}()` returns the first element matching the predicate (or `undefined`), while `{{c2::findIndex}}()` returns its index (or -1)."
+          },
+          "tags": ["topic-arrays"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is destructuring in JS?",
+            "back": "Syntax that lets you unpack values from arrays or properties from objects into distinct variables. Example: `const {name, age} = user;`."
+          },
+          "tags": ["topic-objects"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Object destructuring with renaming: `const { name: {{c1::userName}} } = user;`."
+          },
+          "tags": ["topic-objects"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What does `Object.freeze()` do?",
+            "back": "Shallowly freezes an object: no new properties can be added, existing ones cannot be removed or reassigned. Nested objects remain mutable."
+          },
+          "tags": ["topic-objects"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "`Object.{{c1::keys}}(obj)` returns the array of own enumerable property names of `obj`."
+          },
+          "tags": ["topic-objects"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is prototypal inheritance?",
+            "back": "Every JS object has an internal `[[Prototype]]` link to another object. Property lookups walk this chain until found or it ends at `null`."
+          },
+          "tags": ["topic-objects"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "`Object.{{c1::assign}}(target, ...sources)` copies enumerable own properties from sources into target."
+          },
+          "tags": ["topic-objects"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "How does `JSON.stringify()` handle `undefined`, functions, and symbols in an object?",
+            "back": "They are silently omitted from the output. In arrays, `undefined` and functions become `null`."
+          },
+          "tags": ["topic-objects"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "`Object.{{c1::entries}}(obj)` returns `[key, value]` pairs as an array, useful for iterating with `for...of`."
+          },
+          "tags": ["topic-objects"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is the difference between a default export and a named export in ES modules?",
+            "back": "A module has at most one default export, imported without braces and renamable freely. Named exports use braces and must match by name (unless aliased with `as`)."
+          },
+          "tags": ["topic-modules"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "ES module syntax: `import { foo } from {{c1::'./mod.js'}};` imports a named export."
+          },
+          "tags": ["topic-modules"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is a dynamic import?",
+            "back": "`import('./mod.js')` returns a Promise resolving to the module namespace. Used for code-splitting and conditional loading."
+          },
+          "tags": ["topic-modules"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Dynamic import returns a {{c1::Promise}} that resolves to the module's namespace object."
+          },
+          "tags": ["topic-modules"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is the difference between CommonJS and ES modules?",
+            "back": "CommonJS uses synchronous `require()` and `module.exports` (Node legacy). ES modules use static `import`/`export`, are asynchronous, and support tree-shaking."
+          },
+          "tags": ["topic-modules"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Re-export syntax: `export {{c1::{ foo }}} from './other.js';`."
+          },
+          "tags": ["topic-modules"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "How do you create a custom Error class in JS?",
+            "back": "Extend `Error`: `class MyError extends Error { constructor(msg) { super(msg); this.name = 'MyError'; } }`."
+          },
+          "tags": ["topic-errors"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "A `try` block must be followed by `{{c1::catch}}` and/or `{{c2::finally}}`."
+          },
+          "tags": ["topic-errors"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Does a thrown value have to be an Error instance?",
+            "back": "No — you can `throw` any value (string, object, etc.). But throwing an `Error` is strongly recommended because only `Error` instances capture a stack trace."
+          },
+          "tags": ["topic-errors"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "The `{{c1::finally}}` block runs whether an exception is thrown or not, even if the try block returns early."
+          },
+          "tags": ["topic-errors"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "How do you catch the rejection of a Promise without async/await?",
+            "back": "Chain a `.catch(err => ...)` handler. Unhandled rejections trigger the `unhandledrejection` event (and a console warning)."
+          },
+          "tags": ["topic-errors"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Inside an async function, a rejected awaited Promise becomes a thrown error caught by `{{c1::try/catch}}`."
+          },
+          "tags": ["topic-errors"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is the difference between `throw new Error('msg')` and `throw 'msg'`?",
+            "back": "`new Error()` produces an object with `.message`, `.name`, and `.stack`. A plain string has none of these and is harder to debug."
+          },
+          "tags": ["topic-errors"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "A common standard error subclass for invalid input is `{{c1::TypeError}}`; for out-of-range values it's `{{c2::RangeError}}`."
+          },
+          "tags": ["topic-errors"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "What is the `cause` option on the Error constructor?",
+            "back": "`new Error('outer', { cause: inner })` chains a lower-level error so the original stack/context is preserved when re-throwing with more context."
+          },
+          "tags": ["topic-errors"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Use `error.{{c1::cause}}` to access the underlying error chained via the constructor options."
+          },
+          "tags": ["topic-errors"]
+        }
+      ]
+    },
+    {
+      "name": "Biologie cellulaire",
+      "description": "Bases de biologie cellulaire : membrane, organites, cycle cellulaire, métabolisme, génétique.",
+      "color": "#ec4899",
+      "desired_retention": 0.9,
+      "notes": [
+        {
+          "template": "basic",
+          "fields": {
+            "front": "De quoi est composée la membrane plasmique ?",
+            "back": "D'une bicouche phospholipidique avec des protéines insérées (intégrales et périphériques), du cholestérol et des glycoprotéines (modèle de la mosaïque fluide de Singer-Nicolson)."
+          },
+          "tags": ["topic-membrane"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Le modèle de la {{c1::mosaïque fluide}} décrit la membrane plasmique comme une bicouche lipidique parsemée de protéines mobiles."
+          },
+          "tags": ["topic-membrane"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quel rôle joue le cholestérol dans la membrane plasmique ?",
+            "back": "Il module la fluidité membranaire : il rigidifie la membrane à haute température et empêche son durcissement à basse température."
+          },
+          "tags": ["topic-membrane"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Une molécule est dite {{c1::amphiphile}} lorsqu'elle possède à la fois une partie hydrophile et une partie hydrophobe, comme les phospholipides."
+          },
+          "tags": ["topic-membrane"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quelle est la différence entre transport passif et transport actif ?",
+            "back": "Le transport passif suit le gradient de concentration sans dépense d'énergie (diffusion simple, facilitée, osmose). Le transport actif consomme de l'ATP pour déplacer des molécules contre leur gradient."
+          },
+          "tags": ["topic-membrane"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "La {{c1::pompe Na+/K+ ATPase}} expulse 3 ions sodium et fait entrer 2 ions potassium par cycle, en hydrolysant une molécule d'ATP."
+          },
+          "tags": ["topic-membrane"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Qu'est-ce que l'endocytose ?",
+            "back": "Un mécanisme d'internalisation par lequel la cellule englobe des substances extracellulaires via invagination de sa membrane (phagocytose pour les particules solides, pinocytose pour les liquides)."
+          },
+          "tags": ["topic-membrane"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "L'{{c1::exocytose}} est le mécanisme inverse de l'endocytose : une vésicule fusionne avec la membrane pour libérer son contenu à l'extérieur."
+          },
+          "tags": ["topic-membrane"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Qu'est-ce que l'osmose ?",
+            "back": "Un cas particulier de diffusion : le mouvement net d'eau à travers une membrane semi-perméable, du compartiment le moins concentré en soluté vers le plus concentré."
+          },
+          "tags": ["topic-membrane"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Une solution est dite {{c1::hypertonique}} lorsqu'elle est plus concentrée en solutés que l'intérieur de la cellule, provoquant la plasmolyse."
+          },
+          "tags": ["topic-membrane"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quel est le rôle des mitochondries ?",
+            "back": "Production d'ATP via la phosphorylation oxydative. Aussi appelées les centrales énergétiques de la cellule. Elles abritent le cycle de Krebs et la chaîne respiratoire."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Les {{c1::mitochondries}} possèdent leur propre ADN circulaire et se divisent indépendamment de la cellule, témoignant de leur origine endosymbiotique."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quelle est la fonction du réticulum endoplasmique rugueux (RER) ?",
+            "back": "Synthèse des protéines destinées à la sécrétion, à la membrane ou aux organites. Les ribosomes fixés sur sa face cytosolique le rendent granuleux."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quelle est la fonction du réticulum endoplasmique lisse (REL) ?",
+            "back": "Synthèse des lipides (phospholipides, stéroïdes), détoxification (notamment dans le foie) et stockage du calcium."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "L'appareil de {{c1::Golgi}} modifie, trie et empaquette les protéines reçues du RER avant leur envoi vers leur destination finale."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quel est le rôle des lysosomes ?",
+            "back": "Digestion intracellulaire grâce à leurs enzymes hydrolytiques (pH acide ~4,5). Ils dégradent macromolécules, débris cellulaires et particules issues de la phagocytose."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Les ribosomes sont composés d'une grande et d'une petite sous-unité d'{{c1::ARN ribosomique}} et de protéines ; ils sont le site de la traduction."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quelle est la fonction du noyau cellulaire ?",
+            "back": "Contient l'ADN génomique et est le siège de la transcription en ARN. Délimité par une enveloppe nucléaire à deux membranes percée de pores nucléaires."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Le {{c1::nucléole}} est une région dense du noyau où sont synthétisés les ARN ribosomiques et assemblées les sous-unités des ribosomes."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "À quoi servent les chloroplastes ?",
+            "back": "Présents dans les cellules végétales et certaines algues, ils réalisent la photosynthèse : conversion de l'énergie lumineuse en énergie chimique (glucides) à partir de CO2 et d'eau."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Les chloroplastes contiennent un pigment vert, la {{c1::chlorophylle}}, qui absorbe la lumière dans les régions rouge et bleue du spectre."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Qu'est-ce que le cytosquelette ?",
+            "back": "Un réseau dynamique de filaments protéiques (microfilaments d'actine, filaments intermédiaires, microtubules) qui maintient la forme cellulaire, permet le mouvement et organise les organites."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Les microtubules sont des polymères de {{c1::tubuline}} ; ils forment le fuseau mitotique et servent de rails au transport intracellulaire."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quelle est la différence entre une cellule procaryote et une cellule eucaryote ?",
+            "back": "La procaryote (bactéries, archées) n'a pas de noyau ni d'organites membranés ; son ADN est libre dans le cytoplasme. L'eucaryote (animaux, végétaux, champignons, protistes) possède un noyau et des organites compartimentés."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "La paroi cellulaire des plantes est principalement composée de {{c1::cellulose}}, un polymère de glucose."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Qu'est-ce qu'une vacuole et où la trouve-t-on principalement ?",
+            "back": "Une grande vésicule de stockage entourée d'une membrane (le tonoplaste). Très développée dans les cellules végétales, où elle peut occuper 80-90% du volume et maintenir la pression de turgescence."
+          },
+          "tags": ["topic-organites"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quelles sont les phases du cycle cellulaire ?",
+            "back": "L'interphase (G1, S, G2) puis la phase M (mitose + cytocinèse). G1 = croissance ; S = synthèse/réplication de l'ADN ; G2 = préparation à la division ; M = division."
+          },
+          "tags": ["topic-cycle"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "La réplication de l'ADN a lieu pendant la phase {{c1::S}} (synthèse) de l'interphase."
+          },
+          "tags": ["topic-cycle"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quelles sont les 4 phases de la mitose ?",
+            "back": "Prophase (chromosomes se condensent), métaphase (alignement à l'équateur), anaphase (séparation des chromatides), télophase (deux nouveaux noyaux). Suivies de la cytocinèse."
+          },
+          "tags": ["topic-cycle"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Pendant la {{c1::métaphase}}, les chromosomes s'alignent sur la plaque équatoriale du fuseau mitotique."
+          },
+          "tags": ["topic-cycle"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quelle est la différence entre mitose et méiose ?",
+            "back": "La mitose produit 2 cellules diploïdes identiques à la cellule mère (croissance, réparation). La méiose produit 4 cellules haploïdes génétiquement différentes (gamètes) via deux divisions successives."
+          },
+          "tags": ["topic-cycle"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "La méiose comporte {{c1::deux}} divisions successives mais une seule réplication d'ADN, produisant 4 cellules haploïdes."
+          },
+          "tags": ["topic-cycle"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Qu'est-ce que le crossing-over ?",
+            "back": "Un échange réciproque de segments d'ADN entre chromosomes homologues pendant la prophase I de la méiose. C'est l'une des sources principales de diversité génétique."
+          },
+          "tags": ["topic-cycle"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Le point de contrôle G1/S, aussi appelé point {{c1::de restriction}}, vérifie l'intégrité de l'ADN avant d'autoriser la réplication."
+          },
+          "tags": ["topic-cycle"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Qu'est-ce que l'apoptose ?",
+            "back": "La mort cellulaire programmée : un mécanisme actif et contrôlé qui élimine les cellules endommagées ou superflues sans déclencher de réaction inflammatoire (contrairement à la nécrose)."
+          },
+          "tags": ["topic-cycle"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Les protéines régulatrices du cycle cellulaire sont les {{c1::cyclines}}, dont la concentration varie au cours du cycle, et leurs partenaires {{c2::CDK}} (kinases cycline-dépendantes)."
+          },
+          "tags": ["topic-cycle"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Qu'est-ce qu'un chromosome dupliqué ?",
+            "back": "Un chromosome formé de deux chromatides sœurs identiques, attachées par le centromère, résultat de la réplication de l'ADN en phase S."
+          },
+          "tags": ["topic-cycle"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "La protéine {{c1::p53}}, dite gardienne du génome, déclenche l'arrêt du cycle cellulaire ou l'apoptose en réponse à des dommages de l'ADN."
+          },
+          "tags": ["topic-cycle"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quelles sont les 3 étapes de la respiration cellulaire ?",
+            "back": "1) Glycolyse (cytoplasme) : glucose -> 2 pyruvates + 2 ATP + 2 NADH. 2) Cycle de Krebs (matrice mitochondriale) : oxydation complète. 3) Chaîne respiratoire + phosphorylation oxydative (membrane interne) : ~30-32 ATP."
+          },
+          "tags": ["topic-metabolisme"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "La {{c1::glycolyse}} a lieu dans le cytoplasme et transforme une molécule de glucose en deux molécules de pyruvate."
+          },
+          "tags": ["topic-metabolisme"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Où se déroule le cycle de Krebs ?",
+            "back": "Dans la matrice mitochondriale. Il oxyde l'acétyl-CoA en CO2 et produit NADH, FADH2 et un peu d'ATP/GTP."
+          },
+          "tags": ["topic-metabolisme"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Le bilan énergétique théorique de la respiration cellulaire complète d'une molécule de glucose est d'environ {{c1::30 à 32}} molécules d'ATP."
+          },
+          "tags": ["topic-metabolisme"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Qu'est-ce que la fermentation et quand l'utilise-t-on ?",
+            "back": "Une voie anaérobie qui régénère le NAD+ à partir du pyruvate sans utiliser d'oxygène. Permet à la glycolyse de continuer. Deux formes principales : lactique (muscle, certaines bactéries) et alcoolique (levures)."
+          },
+          "tags": ["topic-metabolisme"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "La phosphorylation oxydative se déroule dans la membrane interne mitochondriale et produit de l'ATP grâce à l'{{c1::ATP synthase}}."
+          },
+          "tags": ["topic-metabolisme"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quel est le bilan global de la photosynthèse ?",
+            "back": "6 CO2 + 6 H2O + énergie lumineuse -> C6H12O6 (glucose) + 6 O2. Comporte une phase claire (membranes des thylacoïdes) et une phase sombre (cycle de Calvin, dans le stroma)."
+          },
+          "tags": ["topic-metabolisme"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Le {{c1::cycle de Calvin}} (phase sombre de la photosynthèse) fixe le CO2 atmosphérique en molécules organiques, en consommant ATP et NADPH produits lors de la phase claire."
+          },
+          "tags": ["topic-metabolisme"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Qu'est-ce qu'une enzyme ?",
+            "back": "Un catalyseur biologique, en général une protéine, qui accélère une réaction chimique sans être consommée. Très spécifique (modèle clé-serrure ou ajustement induit) et sensible à pH/température."
+          },
+          "tags": ["topic-metabolisme"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "L'ATP libère de l'énergie lors de l'hydrolyse de sa liaison phosphoanhydre terminale, produisant de l'{{c1::ADP}} et un phosphate inorganique."
+          },
+          "tags": ["topic-metabolisme"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quelle est la structure de l'ADN ?",
+            "back": "Une double hélice de deux brins antiparallèles. Chaque brin est un polymère de nucléotides (désoxyribose + phosphate + base : A, T, G, C). A s'apparie avec T (2 liaisons H), G avec C (3 liaisons H)."
+          },
+          "tags": ["topic-genetique"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Les bases azotées de l'ADN sont {{c1::A, T, G, C}} ; dans l'ARN, la thymine est remplacée par l'{{c2::uracile}}."
+          },
+          "tags": ["topic-genetique"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quelles sont les trois étapes de l'expression d'un gène ?",
+            "back": "1) Transcription : ADN -> ARNm (par l'ARN polymérase, dans le noyau chez les eucaryotes). 2) Maturation de l'ARN (épissage, coiffe, queue poly-A). 3) Traduction : ARNm -> protéine (par les ribosomes, dans le cytoplasme)."
+          },
+          "tags": ["topic-genetique"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "La {{c1::transcription}} produit un ARN messager à partir d'un brin matrice d'ADN ; elle est catalysée par l'ARN polymérase."
+          },
+          "tags": ["topic-genetique"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Qu'est-ce qu'un codon ?",
+            "back": "Un triplet de nucléotides sur l'ARNm qui code un acide aminé spécifique (ou un signal stop). Le code génétique compte 64 codons pour 20 acides aminés + 3 codons stop."
+          },
+          "tags": ["topic-genetique"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Le codon d'initiation de la traduction est {{c1::AUG}}, qui code la méthionine."
+          },
+          "tags": ["topic-genetique"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Quel est le rôle de l'ARN de transfert (ARNt) ?",
+            "back": "Apporter un acide aminé spécifique au ribosome pendant la traduction. Chaque ARNt porte un anticodon qui s'apparie avec le codon correspondant sur l'ARNm."
+          },
+          "tags": ["topic-genetique"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Les 3 codons stop universels sont {{c1::UAA}}, {{c2::UAG}} et {{c3::UGA}}."
+          },
+          "tags": ["topic-genetique"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Qu'est-ce que la réplication semi-conservative de l'ADN ?",
+            "back": "Chaque molécule d'ADN fille contient un brin parental et un brin néosynthétisé. Mise en évidence par l'expérience de Meselson et Stahl (1958)."
+          },
+          "tags": ["topic-genetique"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "L'enzyme principale de la réplication de l'ADN est l'{{c1::ADN polymérase}}, qui synthétise toujours dans le sens 5' vers 3'."
+          },
+          "tags": ["topic-genetique"]
+        },
+        {
+          "template": "basic",
+          "fields": {
+            "front": "Qu'est-ce qu'une mutation ?",
+            "back": "Un changement permanent dans la séquence de l'ADN : substitution (ponctuelle), insertion, délétion, ou réarrangement chromosomique. Peut être neutre, bénéfique ou délétère."
+          },
+          "tags": ["topic-genetique"]
+        },
+        {
+          "template": "cloze",
+          "fields": {
+            "text": "Une mutation {{c1::silencieuse}} ne change pas l'acide aminé codé, grâce à la redondance du code génétique."
+          },
+          "tags": ["topic-genetique"]
+        }
+      ]
+    }
+  ]
+}
