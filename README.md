@@ -2,7 +2,7 @@
 
 > L'app de mémorisation next-gen, propulsée par l'algorithme **FSRS-6** — 100 % locale, ultra-rapide, pensée clavier-first.
 
-[![Session 1 MVP](https://img.shields.io/badge/Session%201-MVP%20livré-22c55e)](./CHANGELOG.md)
+[![v0.5.0](https://img.shields.io/badge/version-0.5.0-22c55e)](./CHANGELOG.md)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-24c8db)](https://tauri.app)
 [![React 19](https://img.shields.io/badge/React-19-61dafb)](https://react.dev)
 [![Rust 1.81+](https://img.shields.io/badge/Rust-1.81%2B-orange)](https://www.rust-lang.org)
@@ -18,10 +18,23 @@ Mnemosys est une app desktop de **répétition espacée (SRS)** qui pousse FSRS-
 
 ## Statut
 
-- **Session 1 — MVP Desktop** : *livré* (cf. [CHANGELOG.md](./CHANGELOG.md))
-- **Session 2 — IA & contenu** : en préparation (génération de cartes via LLM, TTS, image-occlusion, import `.apkg`)
-- **Session 3 — Sync cloud** : à venir (Supabase + auth multi-device)
-- **Session 4 — FSRS Optimizer & release** : à venir (calibration des paramètres, analytics avancés, packaging signé)
+- **Session 1 — MVP Desktop** : ✅ livré
+- **Session 2 — IA & contenu** : ✅ livré (AI gen + TTS + APKG + image-occlusion + reset_card)
+- **Session 3 — Sync cloud** : ✅ scaffolding livré (désactivé tant qu'aucun projet Supabase n'est configuré)
+- **Session 4 — FSRS Optimizer** : ✅ backend livré (UI optimizer + CI + signing à venir)
+- **Vagues 1-5 — Recherche scientifique appliquée** : ✅ livrées (cf. [CHANGELOG.md](./CHANGELOG.md))
+  - V1 Gamification éthique — streaks + achievements + deck mastery WaniKani-style
+  - V2 Cognitive — type-the-answer + confidence rating (CBM) + pre-questioning IA
+  - V3 Neuro modes — mood/sleep check-in + movement break + cyclic sighing
+  - V4 Schedulers pluggables — FSRS-6 + SM-2 + Leitner 5-box par deck
+  - V5 IA augmentée — Why?/Example auto + Interleaved Review mode
+
+## Différenciateurs vs Anki / RemNote / Mochi
+
+- **La SEULE app SRS qui mesure la métacognition** (CBM confidence rating + scoring asymétrique)
+- **Choix d'algorithme par deck** (FSRS-6 / SM-2 / Leitner)
+- **Local-first + AI Augmented** (cohérent privacy-first Tauri)
+- **Sourcing scientifique transparent** — chaque feature opt-in cite ses papers (effect sizes)
 
 ## Fonctionnalités (Session 1)
 
@@ -158,4 +171,4 @@ Pour valider le MVP de bout en bout, suis la procédure pas-à-pas dans [TEST_CH
 - **FSRS-6** : algorithme open-source par [Jarrett Ye / open-spaced-repetition](https://github.com/open-spaced-repetition).
 - **shadcn/ui** : composants UI sous license MIT.
 - **Tauri** : framework desktop sous license Apache-2.0 / MIT.
-- **Mnemosys** : License TBD (probablement MIT pour Session 4 release).
+- **Mnemosys** : License **MIT** (cf. [LICENSE](./LICENSE)).
