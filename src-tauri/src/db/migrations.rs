@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 3;
+pub const CURRENT_VERSION: i32 = 4;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -112,6 +112,20 @@ CREATE TABLE IF NOT EXISTS sync_state (
 INSERT OR IGNORE INTO sync_state (id, last_sync_at, user_id) VALUES (1, NULL, NULL);
 "#;
 
+/// v4 — White Hat gamification primitives (Vague 1).
+///
+/// - `user_stats` is a singleton row (`CHECK(id = 1)`) tracking the current /
+///   best streak, the last day a review was logged, monthly freeze inventory
+///   (resets when `freeze_month` no longer matches the current `YYYY-MM`), and
+///   lifetime review counters.
+/// - `achievements` records badges earned by the learner. `code` is a unique
+///   string slug (`streak_7`, `first_review`, …); `INSERT OR IGNORE` on the
+///   `code` constraint makes unlocking idempotent.
+///
+/// White Hat principle: every column is **positive reinforcement**. No
+/// punitive timers, no XP debts, no public leaderboard.
+const SCHEMA_V4: &str = include_str!("schema_v4.sql");
+
 /// Apply all pending migrations to `conn`.
 ///
 /// Reads `PRAGMA user_version` and applies migrations in order. Each migration
@@ -147,6 +161,11 @@ pub fn run(conn: &Connection) -> AppResult<()> {
     // v3 — sync scaffolding (`remote_id` columns + `sync_state` table).
     if current < 3 {
         apply_migration(conn, 3, SCHEMA_V3)?;
+    }
+
+    // v4 — Vague 1 gamification (`user_stats` singleton + `achievements`).
+    if current < 4 {
+        apply_migration(conn, 4, SCHEMA_V4)?;
     }
 
     Ok(())

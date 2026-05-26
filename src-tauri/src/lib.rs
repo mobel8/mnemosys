@@ -77,6 +77,7 @@ pub fn run() {
             commands::decks::delete_deck,
             commands::decks::get_deck_stats,
             commands::decks::count_decks,
+            commands::decks::get_deck_mastery,
             // cards / notes
             commands::cards::list_cards_in_deck,
             commands::cards::search_notes,
@@ -120,6 +121,10 @@ pub fn run() {
             // fsrs optimizer (Session 4)
             commands::fsrs_optimizer::get_total_reviews_count,
             commands::fsrs_optimizer::optimize_fsrs_params,
+            // gamification (Vague 1 — White Hat)
+            commands::gamification::get_user_stats,
+            commands::gamification::use_streak_freeze,
+            commands::gamification::list_unlocked_achievements,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -11,6 +11,7 @@ pub mod cards;
 pub mod decks;
 pub mod demo;
 pub mod fsrs_optimizer;
+pub mod gamification;
 pub mod io;
 pub mod media;
 pub mod review;

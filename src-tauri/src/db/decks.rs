@@ -42,6 +42,34 @@ pub struct DeckStats {
     pub due_today: i64,
 }
 
+/// Per-deck WaniKani-style mastery distribution.
+///
+/// Buckets are derived from FSRS stability (a continuous proxy for memory
+/// strength). Cards that have never been reviewed or are still in
+/// learning/relearning all land in `apprentice` so the badge always sums to
+/// the deck's total card count.
+///
+/// Thresholds (days of stability):
+/// - `apprentice`  : new / learning / relearning OR stability < 7
+/// - `guru`        : 7 <= stability < 30
+/// - `master`      : 30 <= stability < 90
+/// - `enlightened` : 90 <= stability < 180
+/// - `burned`      : stability >= 180
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct DeckMastery {
+    pub apprentice: i64,
+    pub guru: i64,
+    pub master: i64,
+    pub enlightened: i64,
+    pub burned: i64,
+}
+
+impl DeckMastery {
+    pub fn total(&self) -> i64 {
+        self.apprentice + self.guru + self.master + self.enlightened + self.burned
+    }
+}
+
 /// Thin repository — holds a borrow on the active connection.
 pub struct DeckRepo<'a> {
     conn: &'a Connection,
@@ -213,6 +241,60 @@ impl<'a> DeckRepo<'a> {
             learning_cards,
             review_cards,
             due_today,
+        })
+    }
+
+    /// Bucket the deck's cards into WaniKani-style stages based on FSRS
+    /// stability. See [`DeckMastery`] for the exact thresholds.
+    pub fn mastery(&self, id: i64) -> AppResult<DeckMastery> {
+        // Confirm the deck exists for a nicer error.
+        let _ = self.get(id)?;
+
+        // Single COUNT() per bucket — five round-trips total but each query
+        // is sub-millisecond on the indexed `deck_id` column.
+        let apprentice: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM cards
+             WHERE deck_id = ?1 AND suspended = 0
+               AND (state IN ('new', 'learning', 'relearning')
+                    OR (state = 'review' AND (stability IS NULL OR stability < 7.0)))",
+            params![id],
+            |r| r.get(0),
+        )?;
+        let guru: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM cards
+             WHERE deck_id = ?1 AND suspended = 0 AND state = 'review'
+               AND stability >= 7.0 AND stability < 30.0",
+            params![id],
+            |r| r.get(0),
+        )?;
+        let master: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM cards
+             WHERE deck_id = ?1 AND suspended = 0 AND state = 'review'
+               AND stability >= 30.0 AND stability < 90.0",
+            params![id],
+            |r| r.get(0),
+        )?;
+        let enlightened: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM cards
+             WHERE deck_id = ?1 AND suspended = 0 AND state = 'review'
+               AND stability >= 90.0 AND stability < 180.0",
+            params![id],
+            |r| r.get(0),
+        )?;
+        let burned: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM cards
+             WHERE deck_id = ?1 AND suspended = 0 AND state = 'review'
+               AND stability >= 180.0",
+            params![id],
+            |r| r.get(0),
+        )?;
+
+        Ok(DeckMastery {
+            apprentice,
+            guru,
+            master,
+            enlightened,
+            burned,
         })
     }
 }

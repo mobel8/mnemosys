@@ -6,6 +6,7 @@
 
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
+import { StreakWidget } from "@/components/StreakWidget";
 import { Button } from "@/components/ui/button";
 import { useDecks } from "@/lib/queries";
 
@@ -31,6 +32,8 @@ function buildCrumbs(pathname: string, deckName?: string): Crumb[] {
     crumbs.push({ label: "Review" });
   } else if (first === "stats") {
     crumbs.push({ label: "Stats" });
+  } else if (first === "achievements") {
+    crumbs.push({ label: "Succès" });
   } else if (first === "settings") {
     crumbs.push({ label: "Settings" });
   }
@@ -77,6 +80,7 @@ export function TopBar() {
       </nav>
 
       <div className="flex items-center gap-2">
+        <StreakWidget />
         <Button asChild size="sm" variant="default">
           {activeDeckId ? (
             <Link to="/decks/$deckId/new-card" params={{ deckId: activeDeckId }}>

@@ -7,7 +7,7 @@
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::db::{Deck, DeckPatch, DeckStats};
+use crate::db::{Deck, DeckMastery, DeckPatch, DeckStats};
 use crate::error::AppResult;
 use crate::fsrs::DEFAULT_DESIRED_RETENTION;
 
@@ -65,4 +65,10 @@ pub fn get_deck_stats(state: State<'_, AppState>, id: i64) -> AppResult<DeckStat
 pub fn count_decks(state: State<'_, AppState>) -> AppResult<i64> {
     let conn = state.db.lock();
     state.db.decks(&conn).count()
+}
+
+#[tauri::command]
+pub fn get_deck_mastery(state: State<'_, AppState>, id: i64) -> AppResult<DeckMastery> {
+    let conn = state.db.lock();
+    state.db.decks(&conn).mastery(id)
 }

@@ -18,6 +18,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
+  type Achievement,
   type AppSettings,
   api,
   type Card,
@@ -26,6 +27,7 @@ import {
   type DayCount,
   type DayRetention,
   type Deck,
+  type DeckMastery,
   type DeckPatch,
   type DeckStats,
   type GeneratedCard,
@@ -41,12 +43,14 @@ import {
   type TodayStats,
   type TTSResult,
   type TTSVoice,
+  type UserStats,
 } from "@/lib/tauri";
 
 export const queryKeys = {
   decks: ["decks"] as const,
   deck: (id: number) => ["deck", id] as const,
   deckStats: (id: number) => ["deck-stats", id] as const,
+  deckMastery: (id: number) => ["deck-mastery", id] as const,
   cardsInDeck: (deckId: number, limit: number, offset: number) =>
     ["cards-in-deck", deckId, limit, offset] as const,
   dueCards: (deckId: number | null, limit: number) => ["due-cards", deckId, limit] as const,
@@ -58,6 +62,8 @@ export const queryKeys = {
   settings: ["settings"] as const,
   ttsCacheSize: ["tts-cache-size"] as const,
   syncStatus: ["sync-status"] as const,
+  userStats: ["user-stats"] as const,
+  achievements: ["achievements"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -85,6 +91,15 @@ export function useDeckStats(id: number, opts?: Partial<UseQueryOptions<DeckStat
   return useQuery<DeckStats>({
     queryKey: queryKeys.deckStats(id),
     queryFn: () => api.decks.stats(id),
+    enabled: Number.isFinite(id),
+    ...opts,
+  });
+}
+
+export function useDeckMastery(id: number, opts?: Partial<UseQueryOptions<DeckMastery>>) {
+  return useQuery<DeckMastery>({
+    queryKey: queryKeys.deckMastery(id),
+    queryFn: () => api.decks.mastery(id),
     enabled: Number.isFinite(id),
     ...opts,
   });
@@ -321,7 +336,11 @@ export function useSubmitReview(
       qc.invalidateQueries({ queryKey: ["reviews-by-day"] });
       qc.invalidateQueries({ queryKey: ["retention-by-day"] });
       qc.invalidateQueries({ queryKey: ["deck-stats", data.card.deck_id] });
+      qc.invalidateQueries({ queryKey: ["deck-mastery", data.card.deck_id] });
       qc.invalidateQueries({ queryKey: queryKeys.nextStates(variables.cardId) });
+      // Gamification side-effects.
+      qc.invalidateQueries({ queryKey: queryKeys.userStats });
+      qc.invalidateQueries({ queryKey: queryKeys.achievements });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -551,6 +570,44 @@ export function useSyncNow(opts?: UseMutationOptions<SyncReport, Error, void>) {
       qc.invalidateQueries({ queryKey: ["reviews-by-day"] });
       qc.invalidateQueries({ queryKey: ["retention-by-day"] });
       qc.invalidateQueries({ queryKey: queryKeys.syncStatus });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Vague 1 — White Hat gamification
+// ---------------------------------------------------------------------------
+
+/** Singleton user-wide gamification stats. Refreshed after every review. */
+export function useUserStats(opts?: Partial<UseQueryOptions<UserStats>>) {
+  return useQuery<UserStats>({
+    queryKey: queryKeys.userStats,
+    queryFn: () => api.gamification.getUserStats(),
+    ...opts,
+  });
+}
+
+/** All unlocked badges, newest first. */
+export function useAchievements(opts?: Partial<UseQueryOptions<Achievement[]>>) {
+  return useQuery<Achievement[]>({
+    queryKey: queryKeys.achievements,
+    queryFn: () => api.gamification.listAchievements(),
+    ...opts,
+  });
+}
+
+/**
+ * Mutation: burn one streak-saving freeze. Errors with a `Validation` message
+ * when none remain.
+ */
+export function useStreakFreeze(opts?: UseMutationOptions<UserStats, Error, void>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.gamification.consumeFreeze(),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.userStats });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

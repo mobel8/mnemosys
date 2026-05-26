@@ -32,16 +32,62 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/use-toast";
-import { useDeckStats, useDeleteDeck } from "@/lib/queries";
-import type { Deck } from "@/lib/tauri";
+import { useDeckMastery, useDeckStats, useDeleteDeck } from "@/lib/queries";
+import type { Deck, DeckMastery } from "@/lib/tauri";
 
 interface DeckCardProps {
   deck: Deck;
 }
 
+/**
+ * Pick the most representative mastery label for the deck card badge.
+ *
+ * Strategy: pick the *highest* level whose share of the deck exceeds a
+ * stability threshold (`>= 50%`). If the deck is empty (no non-suspended
+ * cards) the function returns `null` and the caller renders no badge.
+ *
+ * Order of preference (best first): Burned → Enlightened → Master → Guru →
+ * Apprentice. A deck with `apprentice = 100%` lands on Apprentice; the
+ * thresholds are explicit so a future change of policy stays trivial.
+ */
+function pickMasteryLevel(m: DeckMastery): {
+  label: string;
+  tone: string;
+} | null {
+  const total = m.apprentice + m.guru + m.master + m.enlightened + m.burned;
+  if (total === 0) return null;
+  const half = total / 2;
+  if (m.burned >= half)
+    return {
+      label: "Burned",
+      tone: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
+    };
+  if (m.burned + m.enlightened >= half)
+    return {
+      label: "Enlightened",
+      tone: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/30",
+    };
+  if (m.burned + m.enlightened + m.master >= half)
+    return {
+      label: "Master",
+      tone: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30",
+    };
+  if (m.burned + m.enlightened + m.master + m.guru >= half)
+    return {
+      label: "Guru",
+      tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
+    };
+  return {
+    label: "Apprentice",
+    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30",
+  };
+}
+
 export function DeckCard({ deck }: DeckCardProps) {
   const navigate = useNavigate();
   const stats = useDeckStats(deck.id);
+  const mastery = useDeckMastery(deck.id);
+  const masteryLevel = mastery.data ? pickMasteryLevel(mastery.data) : null;
   const [editOpen, setEditOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -149,6 +195,15 @@ export function DeckCard({ deck }: DeckCardProps) {
                     <BookOpen className="h-3 w-3" />
                     {stats.data.total_cards} total
                   </Badge>
+                  {masteryLevel && (
+                    <Badge
+                      variant="outline"
+                      className={`border font-medium ${masteryLevel.tone}`}
+                      title="Niveau de maîtrise dominant — basé sur la stabilité FSRS"
+                    >
+                      {masteryLevel.label}
+                    </Badge>
+                  )}
                 </>
               ) : (
                 <span className="text-xs text-muted-foreground">Chargement…</span>

@@ -35,13 +35,15 @@ use crate::error::{AppError, AppResult};
 
 pub mod cards;
 pub mod decks;
+pub mod gamification;
 pub mod migrations;
 pub mod notes;
 pub mod params;
 pub mod reviews;
 
 pub use cards::{Card, CardRepo, CardState, CardWithNote};
-pub use decks::{Deck, DeckPatch, DeckRepo, DeckStats};
+pub use decks::{Deck, DeckMastery, DeckPatch, DeckRepo, DeckStats};
+pub use gamification::{Achievement, GamificationRepo, UserStats};
 pub use notes::{Note, NoteRepo, NoteTemplate};
 pub use params::ParamsRepo;
 pub use reviews::{DayCount, DayRetention, NewReview, Review, ReviewRepo};
@@ -130,6 +132,10 @@ impl Database {
     }
     pub fn params<'a>(&self, conn: &'a Connection) -> ParamsRepo<'a> {
         ParamsRepo::new(conn)
+    }
+
+    pub fn gamification<'a>(&self, conn: &'a Connection) -> GamificationRepo<'a> {
+        GamificationRepo::new(conn)
     }
 }
 

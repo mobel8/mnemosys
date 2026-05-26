@@ -5,6 +5,7 @@
 //! agents rely on (decks → notes → cards cascade, FTS5 search, FSRS scheduler
 //! update flow, etc.).
 
+use chrono::{Duration, Utc};
 use mnemosys_lib::db::{
     cards::CardState, decks::DeckPatch, notes::NoteTemplate, reviews::NewReview, Database,
 };
@@ -404,6 +405,190 @@ fn reset_card_clears_fsrs_state_and_preserves_reviews() {
     let reviews_after = db.reviews(&conn).list_for_card(card_id).unwrap();
     assert_eq!(reviews_after.len(), 1);
     assert_eq!(reviews_after[0].card_id, card_id);
+}
+
+// ---- gamification (Vague 1) -----------------------------------------------
+
+#[test]
+fn user_stats_singleton_is_seeded_on_init() {
+    let db = Database::for_test();
+    let conn = db.lock();
+    let stats = db.gamification(&conn).get_user_stats().unwrap();
+    assert_eq!(stats.streak_current, 0);
+    assert_eq!(stats.streak_best, 0);
+    assert_eq!(stats.total_reviews, 0);
+    assert_eq!(stats.total_correct, 0);
+    assert!(stats.last_review_date.is_none());
+    // Freeze counter is lazily initialised on the first review call; the
+    // singleton row defaults to 2 / NULL until then.
+    assert_eq!(stats.freeze_remaining, 2);
+}
+
+#[test]
+fn streak_increments_on_new_day() {
+    let db = Database::for_test();
+    let conn = db.lock();
+    let now = Utc::now();
+    let yesterday = now - Duration::days(1);
+    let two_days_ago = now - Duration::days(2);
+
+    let s = db
+        .gamification(&conn)
+        .update_on_review(two_days_ago.timestamp(), true)
+        .unwrap();
+    assert_eq!(s.streak_current, 1);
+    let s = db
+        .gamification(&conn)
+        .update_on_review(yesterday.timestamp(), true)
+        .unwrap();
+    assert_eq!(s.streak_current, 2);
+    let s = db
+        .gamification(&conn)
+        .update_on_review(now.timestamp(), true)
+        .unwrap();
+    assert_eq!(s.streak_current, 3);
+    assert_eq!(s.streak_best, 3);
+    assert_eq!(s.total_reviews, 3);
+    assert_eq!(s.total_correct, 3);
+}
+
+#[test]
+fn streak_resets_on_gap_more_than_one_day() {
+    let db = Database::for_test();
+    let conn = db.lock();
+    let now = Utc::now();
+
+    // Prime: a single review primes streak=1, freeze=2.
+    let seven_days_ago = now - Duration::days(7);
+    db.gamification(&conn)
+        .update_on_review(seven_days_ago.timestamp(), true)
+        .unwrap();
+
+    // Today is 7 days after — gap is far above the 2-day freeze rescue
+    // window. Even with both freezes available, the streak must reset.
+    let s = db
+        .gamification(&conn)
+        .update_on_review(now.timestamp(), true)
+        .unwrap();
+    assert_eq!(s.streak_current, 1, "huge gap must reset the streak");
+    // Freezes are preserved (the rescue path didn't fire — gap > 2).
+    assert_eq!(s.freeze_remaining, 2);
+}
+
+#[test]
+fn streak_uses_freeze_when_available() {
+    let db = Database::for_test();
+    let conn = db.lock();
+    let now = Utc::now();
+    let two_days_ago = now - Duration::days(2);
+
+    // First review primes the streak at 1.
+    let s = db
+        .gamification(&conn)
+        .update_on_review(two_days_ago.timestamp(), true)
+        .unwrap();
+    assert_eq!(s.streak_current, 1);
+    assert_eq!(s.freeze_remaining, 2);
+
+    // Skip a day — gap is 2 → consume one freeze, streak grows to 2.
+    let s = db
+        .gamification(&conn)
+        .update_on_review(now.timestamp(), true)
+        .unwrap();
+    assert_eq!(s.streak_current, 2);
+    assert_eq!(s.freeze_remaining, 1);
+}
+
+#[test]
+fn freeze_resets_at_new_month() {
+    let db = Database::for_test();
+    let conn = db.lock();
+    let now = Utc::now();
+
+    // Burn one freeze in the current month.
+    db.gamification(&conn)
+        .update_on_review(now.timestamp(), true)
+        .unwrap();
+    db.gamification(&conn).use_freeze().unwrap();
+    let stats = db.gamification(&conn).get_user_stats().unwrap();
+    assert_eq!(stats.freeze_remaining, 1);
+
+    // Rewind `freeze_month` to last month so the next call triggers a reset.
+    let prev_month = (now - Duration::days(45)).format("%Y-%m").to_string();
+    conn.execute(
+        "UPDATE user_stats SET freeze_month = ?1 WHERE id = 1",
+        rusqlite::params![prev_month],
+    )
+    .unwrap();
+
+    // Any read that goes through update_on_review or use_freeze re-runs the
+    // monthly refresh.
+    let stats = db
+        .gamification(&conn)
+        .update_on_review(now.timestamp(), true)
+        .unwrap();
+    assert_eq!(stats.freeze_remaining, 2, "freezes should reset to default");
+}
+
+#[test]
+fn unlock_achievement_is_idempotent() {
+    let db = Database::for_test();
+    let conn = db.lock();
+    let now = Utc::now().timestamp();
+    let repo = db.gamification(&conn);
+
+    assert!(repo.unlock_achievement("first_review", now).unwrap());
+    assert!(!repo.unlock_achievement("first_review", now).unwrap());
+    let list = repo.list_achievements().unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].code, "first_review");
+}
+
+#[test]
+fn deck_mastery_distribution_buckets_by_stability() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let conn = db.lock();
+
+    // Seed five basic notes (one card each).
+    for i in 0..5 {
+        db.notes(&conn)
+            .create(
+                deck_id,
+                NoteTemplate::Basic,
+                json!({ "front": format!("Q{}", i), "back": "A" }),
+                vec![],
+            )
+            .unwrap();
+    }
+    let cards = db.cards(&conn).list_in_deck(deck_id, 10, 0).unwrap();
+    assert_eq!(cards.len(), 5);
+
+    let now = Utc::now().timestamp();
+    // Card 0: apprentice (still new — no review applied).
+    // Card 1: guru (stability=10)
+    db.cards(&conn)
+        .update_after_review(cards[1].card.id, CardState::Review, 10.0, 5.0, 10, now)
+        .unwrap();
+    // Card 2: master (stability=60)
+    db.cards(&conn)
+        .update_after_review(cards[2].card.id, CardState::Review, 60.0, 5.0, 60, now)
+        .unwrap();
+    // Card 3: enlightened (stability=120)
+    db.cards(&conn)
+        .update_after_review(cards[3].card.id, CardState::Review, 120.0, 5.0, 120, now)
+        .unwrap();
+    // Card 4: burned (stability=200)
+    db.cards(&conn)
+        .update_after_review(cards[4].card.id, CardState::Review, 200.0, 5.0, 200, now)
+        .unwrap();
+
+    let mastery = db.decks(&conn).mastery(deck_id).unwrap();
+    assert_eq!(mastery.apprentice, 1);
+    assert_eq!(mastery.guru, 1);
+    assert_eq!(mastery.master, 1);
+    assert_eq!(mastery.enlightened, 1);
+    assert_eq!(mastery.burned, 1);
+    assert_eq!(mastery.total(), 5);
 }
 
 #[test]

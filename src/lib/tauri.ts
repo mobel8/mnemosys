@@ -124,6 +124,50 @@ export interface NextStates {
 export interface ReviewResult {
   card: Card;
   scheduled_days: number;
+  /** Refreshed gamification snapshot, `null` if the side-effect failed. */
+  user_stats: UserStats | null;
+  /** Codes of achievements unlocked **by this review** (for celebratory toasts). */
+  newly_unlocked: string[];
+}
+
+// --- Vague 1: gamification ------------------------------------------------
+
+/**
+ * White Hat gamification snapshot. Tracks streaks, monthly freeze inventory,
+ * and lifetime review counters. Mirrors the Rust singleton `user_stats`
+ * (id = 1).
+ */
+export interface UserStats {
+  streak_current: number;
+  streak_best: number;
+  /** ISO `YYYY-MM-DD` of the most recent review. `null` before the first one. */
+  last_review_date: string | null;
+  /** Freezes still available this calendar month (default budget = 2). */
+  freeze_remaining: number;
+  /** ISO `YYYY-MM` of the month the freeze counter belongs to. */
+  freeze_month: string | null;
+  total_reviews: number;
+  total_correct: number;
+}
+
+export interface Achievement {
+  id: number;
+  code: string;
+  /** unix-seconds timestamp. */
+  unlocked_at: number;
+}
+
+/**
+ * WaniKani-style mastery distribution for a single deck. Sums to the deck's
+ * total non-suspended card count. Buckets are derived from FSRS stability:
+ * <7 / 7-30 / 30-90 / 90-180 / >=180 days.
+ */
+export interface DeckMastery {
+  apprentice: number;
+  guru: number;
+  master: number;
+  enlightened: number;
+  burned: number;
 }
 
 export interface DayCount {
@@ -288,6 +332,8 @@ export const api = {
     delete: (id: number) => invoke<void>("delete_deck", { id }),
     stats: (id: number) => invoke<DeckStats>("get_deck_stats", { id }),
     count: () => invoke<number>("count_decks"),
+    /** WaniKani-style mastery buckets (apprentice / guru / master / …). */
+    mastery: (id: number) => invoke<DeckMastery>("get_deck_mastery", { id }),
   },
   cards: {
     listInDeck: (deckId: number, limit: number, offset: number) =>
@@ -388,6 +434,14 @@ export const api = {
      */
     copyImageToAppData: (sourcePath: string) =>
       invoke<string>("copy_image_to_app_data", { sourcePath }),
+  },
+  gamification: {
+    /** Read the singleton stats row. */
+    getUserStats: () => invoke<UserStats>("get_user_stats"),
+    /** Burn one streak-saving freeze. Errors when none remain. */
+    consumeFreeze: () => invoke<UserStats>("use_streak_freeze"),
+    /** All unlocked badges, newest first. */
+    listAchievements: () => invoke<Achievement[]>("list_unlocked_achievements"),
   },
   sync: {
     /**
