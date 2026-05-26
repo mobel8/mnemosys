@@ -303,6 +303,7 @@ fn insert_review_returns_review_with_id() {
                 elapsed_days: 0,
                 scheduled_days: 1,
                 review_time: 4_500,
+                confidence: None,
             },
             now,
         )
@@ -312,6 +313,63 @@ fn insert_review_returns_review_with_id() {
     assert_eq!(review.card_id, card_id);
     assert_eq!(review.rating, 3);
     assert!((review.stability_after - 1.5).abs() < 1e-9);
+    assert!(
+        review.confidence.is_none(),
+        "default confidence must round-trip as None"
+    );
+}
+
+/// v5: confidence ratings round-trip through the reviews table and the
+/// repo when the toggle is on (CBM — Gardner-Medwin UCL).
+#[test]
+fn insert_review_persists_confidence_in_1_to_5() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let conn = db.lock();
+    db.notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::Basic,
+            json!({ "front": "Q", "back": "A" }),
+            vec![],
+        )
+        .unwrap();
+    let card_id = db
+        .cards(&conn)
+        .list_in_deck(deck_id, 10, 0)
+        .unwrap()
+        .pop()
+        .unwrap()
+        .card
+        .id;
+
+    let now = 1_700_000_001_i64;
+    let review = db
+        .reviews(&conn)
+        .insert(
+            NewReview {
+                card_id,
+                rating: 3,
+                state_before: CardState::New,
+                state_after: CardState::Learning,
+                stability_before: None,
+                stability_after: 2.0,
+                difficulty_before: None,
+                difficulty_after: 5.0,
+                elapsed_days: 0,
+                scheduled_days: 1,
+                review_time: 2_000,
+                confidence: Some(4),
+            },
+            now,
+        )
+        .unwrap();
+
+    assert_eq!(review.confidence, Some(4));
+
+    // Read-through: list_for_card must also surface the value.
+    let history = db.reviews(&conn).list_for_card(card_id).unwrap();
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].confidence, Some(4));
 }
 
 // ---- extras ---------------------------------------------------------------
@@ -377,6 +435,7 @@ fn reset_card_clears_fsrs_state_and_preserves_reviews() {
                 elapsed_days: 0,
                 scheduled_days: 5,
                 review_time: 1_500,
+                confidence: None,
             },
             now,
         )

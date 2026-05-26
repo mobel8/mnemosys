@@ -203,6 +203,7 @@ mod tests {
                     elapsed_days: if i == 0 { 0 } else { 1 },
                     scheduled_days: 2,
                     review_time: 3_000,
+                    confidence: None,
                 },
                 now + (i as i64) * 86_400,
             )

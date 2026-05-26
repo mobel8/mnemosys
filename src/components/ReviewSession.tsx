@@ -34,6 +34,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { PreQuestioning } from "@/components/PreQuestioning";
 import { ReviewCard } from "@/components/ReviewCard";
 import { ReviewControls } from "@/components/ReviewControls";
 import { ReviewProgress } from "@/components/ReviewProgress";
@@ -46,7 +47,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Toast, ToastDescription, ToastTitle } from "@/components/ui/toast";
-import { useSubmitReview, useSuspendCard } from "@/lib/queries";
+import { useSettingsQuery, useSubmitReview, useSuspendCard } from "@/lib/queries";
 import { useReviewSession } from "@/lib/stores/review";
 import type { CardWithNote, Rating } from "@/lib/tauri";
 
@@ -68,6 +69,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   const navigate = useNavigate();
   const submitReview = useSubmitReview();
   const suspendCard = useSuspendCard();
+  const settings = useSettingsQuery();
 
   // Snapshot the queue once; the parent route only renders us when due
   // cards arrive, so `initial` is stable per-mount.
@@ -79,6 +81,16 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [toasts, setToasts] = useState<InlineToast[]>([]);
   const toastSeqRef = useRef(0);
+  // Vague 2 — cognitive features state.
+  // Whether pre-questioning still has to play before the queue. Stays
+  // independent of `phase` so we don't intertwine the session machine
+  // with the priming step.
+  const [preQuestionsDone, setPreQuestionsDone] = useState(false);
+  // Per-card confidence buffer. Reset on every card transition.
+  const [confidence, setConfidence] = useState<number | null>(null);
+  const typeTheAnswerEnabled = settings.data?.type_the_answer_enabled ?? false;
+  const confidenceEnabled = settings.data?.confidence_rating_enabled ?? false;
+  const preQuestioningEnabled = settings.data?.pre_questioning_enabled ?? false;
 
   const startedAtRef = useRef<number>(Date.now());
   const cardShownAtRef = useRef<number>(Date.now());
@@ -122,6 +134,8 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       }
       return next;
     });
+    // Reset the per-card confidence buffer so each card starts fresh.
+    setConfidence(null);
     advanceInStore();
   }, [advanceInStore, cards.length, markShown]);
 
@@ -136,8 +150,16 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       const reviewTimeMs = Math.max(0, Date.now() - cardShownAtRef.current);
       setPhase("submitting");
       setPendingRating(rating);
+      // Only forward `confidence` when the toggle is on *and* the learner
+      // actually picked a value. Otherwise the backend keeps it NULL.
+      const confidenceForSubmit = confidenceEnabled && confidence !== null ? confidence : null;
       submitReview.mutate(
-        { cardId: current.card.id, rating, reviewTimeMs },
+        {
+          cardId: current.card.id,
+          rating,
+          reviewTimeMs,
+          confidence: confidenceForSubmit,
+        },
         {
           onSuccess: () => {
             setReviewed((log) => [
@@ -163,7 +185,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
         },
       );
     },
-    [advanceToNext, current, phase, pushToast, submitReview],
+    [advanceToNext, confidence, confidenceEnabled, current, phase, pushToast, submitReview],
   );
 
   const handleQuit = useCallback(() => {
@@ -293,6 +315,35 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
     );
   }
 
+  // Pre-questioning takes precedence over the queue exactly once per
+  // session. Once `preQuestionsDone` is set the user can't replay it
+  // (matches Pan et al. 2023's « priming once, at the start ») nor
+  // accidentally trigger a second LLM call.
+  if (preQuestioningEnabled && !preQuestionsDone) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <ReviewProgress
+          current={0}
+          total={totalForBar}
+          startedAt={startedAtRef.current}
+          reviewedCount={0}
+          onQuit={handleQuit}
+          onHelp={() => setHelpOpen(true)}
+        />
+        <div className="flex flex-1 items-center justify-center px-4 py-8">
+          <PreQuestioning
+            deckId={deckId}
+            language="fr"
+            onComplete={() => {
+              setPreQuestionsDone(true);
+              cardShownAtRef.current = Date.now();
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ReviewProgress
@@ -305,13 +356,21 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       />
 
       <div className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-8">
-        <ReviewCard note={current.note} phase={phase} cardOrd={current.card.card_ord} />
+        <ReviewCard
+          note={current.note}
+          phase={phase}
+          cardOrd={current.card.card_ord}
+          typeTheAnswerEnabled={typeTheAnswerEnabled}
+        />
         <ReviewControls
           phase={phase}
           cardId={current.card.id}
           onFlip={handleFlip}
           onRate={handleRate}
           pendingRating={pendingRating}
+          confidenceEnabled={confidenceEnabled}
+          confidenceValue={confidence}
+          onConfidenceChange={setConfidence}
         />
       </div>
 

@@ -43,6 +43,9 @@ const DEFAULTS: AppSettings = {
   anthropic_api_key: null,
   supabase_url: null,
   supabase_anon_key: null,
+  type_the_answer_enabled: false,
+  confidence_rating_enabled: false,
+  pre_questioning_enabled: false,
 };
 
 function formatLastSync(ts: number | null): string {

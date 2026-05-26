@@ -24,6 +24,10 @@ const DEFAULTS: AppSettings = {
   anthropic_api_key: null,
   supabase_url: null,
   supabase_anon_key: null,
+  // Vague 2 cognitive features — opt-in.
+  type_the_answer_enabled: false,
+  confidence_rating_enabled: false,
+  pre_questioning_enabled: false,
 };
 
 interface SettingsState extends AppSettings {

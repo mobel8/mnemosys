@@ -209,6 +209,13 @@ export interface AppSettings {
   supabase_url: string | null;
   /** Project anon (public) key, required for every PostgREST + Auth call. */
   supabase_anon_key: string | null;
+  // --- Vague 2 (cognitive features) ---
+  /** Type-the-answer mode: input + Levenshtein scoring before flipping. */
+  type_the_answer_enabled: boolean;
+  /** Confidence rating: capture 1..5 metacognitive confidence before FSRS rating. */
+  confidence_rating_enabled: boolean;
+  /** Pre-questioning IA: curiosity-priming questions before each new session block. */
+  pre_questioning_enabled: boolean;
 }
 
 /**
@@ -370,11 +377,22 @@ export const api = {
     dueCards: (deckId: number | null, limit: number) =>
       invoke<CardWithNote[]>("get_due_cards", { deckId, limit }),
     previewNextStates: (cardId: number) => invoke<NextStates>("preview_next_states", { cardId }),
-    submit: (data: { cardId: number; rating: Rating; reviewTimeMs: number }) =>
+    /**
+     * Submit a graded card. `confidence` is the optional 1..5 metacognitive
+     * confidence captured BEFORE the FSRS rating (CBM). `null`/`undefined`
+     * means « confidence rating toggle was off this session ».
+     */
+    submit: (data: {
+      cardId: number;
+      rating: Rating;
+      reviewTimeMs: number;
+      confidence?: number | null;
+    }) =>
       invoke<ReviewResult>("submit_review", {
         cardId: data.cardId,
         rating: data.rating,
         reviewTimeMs: data.reviewTimeMs,
+        confidence: data.confidence ?? null,
       }),
   },
   stats: {
@@ -442,6 +460,16 @@ export const api = {
     consumeFreeze: () => invoke<UserStats>("use_streak_freeze"),
     /** All unlocked badges, newest first. */
     listAchievements: () => invoke<Achievement[]>("list_unlocked_achievements"),
+  },
+  cognitive: {
+    /**
+     * Generate `count` curiosity-priming pre-questions for a deck. The deck
+     * must contain at least one non-occlusion note (else the backend returns
+     * a `Validation` error). Requires an Anthropic API key configured in
+     * settings or via `ANTHROPIC_API_KEY`.
+     */
+    generatePreQuestions: (deckId: number, count: number, language: string) =>
+      invoke<string[]>("generate_pre_questions", { deckId, count, language }),
   },
   sync: {
     /**

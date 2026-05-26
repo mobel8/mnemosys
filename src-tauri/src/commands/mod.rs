@@ -8,6 +8,7 @@
 pub mod ai;
 pub mod apkg;
 pub mod cards;
+pub mod cognitive;
 pub mod decks;
 pub mod demo;
 pub mod fsrs_optimizer;

@@ -125,6 +125,8 @@ pub fn run() {
             commands::gamification::get_user_stats,
             commands::gamification::use_streak_freeze,
             commands::gamification::list_unlocked_achievements,
+            // cognitive features (Vague 2 — type-the-answer, confidence rating, pre-questioning)
+            commands::cognitive::generate_pre_questions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

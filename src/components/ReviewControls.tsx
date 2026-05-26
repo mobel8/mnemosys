@@ -15,6 +15,7 @@
  */
 
 import { motion } from "framer-motion";
+import { ConfidenceRating } from "@/components/ConfidenceRating";
 import { Button } from "@/components/ui/button";
 import { formatInterval } from "@/lib/format";
 import { useNextStates } from "@/lib/queries";
@@ -30,6 +31,12 @@ interface ReviewControlsProps {
   onRate: (rating: Rating) => void;
   /** When a rating is in flight we disable the rest and show a loader. */
   pendingRating?: Rating | null;
+  /** Opt-in: render the CBM (1..5) confidence picker above the rating row. */
+  confidenceEnabled?: boolean;
+  /** Current confidence value (controlled). */
+  confidenceValue?: number | null;
+  /** Fired when the learner clicks a confidence level. */
+  onConfidenceChange?: (value: number) => void;
 }
 
 interface RatingDef {
@@ -77,6 +84,9 @@ export function ReviewControls({
   onFlip,
   onRate,
   pendingRating = null,
+  confidenceEnabled = false,
+  confidenceValue = null,
+  onConfidenceChange,
 }: ReviewControlsProps) {
   // Only fetch the preview once the answer has been revealed — there's no
   // point in spending IPC on a card the user might just hit Space and ignore.
@@ -106,54 +116,63 @@ export function ReviewControls({
   const isSubmitting = phase === "submitting";
 
   return (
-    <div className="grid w-full max-w-2xl grid-cols-4 gap-2">
-      {RATINGS.map((r) => {
-        const interval =
-          intervals === undefined
-            ? null
-            : r.rating === 1
-              ? intervals.again.interval_days
-              : r.rating === 2
-                ? intervals.hard.interval_days
-                : r.rating === 3
-                  ? intervals.good.interval_days
-                  : intervals.easy.interval_days;
-        const isPending = pendingRating === r.rating;
-        return (
-          <motion.div
-            key={r.rating}
-            whileHover={isSubmitting ? undefined : { scale: 1.02 }}
-            whileTap={isSubmitting ? undefined : { scale: 0.98 }}
-            transition={{ duration: 0.1 }}
-            className="flex"
-          >
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => onRate(r.rating)}
-              aria-label={`${r.label} (touche ${r.hotkey})`}
-              aria-keyshortcuts={r.hotkey}
-              data-testid={`rating-${r.label.toLowerCase()}`}
-              className={cn(
-                "flex w-full flex-col items-center justify-center gap-1 rounded-md px-3 py-3 text-sm font-semibold shadow-sm transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                "disabled:opacity-60",
-                r.className,
-              )}
+    <div className="flex w-full max-w-2xl flex-col items-center gap-3">
+      {confidenceEnabled && onConfidenceChange ? (
+        <ConfidenceRating
+          value={confidenceValue}
+          onChange={onConfidenceChange}
+          disabled={isSubmitting}
+        />
+      ) : null}
+      <div className="grid w-full grid-cols-4 gap-2">
+        {RATINGS.map((r) => {
+          const interval =
+            intervals === undefined
+              ? null
+              : r.rating === 1
+                ? intervals.again.interval_days
+                : r.rating === 2
+                  ? intervals.hard.interval_days
+                  : r.rating === 3
+                    ? intervals.good.interval_days
+                    : intervals.easy.interval_days;
+          const isPending = pendingRating === r.rating;
+          return (
+            <motion.div
+              key={r.rating}
+              whileHover={isSubmitting ? undefined : { scale: 1.02 }}
+              whileTap={isSubmitting ? undefined : { scale: 0.98 }}
+              transition={{ duration: 0.1 }}
+              className="flex"
             >
-              <span className="flex items-center gap-2">
-                <span>{r.label}</span>
-                <span className="rounded border border-white/30 px-1 py-px text-[10px] font-mono opacity-80">
-                  {r.hotkey}
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => onRate(r.rating)}
+                aria-label={`${r.label} (touche ${r.hotkey})`}
+                aria-keyshortcuts={r.hotkey}
+                data-testid={`rating-${r.label.toLowerCase()}`}
+                className={cn(
+                  "flex w-full flex-col items-center justify-center gap-1 rounded-md px-3 py-3 text-sm font-semibold shadow-sm transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                  "disabled:opacity-60",
+                  r.className,
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <span>{r.label}</span>
+                  <span className="rounded border border-white/30 px-1 py-px text-[10px] font-mono opacity-80">
+                    {r.hotkey}
+                  </span>
                 </span>
-              </span>
-              <span className="text-[11px] font-normal opacity-90 tabular-nums">
-                {isPending ? "…" : interval === null ? "—" : formatInterval(interval)}
-              </span>
-            </button>
-          </motion.div>
-        );
-      })}
+                <span className="text-[11px] font-normal opacity-90 tabular-nums">
+                  {isPending ? "…" : interval === null ? "—" : formatInterval(interval)}
+                </span>
+              </button>
+            </motion.div>
+          );
+        })}
+      </div>
     </div>
   );
 }

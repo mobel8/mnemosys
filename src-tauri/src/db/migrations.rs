@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 4;
+pub const CURRENT_VERSION: i32 = 5;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -126,6 +126,19 @@ INSERT OR IGNORE INTO sync_state (id, last_sync_at, user_id) VALUES (1, NULL, NU
 /// punitive timers, no XP debts, no public leaderboard.
 const SCHEMA_V4: &str = include_str!("schema_v4.sql");
 
+/// v5 — Cognitive features (Vague 2): metacognitive confidence rating.
+///
+/// Adds an optional `confidence INTEGER` column to `reviews`. Values lie in
+/// `[1, 5]` (CBM — Gardner-Medwin's confidence-based marking) and are
+/// captured BEFORE the user picks the FSRS rating, so the two signals stay
+/// orthogonal: confidence reflects what the learner *thinks* they know,
+/// rating reflects what they *actually* answered.
+///
+/// NULL is intentionally allowed so the column is forward-compatible: any
+/// review logged before v5 keeps a NULL confidence and reviews from a
+/// session where the toggle is off do too.
+const SCHEMA_V5: &str = include_str!("schema_v5.sql");
+
 /// Apply all pending migrations to `conn`.
 ///
 /// Reads `PRAGMA user_version` and applies migrations in order. Each migration
@@ -166,6 +179,11 @@ pub fn run(conn: &Connection) -> AppResult<()> {
     // v4 — Vague 1 gamification (`user_stats` singleton + `achievements`).
     if current < 4 {
         apply_migration(conn, 4, SCHEMA_V4)?;
+    }
+
+    // v5 — Vague 2 cognitive: optional `confidence` column on `reviews`.
+    if current < 5 {
+        apply_migration(conn, 5, SCHEMA_V5)?;
     }
 
     Ok(())

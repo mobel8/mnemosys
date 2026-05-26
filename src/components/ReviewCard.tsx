@@ -26,6 +26,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { OcclusionReviewView } from "@/components/OcclusionReviewView";
 import { TtsButton } from "@/components/TtsButton";
+import { TypeAnswer, type TypeAnswerVerdict } from "@/components/TypeAnswer";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Note } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
@@ -59,6 +60,13 @@ interface ReviewCardProps {
   /** 0-based ordinal of the underlying card row. Only meaningful for
    *  templates whose notes mint multiple cards (cloze, occlusion). */
   cardOrd?: number;
+  /** When `true` and the note is basic/basic_reverse, an inline input
+   *  asks the learner to type the expected back side before the flip. */
+  typeTheAnswerEnabled?: boolean;
+  /** Fired when the learner submits a typed answer. Surfaces the
+   *  normalised similarity score so the parent can log it / nudge a
+   *  rating decision. */
+  onTypedAnswer?: (typed: string, score: number, verdict: TypeAnswerVerdict) => void;
 }
 
 const CLOZE_REGEX = /\{\{c(\d+)::([^}]+?)(?:::([^}]+?))?\}\}/g;
@@ -142,10 +150,25 @@ function getClozeText(note: Note): string {
   return typeof note.fields.text === "string" ? note.fields.text : "";
 }
 
-export function ReviewCard({ note, phase, cardOrd = 0 }: ReviewCardProps) {
+export function ReviewCard({
+  note,
+  phase,
+  cardOrd = 0,
+  typeTheAnswerEnabled = false,
+  onTypedAnswer,
+}: ReviewCardProps) {
   const isAnswer = phase === "answer" || phase === "submitting";
   const isCloze = note.template === "cloze";
   const isOcclusion = note.template === "occlusion";
+  // Type-the-answer only applies to basic / basic_reverse on the question
+  // face. For cloze + occlusion the existing UI already requires retrieval
+  // (cloze blank, mask reveal) so adding a typed prompt would double-count.
+  const showTypeAnswer =
+    typeTheAnswerEnabled &&
+    !isAnswer &&
+    !isCloze &&
+    !isOcclusion &&
+    (note.template === "basic" || note.template === "basic_reverse");
 
   // Image-occlusion has its own "before/after flip" visual (mask shown vs
   // mask hidden). We render it as a single card without the 3D flip so the
@@ -182,7 +205,7 @@ export function ReviewCard({ note, phase, cardOrd = 0 }: ReviewCardProps) {
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: -40 }}
         transition={{ duration: 0.2, ease: "easeOut" }}
-        className="flex w-full justify-center"
+        className="flex w-full flex-col items-center justify-center gap-4"
       >
         <div
           className={cn(
@@ -271,6 +294,16 @@ export function ReviewCard({ note, phase, cardOrd = 0 }: ReviewCardProps) {
             </Card>
           </motion.div>
         </div>
+
+        {showTypeAnswer && basic ? (
+          <div className="flex w-full justify-center">
+            <TypeAnswer
+              key={note.id}
+              expectedAnswer={basic.back}
+              onSubmit={(typed, score, verdict) => onTypedAnswer?.(typed, score, verdict)}
+            />
+          </div>
+        ) : null}
       </motion.div>
     </AnimatePresence>
   );

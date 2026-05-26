@@ -28,6 +28,9 @@ pub struct Review {
     pub scheduled_days: i64,
     pub review_time: i64,
     pub reviewed_at: i64,
+    /// Optional 1..=5 metacognitive confidence captured BEFORE the FSRS
+    /// rating. `None` whenever the toggle is off or the row predates v5.
+    pub confidence: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -43,6 +46,10 @@ pub struct NewReview {
     pub elapsed_days: i64,
     pub scheduled_days: i64,
     pub review_time: i64,
+    /// See [`Review::confidence`]. Validation of `[1, 5]` happens at the
+    /// command layer before reaching this struct.
+    #[serde(default)]
+    pub confidence: Option<i64>,
 }
 
 /// Per-day aggregate used by the stats dashboard.
@@ -76,8 +83,9 @@ impl<'a> ReviewRepo<'a> {
                 card_id, rating, state_before, state_after,
                 stability_before, stability_after,
                 difficulty_before, difficulty_after,
-                elapsed_days, scheduled_days, review_time, reviewed_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                elapsed_days, scheduled_days, review_time, reviewed_at,
+                confidence
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 r.card_id,
                 r.rating,
@@ -91,6 +99,7 @@ impl<'a> ReviewRepo<'a> {
                 r.scheduled_days,
                 r.review_time,
                 reviewed_at,
+                r.confidence,
             ],
         )?;
         let id = self.conn.last_insert_rowid();
@@ -102,7 +111,8 @@ impl<'a> ReviewRepo<'a> {
             "SELECT id, card_id, rating, state_before, state_after,
                     stability_before, stability_after,
                     difficulty_before, difficulty_after,
-                    elapsed_days, scheduled_days, review_time, reviewed_at
+                    elapsed_days, scheduled_days, review_time, reviewed_at,
+                    confidence
              FROM reviews WHERE id = ?1",
             params![id],
             row_to_review,
@@ -115,7 +125,8 @@ impl<'a> ReviewRepo<'a> {
             "SELECT id, card_id, rating, state_before, state_after,
                     stability_before, stability_after,
                     difficulty_before, difficulty_after,
-                    elapsed_days, scheduled_days, review_time, reviewed_at
+                    elapsed_days, scheduled_days, review_time, reviewed_at,
+                    confidence
              FROM reviews
              WHERE card_id = ?1
              ORDER BY reviewed_at ASC",
@@ -203,6 +214,7 @@ fn row_to_review(row: &Row<'_>) -> rusqlite::Result<AppResult<Review>> {
     let scheduled_days: i64 = row.get(10)?;
     let review_time: i64 = row.get(11)?;
     let reviewed_at: i64 = row.get(12)?;
+    let confidence: Option<i64> = row.get(13)?;
 
     let parsed: AppResult<Review> = (|| {
         Ok(Review {
@@ -219,6 +231,7 @@ fn row_to_review(row: &Row<'_>) -> rusqlite::Result<AppResult<Review>> {
             scheduled_days,
             review_time,
             reviewed_at,
+            confidence,
         })
     })();
 

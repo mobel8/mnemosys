@@ -227,6 +227,7 @@ mod tests {
                             elapsed_days: if i == 0 { 0 } else { 1 },
                             scheduled_days: 2,
                             review_time: 3_000,
+                            confidence: None,
                         },
                         reviewed_at,
                     )

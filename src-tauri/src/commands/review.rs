@@ -16,7 +16,7 @@ use tauri::State;
 
 use crate::app_state::AppState;
 use crate::db::{Card, CardState, CardWithNote, NewReview, UserStats};
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::fsrs::{MemoryStateDTO, NextStatesDTO, Rating};
 
 /// Result returned by [`submit_review`]: the updated card row + the scheduled
@@ -70,8 +70,20 @@ pub fn submit_review(
     card_id: i64,
     rating: u8,
     review_time_ms: u32,
+    confidence: Option<u8>,
 ) -> AppResult<ReviewResultDTO> {
     let rating_enum = Rating::from_u8(rating)?;
+    // Validate the optional confidence in [1, 5]. None is always fine —
+    // the toggle in Settings stays off by default.
+    let confidence_i64 = match confidence {
+        Some(v) if (1..=5).contains(&v) => Some(v as i64),
+        Some(other) => {
+            return Err(AppError::Validation(format!(
+                "confidence must be in [1, 5] (got {other})"
+            )));
+        }
+        None => None,
+    };
     let now = chrono::Utc::now().timestamp();
 
     let conn = state.db.lock();
@@ -113,6 +125,7 @@ pub fn submit_review(
             elapsed_days: elapsed_days as i64,
             scheduled_days: outcome.scheduled_days as i64,
             review_time: review_time_ms as i64,
+            confidence: confidence_i64,
         },
         now,
     )?;

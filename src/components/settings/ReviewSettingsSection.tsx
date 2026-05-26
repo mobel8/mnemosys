@@ -35,6 +35,10 @@ const DEFAULTS: AppSettings = {
   anthropic_api_key: null,
   supabase_url: null,
   supabase_anon_key: null,
+  // Vague 2 cognitive features — opt-in.
+  type_the_answer_enabled: false,
+  confidence_rating_enabled: false,
+  pre_questioning_enabled: false,
 };
 
 const RETENTION_MIN = 0.8;
@@ -79,7 +83,10 @@ export function ReviewSettingsSection() {
       a.desired_retention !== b.desired_retention ||
       a.daily_new_limit !== b.daily_new_limit ||
       a.daily_review_limit !== b.daily_review_limit ||
-      a.show_next_interval !== b.show_next_interval
+      a.show_next_interval !== b.show_next_interval ||
+      a.type_the_answer_enabled !== b.type_the_answer_enabled ||
+      a.confidence_rating_enabled !== b.confidence_rating_enabled ||
+      a.pre_questioning_enabled !== b.pre_questioning_enabled
     );
   }, [query.data, draft]);
 
@@ -92,6 +99,9 @@ export function ReviewSettingsSection() {
       daily_new_limit: clamp(Math.round(draft.daily_new_limit), 1, 200),
       daily_review_limit: clamp(Math.round(draft.daily_review_limit), 10, 1000),
       show_next_interval: draft.show_next_interval,
+      type_the_answer_enabled: draft.type_the_answer_enabled,
+      confidence_rating_enabled: draft.confidence_rating_enabled,
+      pre_questioning_enabled: draft.pre_questioning_enabled,
     });
   }
 
@@ -186,6 +196,67 @@ export function ReviewSettingsSection() {
             disabled={query.isLoading}
             onCheckedChange={(checked) => setDraft((d) => ({ ...d, show_next_interval: checked }))}
           />
+        </div>
+
+        {/* --- Vague 2: Cognitive features ---------------------------------- */}
+        <div className="space-y-3">
+          <div className="text-sm font-medium text-foreground">Modes cognitifs</div>
+          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="type-the-answer-toggle" className="text-sm">
+                Type-the-answer
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Tape la réponse avant de retourner la carte (generation effect — Slamecka &amp; Graf
+                1978, d≈0.40).
+              </p>
+            </div>
+            <Switch
+              id="type-the-answer-toggle"
+              checked={draft.type_the_answer_enabled}
+              disabled={query.isLoading}
+              onCheckedChange={(checked) =>
+                setDraft((d) => ({ ...d, type_the_answer_enabled: checked }))
+              }
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="confidence-rating-toggle" className="text-sm">
+                Évaluation de confiance
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Note ta confiance 1-5 avant le rating FSRS (CBM — Gardner-Medwin, UCL).
+              </p>
+            </div>
+            <Switch
+              id="confidence-rating-toggle"
+              checked={draft.confidence_rating_enabled}
+              disabled={query.isLoading}
+              onCheckedChange={(checked) =>
+                setDraft((d) => ({ ...d, confidence_rating_enabled: checked }))
+              }
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="pre-questioning-toggle" className="text-sm">
+                Pré-questionnement IA
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Questions d'amorçage avant chaque nouveau bloc (g≈0.45 — Pan et al. 2023). Nécessite
+                une clé Anthropic configurée.
+              </p>
+            </div>
+            <Switch
+              id="pre-questioning-toggle"
+              checked={draft.pre_questioning_enabled}
+              disabled={query.isLoading}
+              onCheckedChange={(checked) =>
+                setDraft((d) => ({ ...d, pre_questioning_enabled: checked }))
+              }
+            />
+          </div>
         </div>
 
         <div className="flex justify-end">

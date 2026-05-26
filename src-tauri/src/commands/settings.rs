@@ -70,6 +70,24 @@ pub struct AppSettings {
     /// authenticated calls. `None` -> sync stays dormant.
     #[serde(default)]
     pub supabase_anon_key: Option<String>,
+
+    // --- Vague 2 (cognitive features) ---------------------------------------
+    /// Generation-effect: when on, the learner types the expected answer
+    /// before flipping the card (Slamecka & Graf 1978, d≈0.40). Defaults to
+    /// off so the existing flip-then-rate UX stays untouched for current
+    /// users.
+    #[serde(default)]
+    pub type_the_answer_enabled: bool,
+    /// CBM — confidence-based marking (Gardner-Medwin, UCL). When on the
+    /// learner rates 1..5 confidence BEFORE picking the FSRS rating; the
+    /// value is stored as `reviews.confidence`.
+    #[serde(default)]
+    pub confidence_rating_enabled: bool,
+    /// Pre-questioning IA: generate a handful of curiosity-priming questions
+    /// at the start of each new-deck session (Pan et al. 2023, g≈0.45).
+    /// Requires an Anthropic API key to be configured.
+    #[serde(default)]
+    pub pre_questioning_enabled: bool,
 }
 
 impl Default for AppSettings {
@@ -89,6 +107,10 @@ impl Default for AppSettings {
             // Sync stays dormant out of the box.
             supabase_url: None,
             supabase_anon_key: None,
+            // Vague 2 cognitive features all opt-in.
+            type_the_answer_enabled: false,
+            confidence_rating_enabled: false,
+            pre_questioning_enabled: false,
         }
     }
 }

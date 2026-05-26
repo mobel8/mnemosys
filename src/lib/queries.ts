@@ -322,7 +322,13 @@ export function useSubmitReview(
   opts?: UseMutationOptions<
     ReviewResult,
     Error,
-    { cardId: number; rating: Rating; reviewTimeMs: number }
+    {
+      cardId: number;
+      rating: Rating;
+      reviewTimeMs: number;
+      /** Optional 1..5 confidence (CBM). Omitted when the toggle is off. */
+      confidence?: number | null;
+    }
   >,
 ) {
   const qc = useQueryClient();
@@ -343,6 +349,24 @@ export function useSubmitReview(
       qc.invalidateQueries({ queryKey: queryKeys.achievements });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Vague 2 — Cognitive features
+// ---------------------------------------------------------------------------
+
+/**
+ * Mutation: ask the LLM to mint a handful of curiosity-priming pre-questions
+ * for a deck. Stateless — no cache invalidation needed.
+ */
+export function useGeneratePreQuestions(
+  opts?: UseMutationOptions<string[], Error, { deckId: number; count: number; language: string }>,
+) {
+  return useMutation({
+    mutationFn: ({ deckId, count, language }) =>
+      api.cognitive.generatePreQuestions(deckId, count, language),
+    ...opts,
   });
 }
 
