@@ -1,20 +1,61 @@
 /**
- * Mnemosys — root component (scaffold).
+ * Mnemosys — root component.
  *
- * This is a deliberately minimal placeholder rendered until the Frontend
- * Architect (agent B1) wires the real TanStack Router + layout shell.
- * The router stubs live under `src/routes/` and are NOT yet mounted to keep
- * the foundation easy to compile.
+ * Mounts the TanStack Router (imperative `createRouter` on top of the
+ * `routeTree` declared in `src/routes/routeTree.ts`), TanStack Query
+ * client, theme provider, and toast viewport. Once this file is loaded by
+ * `main.tsx`, every feature page lives under a route and is reachable via
+ * `<Link to="...">`.
+ *
+ * Note: the smoke test asserts that the literal "Mnemosys" appears in the
+ * rendered DOM. The Sidebar renders the brand text, so the test keeps
+ * passing under jsdom (even though `invoke()` rejects there — the Query
+ * client and Theme provider swallow those errors gracefully).
  */
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createRouter, RouterProvider } from "@tanstack/react-router";
+import { ToastProvider, ToastViewport } from "@/components/ui/toast";
+import { ThemeProvider } from "@/lib/theme";
+import { routeTree } from "@/routes/routeTree";
+
+// One QueryClient per app lifetime. Tauri calls are local IPC so retries
+// don't help and a 30s stale time avoids needless re-fetches on tab focus.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false,
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    },
+    mutations: {
+      retry: false,
+    },
+  },
+});
+
+const router = createRouter({
+  routeTree,
+  defaultPreload: "intent",
+});
+
+// Hand TanStack Router the inferred routeTree type so `<Link to="...">`
+// stays type-safe across the app.
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: typeof router;
+  }
+}
+
 export default function App() {
   return (
-    <main className="flex h-full w-full items-center justify-center bg-background text-foreground">
-      <div className="flex flex-col items-center gap-3">
-        <h1 className="text-4xl font-semibold tracking-tight">Mnemosys</h1>
-        <p className="text-sm text-muted-foreground">
-          Foundation scaffold ready — waiting for B1 to mount the router.
-        </p>
-      </div>
-    </main>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <ToastProvider>
+          <RouterProvider router={router} />
+          <ToastViewport />
+        </ToastProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }

@@ -1,19 +1,26 @@
 //! Mnemosys — Rust backend (Tauri 2).
 //!
-//! Module map (foundation laid by agent A1):
-//! - [`error`]    — shared `AppError` and `AppResult` types.
-//! - [`db`]       — SQLite layer (filled by A2).
-//! - [`fsrs`]     — FSRS scheduler wrapper (filled by A3).
-//! - [`commands`] — Tauri `#[command]` handlers (filled by B-wave agents).
+//! Module map:
+//! - [`error`]     — shared `AppError` and `AppResult` types.
+//! - [`db`]        — SQLite layer (rusqlite).
+//! - [`fsrs`]      — FSRS-6 scheduler wrapper.
+//! - [`commands`]  — Tauri `#[command]` handlers (frontend-facing API).
+//! - [`app_state`] — `AppState` bundling DB + scheduler, registered via
+//!   `app.manage(...)` in [`run`].
 //!
-//! `run()` is invoked from `main.rs` and registers all plugins. Additional
-//! Tauri commands will be appended to `.invoke_handler(...)` by downstream
-//! agents.
+//! `run()` is invoked from `main.rs` and registers all plugins, builds the
+//! shared `AppState` from `<app_data_dir>/mnemosys.db`, and wires every
+//! Tauri command into the invoke handler.
 
+pub mod app_state;
 pub mod commands;
 pub mod db;
 pub mod error;
 pub mod fsrs;
+
+use tauri::Manager;
+
+use crate::app_state::AppState;
 
 /// Entry point used by both `main.rs` (release) and integration tests.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -21,22 +28,62 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        // tauri-plugin-sql is NOT registered (see Cargo.toml note).
-        // A2 owns the rusqlite-based DB layer and exposes commands.
+        // tauri-plugin-sql is intentionally NOT registered — rusqlite owns
+        // the DB layer and exposes #[tauri::command] handlers.
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
-        .setup(|_app| {
+        .setup(|app| {
+            // Resolve `<app_data_dir>/mnemosys.db`. `app_data_dir()` on
+            // Linux gives `~/.local/share/<bundle id>`; we create the
+            // directory ourselves so a brand-new install doesn't crash on
+            // first boot.
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("failed to resolve app_data_dir");
+            if !app_data_dir.exists() {
+                std::fs::create_dir_all(&app_data_dir)?;
+            }
+            let db_path = app_data_dir.join("mnemosys.db");
+
+            let state = AppState::new(db_path)?;
+            app.manage(state);
+
             #[cfg(debug_assertions)]
             {
-                // Useful early signal that the backend actually booted.
-                eprintln!("[mnemosys] backend ready");
+                eprintln!("[mnemosys] backend ready — db at app_data_dir/mnemosys.db");
             }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // B-wave agents register their commands here, e.g.:
-            // commands::deck::list_decks,
-            // commands::card::review_card,
+            // decks
+            commands::decks::list_decks,
+            commands::decks::get_deck,
+            commands::decks::create_deck,
+            commands::decks::update_deck,
+            commands::decks::delete_deck,
+            commands::decks::get_deck_stats,
+            commands::decks::count_decks,
+            // cards / notes
+            commands::cards::list_cards_in_deck,
+            commands::cards::search_notes,
+            commands::cards::create_note,
+            commands::cards::update_note,
+            commands::cards::delete_note,
+            commands::cards::suspend_card,
+            // review
+            commands::review::get_due_cards,
+            commands::review::preview_next_states,
+            commands::review::submit_review,
+            // stats
+            commands::stats::get_today_stats,
+            commands::stats::get_reviews_by_day,
+            commands::stats::get_retention_by_day,
+            // demo
+            commands::demo::load_demo_decks,
+            // settings
+            commands::settings::get_settings,
+            commands::settings::save_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

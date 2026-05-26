@@ -1,0 +1,32 @@
+/**
+ * Imperative TanStack Router route tree.
+ *
+ * We don't use `@tanstack/router-plugin`'s file-based codegen (would require
+ * a vite plugin install + dev-server restart loop that other agents haven't
+ * validated yet). Instead, each route module exports a `Route` built with
+ * `createRoute(...)` and this file wires them under the root.
+ *
+ * Adding a route:
+ *   1. Create `src/routes/<segment>.tsx` exporting a `Route`.
+ *   2. Import it here and append to the `addChildren([...])` array.
+ *   3. Add type augmentation for `FileRoutesByPath` if you want full
+ *      typed `Link` targets (TanStack Router v1 picks them up automatically
+ *      when the Route is referenced by `getParentRoute`).
+ */
+
+import { Route as rootRoute } from "./__root";
+import { Route as decksDeckIdRoute } from "./decks.$deckId";
+import { Route as decksDeckIdNewCardRoute } from "./decks.$deckId.new-card";
+import { Route as indexRoute } from "./index";
+import { Route as reviewDeckIdRoute } from "./review.$deckId";
+import { Route as settingsRoute } from "./settings";
+import { Route as statsRoute } from "./stats";
+
+export const routeTree = rootRoute.addChildren([
+  indexRoute,
+  decksDeckIdRoute,
+  decksDeckIdNewCardRoute,
+  reviewDeckIdRoute,
+  statsRoute,
+  settingsRoute,
+]);

@@ -1,12 +1,17 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import App from "@/App";
 import { cn } from "@/lib/utils";
 
 describe("scaffold smoke test", () => {
-  it("renders the Mnemosys placeholder", () => {
+  it("renders the Mnemosys app shell", async () => {
     render(<App />);
-    expect(screen.getByText("Mnemosys")).toBeInTheDocument();
+    // The Sidebar brand label and the home page heading both contain the
+    // text "Mnemosys"; the router resolves asynchronously so we wait until
+    // at least one is mounted.
+    await waitFor(() => {
+      expect(screen.getAllByText("Mnemosys").length).toBeGreaterThan(0);
+    });
   });
 
   it("merges tailwind classes via cn()", () => {
