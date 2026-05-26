@@ -88,6 +88,31 @@ pub struct AppSettings {
     /// Requires an Anthropic API key to be configured.
     #[serde(default)]
     pub pre_questioning_enabled: bool,
+
+    // --- Vague 3 (neuro modes, opt-in) --------------------------------------
+    /// Master switch for every neuro mode. Defaults to `false` so the app
+    /// behaves exactly as before. When `false`, all three sub-toggles below
+    /// are forced inert by the UI regardless of their stored value.
+    #[serde(default)]
+    pub neuro_modes_enabled: bool,
+    /// Show the Mood / Sleep / Stress check-in modal before each session
+    /// (when no log exists for today yet). Evidence: sleep deprivation
+    /// reduces consolidation, meta-analysis g≈0.621.
+    #[serde(default)]
+    pub mood_checkin_enabled: bool,
+    /// Cadence of the movement-break overlay in minutes. UI clamps to
+    /// `[10, 60]`; default `25` matches the Pomodoro timing Roig et al.
+    /// recommend for acute exercise + memory consolidation (d≈0.52).
+    #[serde(default = "default_movement_break_minutes")]
+    pub movement_break_minutes: u32,
+    /// Offer a 5-min cyclic-sighing primer before sessions when stress is
+    /// flagged. Source: Spiegel et al., Cell Reports Medicine 2023.
+    #[serde(default)]
+    pub cyclic_sighing_enabled: bool,
+}
+
+fn default_movement_break_minutes() -> u32 {
+    25
 }
 
 impl Default for AppSettings {
@@ -111,6 +136,11 @@ impl Default for AppSettings {
             type_the_answer_enabled: false,
             confidence_rating_enabled: false,
             pre_questioning_enabled: false,
+            // Vague 3 neuro modes — all opt-in, master switch off.
+            neuro_modes_enabled: false,
+            mood_checkin_enabled: false,
+            movement_break_minutes: default_movement_break_minutes(),
+            cyclic_sighing_enabled: false,
         }
     }
 }
@@ -153,6 +183,12 @@ pub fn save_settings(
         return Err(AppError::Validation(format!(
             "invalid theme: {}",
             settings.theme
+        )));
+    }
+    if !(10..=60).contains(&settings.movement_break_minutes) {
+        return Err(AppError::Validation(format!(
+            "movement_break_minutes out of range (10-60): {}",
+            settings.movement_break_minutes
         )));
     }
 

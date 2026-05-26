@@ -216,6 +216,38 @@ export interface AppSettings {
   confidence_rating_enabled: boolean;
   /** Pre-questioning IA: curiosity-priming questions before each new session block. */
   pre_questioning_enabled: boolean;
+  // --- Vague 3 (neuro modes, opt-in) ---
+  /** Master switch — when `false` every sub-toggle below is inert. */
+  neuro_modes_enabled: boolean;
+  /** Show Mood/Sleep check-in modal at session start (once per day). */
+  mood_checkin_enabled: boolean;
+  /** Cadence in minutes (10..60) for the movement break reminder. */
+  movement_break_minutes: number;
+  /** Offer the cyclic-sighing primer (Spiegel 2023) when stress flagged. */
+  cyclic_sighing_enabled: boolean;
+}
+
+// --- Vague 3: wellness ----------------------------------------------------
+
+/**
+ * One wellness check-in (Vague 3 — opt-in neuro modes). Every nullable
+ * field reflects « learner skipped that question ». Booleans always have a
+ * concrete value.
+ */
+export interface WellnessLog {
+  id: number;
+  /** ISO `YYYY-MM-DD` of the check-in. */
+  date: string;
+  /** Self-reported mood `[1..5]`. */
+  mood: number | null;
+  /** Hours of sleep the previous night. */
+  sleep_hours: number | null;
+  /** Self-reported stress `[1..5]`. */
+  stress_level: number | null;
+  hydrated: boolean;
+  caffeine_taken: boolean;
+  /** Unix seconds. */
+  created_at: number;
 }
 
 /**
@@ -470,6 +502,30 @@ export const api = {
      */
     generatePreQuestions: (deckId: number, count: number, language: string) =>
       invoke<string[]>("generate_pre_questions", { deckId, count, language }),
+  },
+  wellness: {
+    /**
+     * Persist a fresh wellness check-in. Every value is optional (`null` =
+     * « learner skipped that field »); the booleans default to `false`.
+     */
+    submit: (data: {
+      mood: number | null;
+      sleepHours: number | null;
+      stressLevel: number | null;
+      hydrated: boolean;
+      caffeineTaken: boolean;
+    }) =>
+      invoke<WellnessLog>("submit_wellness_log", {
+        mood: data.mood,
+        sleepHours: data.sleepHours,
+        stressLevel: data.stressLevel,
+        hydrated: data.hydrated,
+        caffeineTaken: data.caffeineTaken,
+      }),
+    /** Today's most recent wellness log, or `null` when none exists. */
+    today: () => invoke<WellnessLog | null>("get_today_wellness"),
+    /** Last `days` wellness logs, newest first. */
+    recent: (days: number) => invoke<WellnessLog[]>("get_recent_wellness", { days }),
   },
   sync: {
     /**

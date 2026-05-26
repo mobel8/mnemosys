@@ -650,6 +650,70 @@ fn deck_mastery_distribution_buckets_by_stability() {
     assert_eq!(mastery.total(), 5);
 }
 
+// ---- wellness (Vague 3 — neuro modes opt-in) -------------------------------
+
+#[test]
+fn wellness_log_round_trip() {
+    let db = Database::for_test();
+    let conn = db.lock();
+    let repo = db.wellness(&conn);
+
+    let log = repo
+        .insert_log("2026-05-26", Some(4), Some(7.5), Some(2), true, false, 1_700_000_000)
+        .expect("insert");
+    assert!(log.id > 0);
+
+    // latest_log() returns the freshly-inserted row.
+    let latest = repo.latest_log().unwrap().expect("row exists");
+    assert_eq!(latest.id, log.id);
+    assert_eq!(latest.mood, Some(4));
+    assert_eq!(latest.sleep_hours, Some(7.5));
+    assert_eq!(latest.stress_level, Some(2));
+    assert!(latest.hydrated);
+    assert!(!latest.caffeine_taken);
+    assert_eq!(latest.created_at, 1_700_000_000);
+}
+
+#[test]
+fn today_wellness_finds_same_day_log() {
+    let db = Database::for_test();
+    let conn = db.lock();
+    let repo = db.wellness(&conn);
+
+    // Two check-ins on the same day → log_for_date returns the latest one.
+    repo.insert_log("2026-05-26", Some(3), None, None, false, false, 1)
+        .unwrap();
+    repo.insert_log("2026-05-26", Some(5), Some(8.0), Some(1), true, true, 2)
+        .unwrap();
+    // Another row on a *different* day must not leak through.
+    repo.insert_log("2026-05-25", Some(2), None, None, false, false, 3)
+        .unwrap();
+
+    let same_day = repo
+        .log_for_date("2026-05-26")
+        .unwrap()
+        .expect("today's row");
+    assert_eq!(same_day.mood, Some(5));
+    assert_eq!(same_day.sleep_hours, Some(8.0));
+    assert!(same_day.hydrated);
+    assert!(same_day.caffeine_taken);
+}
+
+#[test]
+fn wellness_recent_logs_returns_newest_first() {
+    let db = Database::for_test();
+    let conn = db.lock();
+    let repo = db.wellness(&conn);
+    for (i, date) in ["2026-05-24", "2026-05-25", "2026-05-26"].iter().enumerate() {
+        repo.insert_log(date, Some((i + 1) as i64), None, None, false, false, i as i64 + 1)
+            .unwrap();
+    }
+    let logs = repo.recent_logs(2).unwrap();
+    assert_eq!(logs.len(), 2);
+    assert_eq!(logs[0].date, "2026-05-26");
+    assert_eq!(logs[1].date, "2026-05-25");
+}
+
 #[test]
 fn fsrs_params_seeded_on_init() {
     let db = Database::for_test();

@@ -34,6 +34,8 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { CyclicSighing } from "@/components/CyclicSighing";
+import { MoodCheckIn } from "@/components/MoodCheckIn";
 import { PreQuestioning } from "@/components/PreQuestioning";
 import { ReviewCard } from "@/components/ReviewCard";
 import { ReviewControls } from "@/components/ReviewControls";
@@ -47,9 +49,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Toast, ToastDescription, ToastTitle } from "@/components/ui/toast";
-import { useSettingsQuery, useSubmitReview, useSuspendCard } from "@/lib/queries";
+import { useSettingsQuery, useSubmitReview, useSuspendCard, useTodayWellness } from "@/lib/queries";
 import { useReviewSession } from "@/lib/stores/review";
-import type { CardWithNote, Rating } from "@/lib/tauri";
+import type { CardWithNote, Rating, WellnessLog } from "@/lib/tauri";
 
 type Phase = "question" | "answer" | "submitting" | "done";
 
@@ -91,6 +93,53 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   const typeTheAnswerEnabled = settings.data?.type_the_answer_enabled ?? false;
   const confidenceEnabled = settings.data?.confidence_rating_enabled ?? false;
   const preQuestioningEnabled = settings.data?.pre_questioning_enabled ?? false;
+  // --- Vague 3 — neuro modes state ----------------------------------------
+  const neuroEnabled = settings.data?.neuro_modes_enabled ?? false;
+  const moodCheckinEnabled = (settings.data?.mood_checkin_enabled ?? false) && neuroEnabled;
+  const cyclicSighingEnabled = (settings.data?.cyclic_sighing_enabled ?? false) && neuroEnabled;
+  const todayWellness = useTodayWellness({ enabled: moodCheckinEnabled });
+  const [moodCheckinOpen, setMoodCheckinOpen] = useState(false);
+  const [moodCheckinDone, setMoodCheckinDone] = useState(false);
+  const [cyclicSighingOpen, setCyclicSighingOpen] = useState(false);
+  const [cyclicSighingDone, setCyclicSighingDone] = useState(false);
+
+  // Decide whether to show the check-in. Done exactly once per session.
+  useEffect(() => {
+    if (!moodCheckinEnabled || moodCheckinDone) return;
+    if (todayWellness.isLoading) return;
+    if (todayWellness.data) {
+      // A row exists for today — skip the modal but still consider it done.
+      setMoodCheckinDone(true);
+      // Surface the high-stress nudge from yesterday's data, when applicable.
+      if (
+        cyclicSighingEnabled &&
+        (todayWellness.data.stress_level ?? 0) >= 4 &&
+        !cyclicSighingDone
+      ) {
+        setCyclicSighingOpen(true);
+      }
+      return;
+    }
+    setMoodCheckinOpen(true);
+  }, [
+    moodCheckinEnabled,
+    moodCheckinDone,
+    todayWellness.data,
+    todayWellness.isLoading,
+    cyclicSighingEnabled,
+    cyclicSighingDone,
+  ]);
+
+  const handleMoodSubmit = useCallback(
+    (log: WellnessLog) => {
+      setMoodCheckinDone(true);
+      // Stress >= 4 + cyclic-sighing toggle on → suggest the primer.
+      if (cyclicSighingEnabled && (log.stress_level ?? 0) >= 4 && !cyclicSighingDone) {
+        setCyclicSighingOpen(true);
+      }
+    },
+    [cyclicSighingEnabled, cyclicSighingDone],
+  );
 
   const startedAtRef = useRef<number>(Date.now());
   const cardShownAtRef = useRef<number>(Date.now());
@@ -413,6 +462,27 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
           </Toast>
         ))}
       </div>
+
+      {/* Vague 3 — neuro modes overlays (opt-in, all gated on settings) */}
+      {moodCheckinEnabled && (
+        <MoodCheckIn
+          open={moodCheckinOpen}
+          onClose={() => {
+            setMoodCheckinOpen(false);
+            setMoodCheckinDone(true);
+          }}
+          onSubmit={handleMoodSubmit}
+        />
+      )}
+      {cyclicSighingEnabled && (
+        <CyclicSighing
+          open={cyclicSighingOpen}
+          onClose={() => {
+            setCyclicSighingOpen(false);
+            setCyclicSighingDone(true);
+          }}
+        />
+      )}
     </div>
   );
 }

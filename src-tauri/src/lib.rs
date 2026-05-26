@@ -127,6 +127,10 @@ pub fn run() {
             commands::gamification::list_unlocked_achievements,
             // cognitive features (Vague 2 — type-the-answer, confidence rating, pre-questioning)
             commands::cognitive::generate_pre_questions,
+            // wellness (Vague 3 — neuro modes opt-in)
+            commands::wellness::submit_wellness_log,
+            commands::wellness::get_today_wellness,
+            commands::wellness::get_recent_wellness,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

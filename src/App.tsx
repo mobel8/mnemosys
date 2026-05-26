@@ -23,9 +23,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { MovementBreakReminder } from "@/components/MovementBreakReminder";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 import { Toaster } from "@/components/ui/toaster";
+import { useSettingsQuery } from "@/lib/queries";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routes/routeTree";
 
@@ -148,6 +150,7 @@ export default function App() {
           <ToastProvider>
             <RouterProvider router={router} />
             <ShortcutsHelpDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+            <NeuroModesShell />
             <Toaster />
             <ToastViewport />
           </ToastProvider>
@@ -155,4 +158,16 @@ export default function App() {
       </QueryClientProvider>
     </ErrorBoundary>
   );
+}
+
+/**
+ * Mounts every neuro-mode side-effect that lives at app-root level. Lives
+ * inside the `QueryClientProvider` so `useSettingsQuery()` can hydrate the
+ * cadence from the live settings without prop drilling.
+ */
+function NeuroModesShell() {
+  const settings = useSettingsQuery();
+  const enabled = settings.data?.neuro_modes_enabled ?? false;
+  const minutes = settings.data?.movement_break_minutes ?? 25;
+  return <MovementBreakReminder enabled={enabled} intervalMinutes={minutes} />;
 }

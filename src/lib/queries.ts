@@ -44,6 +44,7 @@ import {
   type TTSResult,
   type TTSVoice,
   type UserStats,
+  type WellnessLog,
 } from "@/lib/tauri";
 
 export const queryKeys = {
@@ -64,6 +65,8 @@ export const queryKeys = {
   syncStatus: ["sync-status"] as const,
   userStats: ["user-stats"] as const,
   achievements: ["achievements"] as const,
+  todayWellness: ["today-wellness"] as const,
+  recentWellness: (days: number) => ["recent-wellness", days] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -632,6 +635,54 @@ export function useStreakFreeze(opts?: UseMutationOptions<UserStats, Error, void
     ...opts,
     onSuccess: (data, variables, onMutateResult, context) => {
       qc.invalidateQueries({ queryKey: queryKeys.userStats });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Vague 3 — Neuro modes (wellness, opt-in)
+// ---------------------------------------------------------------------------
+
+/** Today's wellness log, or `null` when the user hasn't checked in yet. */
+export function useTodayWellness(opts?: Partial<UseQueryOptions<WellnessLog | null>>) {
+  return useQuery<WellnessLog | null>({
+    queryKey: queryKeys.todayWellness,
+    queryFn: () => api.wellness.today(),
+    ...opts,
+  });
+}
+
+/** Last `days` wellness logs (newest first). */
+export function useRecentWellness(days = 30, opts?: Partial<UseQueryOptions<WellnessLog[]>>) {
+  return useQuery<WellnessLog[]>({
+    queryKey: queryKeys.recentWellness(days),
+    queryFn: () => api.wellness.recent(days),
+    ...opts,
+  });
+}
+
+/** Submit a wellness check-in. Invalidates the « today » + « recent » caches. */
+export function useSubmitWellness(
+  opts?: UseMutationOptions<
+    WellnessLog,
+    Error,
+    {
+      mood: number | null;
+      sleepHours: number | null;
+      stressLevel: number | null;
+      hydrated: boolean;
+      caffeineTaken: boolean;
+    }
+  >,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input) => api.wellness.submit(input),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.todayWellness });
+      qc.invalidateQueries({ queryKey: ["recent-wellness"] });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

@@ -40,6 +40,7 @@ pub mod migrations;
 pub mod notes;
 pub mod params;
 pub mod reviews;
+pub mod wellness;
 
 pub use cards::{Card, CardRepo, CardState, CardWithNote};
 pub use decks::{Deck, DeckMastery, DeckPatch, DeckRepo, DeckStats};
@@ -47,6 +48,7 @@ pub use gamification::{Achievement, GamificationRepo, UserStats};
 pub use notes::{Note, NoteRepo, NoteTemplate};
 pub use params::ParamsRepo;
 pub use reviews::{DayCount, DayRetention, NewReview, Review, ReviewRepo};
+pub use wellness::{WellnessLog, WellnessRepo};
 
 /// Default 21-element FSRS-5 parameter vector. Used as the seed value on a
 /// brand-new database. Agent A3 may overwrite this whenever an optimisation
@@ -136,6 +138,10 @@ impl Database {
 
     pub fn gamification<'a>(&self, conn: &'a Connection) -> GamificationRepo<'a> {
         GamificationRepo::new(conn)
+    }
+
+    pub fn wellness<'a>(&self, conn: &'a Connection) -> WellnessRepo<'a> {
+        WellnessRepo::new(conn)
     }
 }
 

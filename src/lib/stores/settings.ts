@@ -28,6 +28,11 @@ const DEFAULTS: AppSettings = {
   type_the_answer_enabled: false,
   confidence_rating_enabled: false,
   pre_questioning_enabled: false,
+  // Vague 3 neuro modes — all opt-in, master switch off.
+  neuro_modes_enabled: false,
+  mood_checkin_enabled: false,
+  movement_break_minutes: 25,
+  cyclic_sighing_enabled: false,
 };
 
 interface SettingsState extends AppSettings {

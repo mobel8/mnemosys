@@ -20,3 +20,4 @@ pub mod settings;
 pub mod stats;
 pub mod sync;
 pub mod tts;
+pub mod wellness;

@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 5;
+pub const CURRENT_VERSION: i32 = 6;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -139,6 +139,20 @@ const SCHEMA_V4: &str = include_str!("schema_v4.sql");
 /// session where the toggle is off do too.
 const SCHEMA_V5: &str = include_str!("schema_v5.sql");
 
+/// v6 — Neuro modes (Vague 3): optional wellness tracking.
+///
+/// Adds a `wellness_logs` table capturing pre-session mood, sleep hours,
+/// stress level, and two simple boolean flags (hydrated, caffeine taken).
+/// Every value column is NULL-able by design — skipping the check-in is a
+/// first-class flow, not a degenerate case. The opt-in master switch lives
+/// in `AppSettings.neuro_modes_enabled`; until the learner enables it,
+/// nothing writes to this table.
+///
+/// Sourced evidence: Spiegel et al., Cell Reports Medicine 2023
+/// (cyclic sighing); Roig et al., acute exercise & memory consolidation
+/// (d≈0.52); sleep deprivation meta-analysis (g≈0.621).
+const SCHEMA_V6: &str = include_str!("schema_v6.sql");
+
 /// Apply all pending migrations to `conn`.
 ///
 /// Reads `PRAGMA user_version` and applies migrations in order. Each migration
@@ -184,6 +198,11 @@ pub fn run(conn: &Connection) -> AppResult<()> {
     // v5 — Vague 2 cognitive: optional `confidence` column on `reviews`.
     if current < 5 {
         apply_migration(conn, 5, SCHEMA_V5)?;
+    }
+
+    // v6 — Vague 3 neuro: optional `wellness_logs` table.
+    if current < 6 {
+        apply_migration(conn, 6, SCHEMA_V6)?;
     }
 
     Ok(())
