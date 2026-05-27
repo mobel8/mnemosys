@@ -17,6 +17,7 @@
  */
 
 import { AboutSection } from "@/components/settings/AboutSection";
+import { FsrsOptimizerSection } from "@/components/settings/FsrsOptimizerSection";
 import { ImportExportSection } from "@/components/settings/ImportExportSection";
 import { IntegrationsSection } from "@/components/settings/IntegrationsSection";
 import { NeuroModesSection } from "@/components/settings/NeuroModesSection";
@@ -36,6 +37,7 @@ export default function SettingsPage() {
 
       <ThemeSection />
       <ReviewSettingsSection />
+      <FsrsOptimizerSection />
       <IntegrationsSection />
       <NeuroModesSection />
       <SyncSection />

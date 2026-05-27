@@ -45,7 +45,8 @@
       "endpoints": [
         "https://releases.mnemosys.app/{{target}}/{{current_version}}"
       ],
-      "pubkey": ""
+      "pubkey": "",
+      "dangerousInsecureTransportProtocol": false
     }
   }
 }

@@ -513,6 +513,24 @@ export interface SyncReport {
   finished_at: number;
 }
 
+// --- Session 4: FSRS optimizer -------------------------------------------
+
+/**
+ * Outcome of one successful `optimize_fsrs_params` run. Mirrors the Rust
+ * `OptimizeResult` struct (see `commands/fsrs_optimizer.rs`).
+ *
+ * - `params`           : freshly-trained 21-element FSRS-6 vector, now active.
+ * - `reviews_used`     : count of `reviews` rows fed into the optimiser.
+ * - `previous_params`  : the vector that was active **before** this run; kept
+ *   here so a future « undo » affordance can diff the two without an extra
+ *   round-trip.
+ */
+export interface OptimizeResult {
+  params: number[];
+  reviews_used: number;
+  previous_params: number[];
+}
+
 // ---------------------------------------------------------------------------
 // API surface
 // ---------------------------------------------------------------------------
@@ -850,6 +868,25 @@ export const api = {
         x: data.x,
         y: data.y,
         z: data.z,
+      }),
+  },
+  fsrsOptimizer: {
+    /**
+     * Cheap `COUNT(*)` on the `reviews` table. The Settings UI calls this on
+     * mount to decide whether to surface the « Calibrer FSRS » button or the
+     * « keep revising » hint.
+     */
+    getTotalReviewsCount: () => invoke<number>("get_total_reviews_count"),
+    /**
+     * Re-fit the 21-element FSRS parameter vector on this user's review log.
+     * `minReviews` is the gate: the backend errors with `Validation` when the
+     * row count is below it. Omit / pass `null` to use the built-in default
+     * (1000). On success the new params are persisted and the live scheduler
+     * is rebuilt so the next review picks them up immediately.
+     */
+    optimize: (minReviews?: number | null) =>
+      invoke<OptimizeResult>("optimize_fsrs_params", {
+        minReviews: minReviews ?? null,
       }),
   },
   sync: {

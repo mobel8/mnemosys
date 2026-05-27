@@ -38,6 +38,7 @@ import {
   type NextStates,
   type Note,
   type NoteTemplate,
+  type OptimizeResult,
   type Palace,
   type PalaceLocus,
   type PalaceTemplate,
@@ -92,6 +93,8 @@ export const queryKeys = {
   // Vague 9 — Memory Palaces
   palaces: ["palaces"] as const,
   palace: (id: number) => ["palace", id] as const,
+  // Session 4 — FSRS optimizer
+  totalReviewsCount: ["total-reviews-count"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -1079,6 +1082,51 @@ export function useMovePalaceLocus(
     ...opts,
     onSuccess: (data, variables, onMutateResult, context) => {
       qc.invalidateQueries({ queryKey: queryKeys.palace(variables.palaceId) });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Session 4 — FSRS optimizer
+// ---------------------------------------------------------------------------
+
+/**
+ * Total `reviews` row count. Cheap (`COUNT(*)` on an indexed table) so the
+ * Settings page polls it eagerly. We keep `staleTime` short — when the user
+ * has just finished a session in another tab and comes back to settings, the
+ * « keep revising » progress should reflect those fresh rows.
+ */
+export function useTotalReviewsCount(opts?: Partial<UseQueryOptions<number>>) {
+  return useQuery<number>({
+    queryKey: queryKeys.totalReviewsCount,
+    queryFn: () => api.fsrsOptimizer.getTotalReviewsCount(),
+    ...opts,
+  });
+}
+
+/**
+ * Mutation: re-fit the 21-element FSRS parameter vector on the user's
+ * personal review log. Slow (5–30 s depending on row count) — callers should
+ * keep the trigger disabled while `isPending` is true. On success we
+ * invalidate every query that consumes scheduling decisions so the UI shows
+ * the new intervals immediately.
+ */
+export function useOptimizeFsrsParams(
+  opts?: UseMutationOptions<OptimizeResult, Error, { minReviews?: number | null }>,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input) => api.fsrsOptimizer.optimize(input?.minReviews ?? null),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      // Newly-fitted parameters change every `next_states` preview and the
+      // due queue (intervals may shift). Touch all schedule-flavoured caches.
+      qc.invalidateQueries({ queryKey: ["next-states"] });
+      qc.invalidateQueries({ queryKey: ["due-cards"] });
+      qc.invalidateQueries({ queryKey: ["interleaved-due-cards"] });
+      qc.invalidateQueries({ queryKey: queryKeys.todayStats });
+      qc.invalidateQueries({ queryKey: queryKeys.totalReviewsCount });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
