@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 9;
+pub const CURRENT_VERSION: i32 = 10;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -171,6 +171,18 @@ const SCHEMA_V8: &str = include_str!("schema_v8.sql");
 /// per-confidence-band buckets from there.
 const SCHEMA_V9: &str = include_str!("schema_v9.sql");
 
+/// v10 — Memory Palace 3D Builder (Vague 9): method-of-loci spatial review.
+///
+/// Adds `palaces` (one row per palace, e.g. « ma maison d'enfance »,
+/// with a 3D template — house / street / castle / custom) and
+/// `palace_loci` (one row per card-locus pin, with (x, y, z) and a
+/// traversal `ordinal`). The traversal order is the walking path the
+/// learner takes during review mode. Krokos et al. 2019 (Virtual
+/// Reality 23) reports a +8.8 % recall improvement vs flat lists,
+/// rooted in the place/grid-cell circuitry behind episodic memory
+/// (Nobel 2014, O'Keefe & Moser).
+const SCHEMA_V10: &str = include_str!("schema_v10.sql");
+
 /// v7 — Pluggable schedulers (Vague 4): per-deck algorithm choice.
 ///
 /// Adds a `scheduler_kind` column to `decks` storing one of `'fsrs6'`
@@ -285,6 +297,11 @@ pub fn run(conn: &Connection) -> AppResult<()> {
     // v9 — Vague 7 delayed JOLs: `jol_predictions` table for calibration.
     if current < 9 {
         apply_migration(conn, 9, SCHEMA_V9)?;
+    }
+
+    // v10 — Vague 9 Memory Palace: `palaces` + `palace_loci` tables.
+    if current < 10 {
+        apply_migration(conn, 10, SCHEMA_V10)?;
     }
 
     Ok(())

@@ -16,6 +16,7 @@ pub mod gamification;
 pub mod io;
 pub mod media;
 pub mod metacognition;
+pub mod palaces;
 pub mod podcast;
 pub mod review;
 pub mod settings;

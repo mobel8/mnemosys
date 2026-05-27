@@ -39,6 +39,7 @@ pub mod gamification;
 pub mod metacognition;
 pub mod migrations;
 pub mod notes;
+pub mod palaces;
 pub mod params;
 pub mod reviews;
 pub mod sketches;
@@ -49,6 +50,7 @@ pub use decks::{Deck, DeckMastery, DeckPatch, DeckRepo, DeckStats};
 pub use gamification::{Achievement, GamificationRepo, UserStats};
 pub use metacognition::{CalibrationBucket, CalibrationStats, JolPrediction, MetacognitionRepo};
 pub use notes::{Note, NoteRepo, NoteTemplate};
+pub use palaces::{Palace, PalaceLocus, PalaceRepo, PalaceWithLoci};
 pub use params::ParamsRepo;
 pub use reviews::{DayCount, DayRetention, NewReview, Review, ReviewRepo};
 pub use sketches::{Sketch, SketchRepo};
@@ -154,6 +156,10 @@ impl Database {
 
     pub fn metacognition<'a>(&self, conn: &'a Connection) -> MetacognitionRepo<'a> {
         MetacognitionRepo::new(conn)
+    }
+
+    pub fn palaces<'a>(&self, conn: &'a Connection) -> PalaceRepo<'a> {
+        PalaceRepo::new(conn)
     }
 }
 

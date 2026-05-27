@@ -1318,3 +1318,156 @@ fn calibration_gamma_inverse_correlation() {
     // Mean predicted ≈ 0.5, mean actual ≈ 0.5 → bias should be ≈ 0.0.
     assert!(stats.bias.abs() < 0.01);
 }
+
+// ---- Vague 9 — Memory Palace 3D Builder ------------------------------------
+
+/// Seed a deck and `n` distinct basic notes/cards, returning their card ids.
+fn seed_n_cards(db: &Database, deck_id: i64, n: usize) -> Vec<i64> {
+    let conn = db.lock();
+    for i in 0..n {
+        db.notes(&conn)
+            .create(
+                deck_id,
+                NoteTemplate::Basic,
+                json!({ "front": format!("Q{}", i), "back": format!("A{}", i) }),
+                vec![],
+            )
+            .unwrap();
+    }
+    db.cards(&conn)
+        .list_in_deck(deck_id, n as u32, 0)
+        .unwrap()
+        .into_iter()
+        .map(|c| c.card.id)
+        .collect()
+}
+
+#[test]
+fn palace_round_trip() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let cards = seed_n_cards(&db, deck_id, 2);
+    let conn = db.lock();
+    let p = db
+        .palaces(&conn)
+        .create("My House", Some("Childhood home"), "house", 1_700_000_000)
+        .expect("create palace");
+    db.palaces(&conn)
+        .add_locus(p.id, cards[0], 0.0, 1.7, 0.0, Some("kitchen"), 1_700_000_001)
+        .unwrap();
+    db.palaces(&conn)
+        .add_locus(p.id, cards[1], 4.0, 1.7, 0.0, Some("bedroom"), 1_700_000_002)
+        .unwrap();
+    let full = db.palaces(&conn).get(p.id).unwrap();
+    assert_eq!(full.palace.name, "My House");
+    assert_eq!(full.palace.template, "house");
+    assert_eq!(full.loci.len(), 2);
+    assert_eq!(full.loci[0].ordinal, 1);
+    assert_eq!(full.loci[1].ordinal, 2);
+    assert_eq!(full.loci[0].label.as_deref(), Some("kitchen"));
+}
+
+#[test]
+fn palace_locus_unique_per_card() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let cards = seed_n_cards(&db, deck_id, 1);
+    let conn = db.lock();
+    let p = db
+        .palaces(&conn)
+        .create("X", None, "house", 1_700_000_000)
+        .unwrap();
+    db.palaces(&conn)
+        .add_locus(p.id, cards[0], 0.0, 0.0, 0.0, None, 1_700_000_001)
+        .unwrap();
+    // Re-pin the same card → UNIQUE(palace_id, card_id) must fire.
+    let err = db
+        .palaces(&conn)
+        .add_locus(p.id, cards[0], 1.0, 0.0, 0.0, None, 1_700_000_002)
+        .unwrap_err();
+    let msg = format!("{}", err);
+    assert!(
+        msg.contains("UNIQUE") || msg.contains("unique") || msg.to_lowercase().contains("constraint"),
+        "expected a UNIQUE constraint error, got: {}",
+        msg
+    );
+}
+
+#[test]
+fn delete_palace_cascades_to_loci() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let cards = seed_n_cards(&db, deck_id, 2);
+    let conn = db.lock();
+    let p = db
+        .palaces(&conn)
+        .create("X", None, "castle", 1_700_000_000)
+        .unwrap();
+    db.palaces(&conn)
+        .add_locus(p.id, cards[0], 0.0, 0.0, 0.0, None, 1_700_000_001)
+        .unwrap();
+    db.palaces(&conn)
+        .add_locus(p.id, cards[1], 1.0, 0.0, 0.0, None, 1_700_000_002)
+        .unwrap();
+    db.palaces(&conn).delete(p.id).unwrap();
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM palace_loci", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 0, "loci should cascade-delete with the palace");
+}
+
+#[test]
+fn delete_card_cascades_to_palace_loci() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let cards = seed_n_cards(&db, deck_id, 1);
+    let conn = db.lock();
+    let p = db
+        .palaces(&conn)
+        .create("X", None, "street", 1_700_000_000)
+        .unwrap();
+    db.palaces(&conn)
+        .add_locus(p.id, cards[0], 0.0, 0.0, 0.0, None, 1_700_000_001)
+        .unwrap();
+    // Removing the underlying card should drop the locus row.
+    conn.execute("DELETE FROM cards WHERE id = ?1", rusqlite::params![cards[0]])
+        .unwrap();
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM palace_loci WHERE palace_id = ?1",
+            rusqlite::params![p.id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 0, "loci should cascade-delete with the card");
+}
+
+#[test]
+fn reorder_loci_updates_ordinals() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let cards = seed_n_cards(&db, deck_id, 3);
+    let conn = db.lock();
+    let p = db
+        .palaces(&conn)
+        .create("X", None, "house", 1_700_000_000)
+        .unwrap();
+    let l1 = db
+        .palaces(&conn)
+        .add_locus(p.id, cards[0], 0.0, 0.0, 0.0, None, 1_700_000_001)
+        .unwrap();
+    let l2 = db
+        .palaces(&conn)
+        .add_locus(p.id, cards[1], 1.0, 0.0, 0.0, None, 1_700_000_002)
+        .unwrap();
+    let l3 = db
+        .palaces(&conn)
+        .add_locus(p.id, cards[2], 2.0, 0.0, 0.0, None, 1_700_000_003)
+        .unwrap();
+    // Initial ordinals 1, 2, 3 → reverse them to 3, 2, 1.
+    db.palaces(&conn)
+        .reorder_loci(p.id, &[l3.id, l2.id, l1.id])
+        .unwrap();
+    let full = db.palaces(&conn).get(p.id).unwrap();
+    assert_eq!(full.loci[0].id, l3.id, "first slot should now be l3");
+    assert_eq!(full.loci[1].id, l2.id);
+    assert_eq!(full.loci[2].id, l1.id);
+    assert_eq!(full.loci[0].ordinal, 1);
+    assert_eq!(full.loci[1].ordinal, 2);
+    assert_eq!(full.loci[2].ordinal, 3);
+}

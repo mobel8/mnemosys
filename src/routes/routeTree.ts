@@ -20,6 +20,9 @@ import { Route as aiGenerateRoute } from "./ai-generate";
 import { Route as decksDeckIdRoute } from "./decks.$deckId";
 import { Route as decksDeckIdNewCardRoute } from "./decks.$deckId.new-card";
 import { Route as indexRoute } from "./index";
+import { Route as palacesRoute } from "./palaces";
+import { Route as palacesPalaceIdRoute } from "./palaces.$palaceId";
+import { Route as palacesPalaceIdReviewRoute } from "./palaces.$palaceId.review";
 import { Route as reviewDeckIdRoute } from "./review.$deckId";
 import { Route as reviewInterleavedRoute } from "./review-interleaved";
 import { Route as settingsRoute } from "./settings";
@@ -32,6 +35,9 @@ export const routeTree = rootRoute.addChildren([
   reviewDeckIdRoute,
   reviewInterleavedRoute,
   aiGenerateRoute,
+  palacesRoute,
+  palacesPalaceIdRoute,
+  palacesPalaceIdReviewRoute,
   statsRoute,
   achievementsRoute,
   settingsRoute,

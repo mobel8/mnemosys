@@ -147,6 +147,16 @@ pub fn run() {
             commands::podcast::delete_podcast,
             // whisper (Vague 8 — voice answer transcription)
             commands::whisper::transcribe_voice_answer,
+            // palaces (Vague 9 — Memory Palace 3D Builder)
+            commands::palaces::list_palaces,
+            commands::palaces::get_palace,
+            commands::palaces::create_palace,
+            commands::palaces::update_palace,
+            commands::palaces::delete_palace,
+            commands::palaces::add_palace_locus,
+            commands::palaces::remove_palace_locus,
+            commands::palaces::reorder_palace_loci,
+            commands::palaces::move_palace_locus,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

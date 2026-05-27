@@ -9,6 +9,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
+  Compass,
   Github,
   Home,
   Moon,
@@ -32,6 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Home", icon: Home },
   { to: "/review-interleaved", label: "Review entrelacée", icon: Shuffle },
   { to: "/ai-generate", label: "Génération IA", icon: Sparkles },
+  { to: "/palaces", label: "Memory Palaces", icon: Compass },
   { to: "/stats", label: "Stats", icon: BarChart3 },
   { to: "/achievements", label: "Succès", icon: Trophy },
   { to: "/settings", label: "Settings", icon: Settings },

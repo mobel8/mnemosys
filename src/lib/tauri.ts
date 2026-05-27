@@ -435,6 +435,40 @@ export interface PodcastFile {
   size_bytes: number;
 }
 
+// --- Vague 9: Memory Palace 3D Builder ------------------------------------
+
+/** Pre-fabricated 3D scene templates the builder can instantiate. */
+export type PalaceTemplate = "house" | "street" | "castle" | "custom";
+
+/** One palace row. */
+export interface Palace {
+  id: number;
+  name: string;
+  description: string | null;
+  template: PalaceTemplate;
+  created_at: number;
+  updated_at: number;
+}
+
+/** One locus (card pinned at (x, y, z) inside a palace). */
+export interface PalaceLocus {
+  id: number;
+  palace_id: number;
+  card_id: number;
+  x: number;
+  y: number;
+  z: number;
+  /** 1-based traversal order (lowest = visited first in review walk-through). */
+  ordinal: number;
+  label: string | null;
+  created_at: number;
+}
+
+/** `get_palace` payload — the palace + its loci sorted by ordinal. */
+export interface PalaceWithLoci extends Palace {
+  loci: PalaceLocus[];
+}
+
 // --- Session 3: cloud sync -----------------------------------------------
 
 /**
@@ -749,6 +783,73 @@ export const api = {
         audioBase64,
         mimeType,
         language: language ?? null,
+      }),
+  },
+  palaces: {
+    /** All palaces, alphabetical by name. */
+    list: () => invoke<Palace[]>("list_palaces"),
+    /** Fetch one palace + every locus pinned inside, ordered by `ordinal`. */
+    get: (id: number) => invoke<PalaceWithLoci>("get_palace", { id }),
+    /** Create a new palace. `name` must be unique. */
+    create: (data: { name: string; description?: string | null; template: PalaceTemplate }) =>
+      invoke<Palace>("create_palace", {
+        name: data.name,
+        description: data.description ?? null,
+        template: data.template,
+      }),
+    /**
+     * Partially update a palace. Pass `description: null` to clear it, omit
+     * the field to leave it untouched. Tauri sends `Option<Option<String>>`
+     * to the backend so the two cases stay distinguishable.
+     */
+    update: (
+      id: number,
+      patch: {
+        name?: string;
+        description?: string | null;
+        template?: PalaceTemplate;
+      },
+    ) =>
+      invoke<Palace>("update_palace", {
+        id,
+        name: patch.name ?? null,
+        description: patch.description === undefined ? null : [patch.description],
+        template: patch.template ?? null,
+      }),
+    /** Delete a palace. Loci cascade. */
+    delete: (id: number) => invoke<void>("delete_palace", { id }),
+    /** Pin a card at a locus. The traversal `ordinal` is auto-assigned to `max + 1`. */
+    addLocus: (data: {
+      palaceId: number;
+      cardId: number;
+      x: number;
+      y: number;
+      z: number;
+      label?: string | null;
+    }) =>
+      invoke<PalaceLocus>("add_palace_locus", {
+        palaceId: data.palaceId,
+        cardId: data.cardId,
+        x: data.x,
+        y: data.y,
+        z: data.z,
+        label: data.label ?? null,
+      }),
+    /** Remove a single locus by id. */
+    removeLocus: (locusId: number) => invoke<void>("remove_palace_locus", { locusId }),
+    /**
+     * Rewrite ordinals so loci visit in the caller-provided sequence.
+     * `newOrder` must contain every existing locus id of the palace.
+     */
+    reorderLoci: (palaceId: number, newOrder: number[]) =>
+      invoke<void>("reorder_palace_loci", { palaceId, newOrder }),
+    /** Move a locus to a new (x, y, z). Ordinal is preserved. */
+    moveLocus: (data: { locusId: number; x: number; y: number; z: number }) =>
+      invoke<void>("move_palace_locus", {
+        locusId: data.locusId,
+        x: data.x,
+        y: data.y,
+        z: data.z,
       }),
   },
   sync: {

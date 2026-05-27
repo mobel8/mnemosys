@@ -38,6 +38,10 @@ import {
   type NextStates,
   type Note,
   type NoteTemplate,
+  type Palace,
+  type PalaceLocus,
+  type PalaceTemplate,
+  type PalaceWithLoci,
   type PendingJol,
   type PodcastFile,
   type PodcastFormat,
@@ -85,6 +89,9 @@ export const queryKeys = {
   calibrationStats: (deckId: number | null) => ["calibration-stats", deckId] as const,
   // Vague 8 — Deck Podcast
   deckPodcasts: (deckId: number) => ["deck-podcasts", deckId] as const,
+  // Vague 9 — Memory Palaces
+  palaces: ["palaces"] as const,
+  palace: (id: number) => ["palace", id] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -919,6 +926,161 @@ export function useTranscribeVoiceAnswer(
     mutationFn: ({ audioBase64, mimeType, language }) =>
       api.whisper.transcribe(audioBase64, mimeType, language),
     ...opts,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Vague 9 — Memory Palace 3D Builder
+// ---------------------------------------------------------------------------
+
+/** All palaces, alphabetical by name. */
+export function usePalaces(opts?: Partial<UseQueryOptions<Palace[]>>) {
+  return useQuery<Palace[]>({
+    queryKey: queryKeys.palaces,
+    queryFn: () => api.palaces.list(),
+    ...opts,
+  });
+}
+
+/** One palace + its loci in traversal order. */
+export function usePalace(id: number, opts?: Partial<UseQueryOptions<PalaceWithLoci>>) {
+  return useQuery<PalaceWithLoci>({
+    queryKey: queryKeys.palace(id),
+    queryFn: () => api.palaces.get(id),
+    enabled: Number.isFinite(id) && id > 0,
+    ...opts,
+  });
+}
+
+/** Mutation: create a new palace. Invalidates the index list. */
+export function useCreatePalace(
+  opts?: UseMutationOptions<
+    Palace,
+    Error,
+    { name: string; description?: string | null; template: PalaceTemplate }
+  >,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input) => api.palaces.create(input),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.palaces });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/** Mutation: partial update of a palace. Invalidates list + detail. */
+export function useUpdatePalace(
+  opts?: UseMutationOptions<
+    Palace,
+    Error,
+    {
+      id: number;
+      name?: string;
+      description?: string | null;
+      template?: PalaceTemplate;
+    }
+  >,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...patch }) => api.palaces.update(id, patch),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.palaces });
+      qc.invalidateQueries({ queryKey: queryKeys.palace(variables.id) });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/** Mutation: delete a palace + cascade loci. */
+export function useDeletePalace(opts?: UseMutationOptions<void, Error, number>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => api.palaces.delete(id),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.palaces });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/** Mutation: pin a card at a locus inside a palace. */
+export function useAddPalaceLocus(
+  opts?: UseMutationOptions<
+    PalaceLocus,
+    Error,
+    {
+      palaceId: number;
+      cardId: number;
+      x: number;
+      y: number;
+      z: number;
+      label?: string | null;
+    }
+  >,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input) => api.palaces.addLocus(input),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.palace(variables.palaceId) });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/** Mutation: remove a single locus. Caller passes `palaceId` so we can refresh the detail view. */
+export function useRemovePalaceLocus(
+  opts?: UseMutationOptions<void, Error, { locusId: number; palaceId: number }>,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ locusId }) => api.palaces.removeLocus(locusId),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.palace(variables.palaceId) });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/** Mutation: rewrite traversal ordinals. */
+export function useReorderPalaceLoci(
+  opts?: UseMutationOptions<void, Error, { palaceId: number; newOrder: number[] }>,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ palaceId, newOrder }) => api.palaces.reorderLoci(palaceId, newOrder),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.palace(variables.palaceId) });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/** Mutation: move a locus to a new (x, y, z) anchor. */
+export function useMovePalaceLocus(
+  opts?: UseMutationOptions<
+    void,
+    Error,
+    { locusId: number; palaceId: number; x: number; y: number; z: number }
+  >,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ locusId, x, y, z }) => api.palaces.moveLocus({ locusId, x, y, z }),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.palace(variables.palaceId) });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
   });
 }
 
