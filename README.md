@@ -22,12 +22,16 @@ Mnemosys est une app desktop de **répétition espacée (SRS)** qui pousse FSRS-
 - **Session 2 — IA & contenu** : ✅ livré (AI gen + TTS + APKG + image-occlusion + reset_card)
 - **Session 3 — Sync cloud** : ✅ scaffolding livré (désactivé tant qu'aucun projet Supabase n'est configuré)
 - **Session 4 — FSRS Optimizer** : ✅ backend livré (UI optimizer + CI + signing à venir)
-- **Vagues 1-5 — Recherche scientifique appliquée** : ✅ livrées (cf. [CHANGELOG.md](./CHANGELOG.md))
+- **Vagues 1-9 — Recherche scientifique appliquée** : ✅ livrées (cf. [CHANGELOG.md](./CHANGELOG.md))
   - V1 Gamification éthique — streaks + achievements + deck mastery WaniKani-style
   - V2 Cognitive — type-the-answer + confidence rating (CBM) + pre-questioning IA
   - V3 Neuro modes — mood/sleep check-in + movement break + cyclic sighing
   - V4 Schedulers pluggables — FSRS-6 + SM-2 + Leitner 5-box par deck
   - V5 IA augmentée — Why?/Example auto + Interleaved Review mode
+  - **V7 Tier S** — Sketch-before-flip + Delayed-JOL + Calibration Dashboard
+  - **V8 Audio** — Deck Podcast NotebookLM-style + Whisper Mode Review
+  - **V9 Moonshot** — Memory Palace 3D Builder (R3F + 3 templates 3D)
+  - **S4-Final** — FSRS Optimizer UI + GitHub Actions CI + tauri-plugin-updater
 
 ## Différenciateurs vs Anki / RemNote / Mochi
 
