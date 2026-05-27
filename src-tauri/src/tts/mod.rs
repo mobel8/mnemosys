@@ -22,9 +22,12 @@
 
 pub mod cache;
 pub mod openai;
+pub mod podcast;
+pub mod whisper;
 
 #[cfg(test)]
 mod tests;
 
 pub use cache::TTSCache;
 pub use openai::{OpenAIClient, TTSError, Voice};
+pub use whisper::{WhisperClient, WhisperError};

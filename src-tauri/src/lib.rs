@@ -141,6 +141,12 @@ pub fn run() {
             commands::metacognition::record_jol,
             commands::metacognition::get_pending_jols,
             commands::metacognition::get_calibration_stats,
+            // podcast (Vague 8 — Deck Podcast NotebookLM-style)
+            commands::podcast::generate_deck_podcast,
+            commands::podcast::list_deck_podcasts,
+            commands::podcast::delete_podcast,
+            // whisper (Vague 8 — voice answer transcription)
+            commands::whisper::transcribe_voice_answer,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -8,8 +8,9 @@
 
 import { useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { BookOpen, MoreVertical, Pencil, Play, Trash2 } from "lucide-react";
+import { BookOpen, Mic2, MoreVertical, Pencil, Play, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { DeckPodcastDialog } from "@/components/DeckPodcastDialog";
 import { EditDeckDialog } from "@/components/EditDeckDialog";
 import { schedulerLabel } from "@/components/SchedulerPicker";
 import {
@@ -90,7 +91,12 @@ export function DeckCard({ deck }: DeckCardProps) {
   const mastery = useDeckMastery(deck.id);
   const masteryLevel = mastery.data ? pickMasteryLevel(mastery.data) : null;
   const [editOpen, setEditOpen] = useState(false);
+  const [podcastOpen, setPodcastOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const cardCount = stats.data?.total_cards ?? 0;
+  // Podcast generation makes sense only when the deck has enough material;
+  // the backend enforces the same floor (≥3 cards).
+  const canPodcast = cardCount >= 3;
 
   const deleteDeck = useDeleteDeck({
     onSuccess: () => {
@@ -176,6 +182,12 @@ export function DeckCard({ deck }: DeckCardProps) {
                     <Pencil className="h-4 w-4" />
                     Éditer
                   </DropdownMenuItem>
+                  {canPodcast && (
+                    <DropdownMenuItem onSelect={() => setPodcastOpen(true)}>
+                      <Mic2 className="h-4 w-4" />
+                      Podcast
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onSelect={() => setConfirmDelete(true)}
@@ -221,6 +233,15 @@ export function DeckCard({ deck }: DeckCardProps) {
       </motion.div>
 
       <EditDeckDialog deck={deck} open={editOpen} onOpenChange={setEditOpen} />
+
+      {canPodcast && (
+        <DeckPodcastDialog
+          deckId={deck.id}
+          deckName={deck.name}
+          open={podcastOpen}
+          onOpenChange={setPodcastOpen}
+        />
+      )}
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>

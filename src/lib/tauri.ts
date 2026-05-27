@@ -253,6 +253,14 @@ export interface AppSettings {
   delayed_jol_enabled: boolean;
   /** Delay (minutes, clamped 5..120) between a review and the delayed prompt. */
   jol_delay_minutes: number;
+  // --- Vague 8 (Tier A — audio-first differentiation) ---
+  /**
+   * Whisper Mode Review: when on, basic / basic_reverse cards expose a Mic
+   * button. The learner speaks the answer; OpenAI Whisper transcribes; the
+   * same Levenshtein scorer used by `type_the_answer` grades the result.
+   * Requires an OpenAI API key. Defaults to false.
+   */
+  voice_answer_enabled: boolean;
 }
 
 // --- Vague 3: wellness ----------------------------------------------------
@@ -397,6 +405,34 @@ export interface CalibrationStats {
 export interface PendingJol {
   prediction: JolPrediction;
   card: CardWithNote;
+}
+
+// --- Vague 8: Deck Podcast + Whisper Mode Review -------------------------
+
+/** Tone preset used by the podcast scriptwriter. */
+export type PodcastFormat = "deep_dive" | "brief" | "critique";
+
+/**
+ * Result of `generate_deck_podcast`. `cached === true` means the MP3 was
+ * served from the on-disk cache and no API calls were made — in that case
+ * `line_count` and `duration_estimate_seconds` may be 0 (the backend
+ * doesn't re-derive them from the file).
+ */
+export interface PodcastResult {
+  /** Absolute path on disk. Pass through `convertFileSrc()` for playback. */
+  path: string;
+  duration_estimate_seconds: number;
+  line_count: number;
+  cached: boolean;
+  size_bytes: number;
+}
+
+/** One row in `list_deck_podcasts`. */
+export interface PodcastFile {
+  path: string;
+  /** Unix seconds. */
+  generated_at: number;
+  size_bytes: number;
 }
 
 // --- Session 3: cloud sync -----------------------------------------------
@@ -676,6 +712,44 @@ export const api = {
     /** Calibration stats over resolved predictions. Optionally per-deck. */
     getCalibrationStats: (deckId?: number | null) =>
       invoke<CalibrationStats>("get_calibration_stats", { deckId: deckId ?? null }),
+  },
+  podcast: {
+    /**
+     * Generate (or cache-hit) a 2-voice podcast for a deck. Round-trips
+     * Claude (script) + OpenAI TTS (audio). Returns the absolute MP3 path.
+     */
+    generate: (data: {
+      deckId: number;
+      format: PodcastFormat;
+      hostVoice: TTSVoice;
+      expertVoice: TTSVoice;
+      language?: string;
+    }) =>
+      invoke<PodcastResult>("generate_deck_podcast", {
+        deckId: data.deckId,
+        format: data.format,
+        hostVoice: data.hostVoice,
+        expertVoice: data.expertVoice,
+        language: data.language ?? null,
+      }),
+    /** List existing MP3s previously generated for this deck. Newest first. */
+    list: (deckId: number) => invoke<PodcastFile[]>("list_deck_podcasts", { deckId }),
+    /** Delete one generated MP3. Path MUST live inside the podcast cache. */
+    delete: (path: string) => invoke<void>("delete_podcast", { path }),
+  },
+  whisper: {
+    /**
+     * Transcribe a base64-encoded voice recording via OpenAI Whisper. The
+     * caller is responsible for stripping any `data:...;base64,` prefix
+     * before invoking. `mimeType` typically matches the MediaRecorder output
+     * (`audio/webm` on Chrome / Tauri's webview).
+     */
+    transcribe: (audioBase64: string, mimeType: string, language?: string) =>
+      invoke<string>("transcribe_voice_answer", {
+        audioBase64,
+        mimeType,
+        language: language ?? null,
+      }),
   },
   sync: {
     /**

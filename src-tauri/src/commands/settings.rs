@@ -128,6 +128,14 @@ pub struct AppSettings {
     /// gap reported in the meta-analysis.
     #[serde(default = "default_jol_delay_minutes")]
     pub jol_delay_minutes: u32,
+
+    // --- Vague 8 (Tier A — audio-first differentiation) --------------------
+    /// Whisper Mode Review: the learner answers basic / basic_reverse cards
+    /// by voice. The recording goes to OpenAI Whisper for transcription, then
+    /// runs through the same fuzzy-match scorer as type-the-answer. Requires
+    /// an OpenAI API key. Defaults off — existing typed/flip flow is intact.
+    #[serde(default)]
+    pub voice_answer_enabled: bool,
 }
 
 fn default_movement_break_minutes() -> u32 {
@@ -168,6 +176,8 @@ impl Default for AppSettings {
             sketch_before_flip_enabled: false,
             delayed_jol_enabled: false,
             jol_delay_minutes: default_jol_delay_minutes(),
+            // Vague 8 — voice answer opt-in.
+            voice_answer_enabled: false,
         }
     }
 }

@@ -46,6 +46,7 @@ const DEFAULTS: AppSettings = {
   sketch_before_flip_enabled: false,
   delayed_jol_enabled: false,
   jol_delay_minutes: 30,
+  voice_answer_enabled: false,
 };
 
 const RETENTION_MIN = 0.8;
@@ -95,7 +96,8 @@ export function ReviewSettingsSection() {
       a.confidence_rating_enabled !== b.confidence_rating_enabled ||
       a.pre_questioning_enabled !== b.pre_questioning_enabled ||
       a.sketch_before_flip_enabled !== b.sketch_before_flip_enabled ||
-      a.delayed_jol_enabled !== b.delayed_jol_enabled
+      a.delayed_jol_enabled !== b.delayed_jol_enabled ||
+      a.voice_answer_enabled !== b.voice_answer_enabled
     );
   }, [query.data, draft]);
 
@@ -113,6 +115,7 @@ export function ReviewSettingsSection() {
       pre_questioning_enabled: draft.pre_questioning_enabled,
       sketch_before_flip_enabled: draft.sketch_before_flip_enabled,
       delayed_jol_enabled: draft.delayed_jol_enabled,
+      voice_answer_enabled: draft.voice_answer_enabled,
     });
   }
 
@@ -304,6 +307,27 @@ export function ReviewSettingsSection() {
               disabled={query.isLoading}
               onCheckedChange={(checked) =>
                 setDraft((d) => ({ ...d, delayed_jol_enabled: checked }))
+              }
+            />
+          </div>
+          {/* --- Vague 8: Whisper Mode Review (voice answer) ------------------ */}
+          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="voice-answer-toggle" className="text-sm">
+                Réponse vocale (Whisper)
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Réponds aux cartes basic à voix haute. La transcription OpenAI Whisper est comparée
+                à la réponse attendue via le même scoring fuzzy que Type-the-answer. Nécessite une
+                clé OpenAI configurée.
+              </p>
+            </div>
+            <Switch
+              id="voice-answer-toggle"
+              checked={draft.voice_answer_enabled}
+              disabled={query.isLoading}
+              onCheckedChange={(checked) =>
+                setDraft((d) => ({ ...d, voice_answer_enabled: checked }))
               }
             />
           </div>

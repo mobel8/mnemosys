@@ -91,6 +91,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   // Per-card confidence buffer. Reset on every card transition.
   const [confidence, setConfidence] = useState<number | null>(null);
   const typeTheAnswerEnabled = settings.data?.type_the_answer_enabled ?? false;
+  const voiceAnswerEnabled = settings.data?.voice_answer_enabled ?? false;
   const confidenceEnabled = settings.data?.confidence_rating_enabled ?? false;
   const preQuestioningEnabled = settings.data?.pre_questioning_enabled ?? false;
   // --- Vague 3 — neuro modes state ----------------------------------------
@@ -410,6 +411,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
           phase={phase}
           cardOrd={current.card.card_ord}
           typeTheAnswerEnabled={typeTheAnswerEnabled}
+          voiceAnswerEnabled={voiceAnswerEnabled}
         />
         <ReviewControls
           phase={phase}

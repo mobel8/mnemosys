@@ -60,7 +60,13 @@ log = "0.4"
 # HTTP client for Claude API (Vague A2.1).
 # - rustls-tls keeps build hermetic (no system OpenSSL dependency).
 # - `stream` reserved for future streaming responses; `json` for `.json()`/`.json::<T>()`.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+# - `multipart` lets Whisper transcription upload audio file parts (Vague 8).
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream", "multipart"] }
+
+# Base64 decoder for Whisper voice answers (Vague 8). The frontend records
+# audio with MediaRecorder, base64-encodes the Blob, and ships it over IPC —
+# we decode back to bytes before forwarding to the Whisper multipart upload.
+base64 = "0.22"
 
 # PDF text extraction. Pure-Rust crate, no native system bindings required.
 pdf-extract = "0.10"

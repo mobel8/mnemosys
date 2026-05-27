@@ -15,6 +15,7 @@
 pub mod cards;
 pub mod claude;
 pub mod pdf;
+pub mod podcast;
 
 #[cfg(test)]
 mod tests;
@@ -24,3 +25,4 @@ pub use cards::{
 };
 pub use claude::{ClaudeClient, ClaudeError};
 pub use pdf::{chunk_text, extract_pdf_text};
+pub use podcast::{generate_podcast_script, PodcastFormat, PodcastLine};

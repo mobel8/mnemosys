@@ -53,6 +53,7 @@ const DEFAULTS: AppSettings = {
   sketch_before_flip_enabled: false,
   delayed_jol_enabled: false,
   jol_delay_minutes: 30,
+  voice_answer_enabled: false,
 };
 
 function formatLastSync(ts: number | null): string {

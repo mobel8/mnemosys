@@ -26,8 +26,14 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { OcclusionReviewView } from "@/components/OcclusionReviewView";
 import { TtsButton } from "@/components/TtsButton";
-import { TypeAnswer, type TypeAnswerVerdict } from "@/components/TypeAnswer";
+import {
+  similarityScore,
+  TypeAnswer,
+  type TypeAnswerVerdict,
+  verdictFor,
+} from "@/components/TypeAnswer";
 import { Card, CardContent } from "@/components/ui/card";
+import { VoiceAnswerButton } from "@/components/VoiceAnswerButton";
 import type { Note } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +69,11 @@ interface ReviewCardProps {
   /** When `true` and the note is basic/basic_reverse, an inline input
    *  asks the learner to type the expected back side before the flip. */
   typeTheAnswerEnabled?: boolean;
+  /** Vague 8 — Whisper Mode Review. When `true` (and the note is
+   *  basic/basic_reverse) a Mic button captures a voice answer instead of
+   *  the typed input. Mutually exclusive with `typeTheAnswerEnabled` — voice
+   *  wins because the typing alternative is always available offline. */
+  voiceAnswerEnabled?: boolean;
   /** Fired when the learner submits a typed answer. Surfaces the
    *  normalised similarity score so the parent can log it / nudge a
    *  rating decision. */
@@ -172,6 +183,7 @@ export function ReviewCard({
   phase,
   cardOrd = 0,
   typeTheAnswerEnabled = false,
+  voiceAnswerEnabled = false,
   onTypedAnswer,
   deckName,
 }: ReviewCardProps) {
@@ -190,15 +202,14 @@ export function ReviewCard({
   // when at least one field has content — empty enrichments stay hidden.
   const showElaboration =
     isAnswer && (elaboration.why.length > 0 || elaboration.example.length > 0);
-  // Type-the-answer only applies to basic / basic_reverse on the question
-  // face. For cloze + occlusion the existing UI already requires retrieval
-  // (cloze blank, mask reveal) so adding a typed prompt would double-count.
-  const showTypeAnswer =
-    typeTheAnswerEnabled &&
-    !isAnswer &&
-    !isCloze &&
-    !isOcclusion &&
-    (note.template === "basic" || note.template === "basic_reverse");
+  // Type-the-answer / voice-answer only apply to basic / basic_reverse on
+  // the question face. For cloze + occlusion the existing UI already requires
+  // retrieval (cloze blank, mask reveal) so adding a typed prompt would
+  // double-count. Voice wins over typing when both toggles are on.
+  const isBasicTemplate = note.template === "basic" || note.template === "basic_reverse";
+  const canPromptAnswer = !isAnswer && !isCloze && !isOcclusion && isBasicTemplate;
+  const showVoiceAnswer = voiceAnswerEnabled && canPromptAnswer;
+  const showTypeAnswer = !showVoiceAnswer && typeTheAnswerEnabled && canPromptAnswer;
 
   // Image-occlusion has its own "before/after flip" visual (mask shown vs
   // mask hidden). We render it as a single card without the 3D flip so the
@@ -327,6 +338,19 @@ export function ReviewCard({
             </Card>
           </motion.div>
         </div>
+
+        {showVoiceAnswer && basic ? (
+          <div className="flex w-full justify-center">
+            <VoiceAnswerButton
+              key={`voice-${note.id}`}
+              language="fr"
+              onTranscribed={(text) => {
+                const score = similarityScore(text, basic.back);
+                onTypedAnswer?.(text, score, verdictFor(score));
+              }}
+            />
+          </div>
+        ) : null}
 
         {showTypeAnswer && basic ? (
           <div className="flex w-full justify-center">

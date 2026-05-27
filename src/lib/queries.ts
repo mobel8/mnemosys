@@ -39,6 +39,9 @@ import {
   type Note,
   type NoteTemplate,
   type PendingJol,
+  type PodcastFile,
+  type PodcastFormat,
+  type PodcastResult,
   type Rating,
   type ReviewResult,
   type SchedulerKind,
@@ -80,6 +83,8 @@ export const queryKeys = {
   pendingJols: (minAgeMinutes: number, limit: number) =>
     ["pending-jols", minAgeMinutes, limit] as const,
   calibrationStats: (deckId: number | null) => ["calibration-stats", deckId] as const,
+  // Vague 8 — Deck Podcast
+  deckPodcasts: (deckId: number) => ["deck-podcasts", deckId] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -831,6 +836,88 @@ export function useCalibrationStats(
   return useQuery<CalibrationStats>({
     queryKey: queryKeys.calibrationStats(deckId),
     queryFn: () => api.metacognition.getCalibrationStats(deckId),
+    ...opts,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Vague 8 — Deck Podcast + Whisper Mode Review
+// ---------------------------------------------------------------------------
+
+/**
+ * Mutation: generate (or cache-hit) a 2-voice podcast for a deck. Invalidates
+ * the deck's podcast list so the dialog refreshes immediately.
+ */
+export function useGenerateDeckPodcast(
+  opts?: UseMutationOptions<
+    PodcastResult,
+    Error,
+    {
+      deckId: number;
+      format: PodcastFormat;
+      hostVoice: TTSVoice;
+      expertVoice: TTSVoice;
+      language?: string;
+    }
+  >,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input) => api.podcast.generate(input),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.deckPodcasts(variables.deckId) });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/** List of previously generated podcasts for one deck. Newest first. */
+export function useListDeckPodcasts(
+  deckId: number,
+  opts?: Partial<UseQueryOptions<PodcastFile[]>>,
+) {
+  return useQuery<PodcastFile[]>({
+    queryKey: queryKeys.deckPodcasts(deckId),
+    queryFn: () => api.podcast.list(deckId),
+    enabled: Number.isFinite(deckId) && deckId > 0,
+    ...opts,
+  });
+}
+
+/**
+ * Mutation: delete one podcast MP3. Invalidates the deck's podcast list.
+ * Caller passes both `path` (for the actual delete call) and `deckId` (so
+ * we can invalidate the right cache key).
+ */
+export function useDeletePodcast(
+  opts?: UseMutationOptions<void, Error, { path: string; deckId: number }>,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ path }) => api.podcast.delete(path),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.deckPodcasts(variables.deckId) });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/**
+ * Mutation: transcribe a base64-encoded voice answer via OpenAI Whisper.
+ * Stateless — no cache invalidation.
+ */
+export function useTranscribeVoiceAnswer(
+  opts?: UseMutationOptions<
+    string,
+    Error,
+    { audioBase64: string; mimeType: string; language?: string }
+  >,
+) {
+  return useMutation({
+    mutationFn: ({ audioBase64, mimeType, language }) =>
+      api.whisper.transcribe(audioBase64, mimeType, language),
     ...opts,
   });
 }
