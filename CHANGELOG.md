@@ -1,5 +1,74 @@
 # Changelog
 
+## [0.6.0] — Vagues 7-9 + S4 final (2026-05-27)
+
+Continuation de l'effort de recherche scientifique appliquée. Vagues 7-9
+ajoutent les **Tier S** identifiés dans la roadmap (impact × différenciation
+maximum) + finalise la Session 4 release tooling.
+
+### Vague 7 — Tier S métacognition + drawing (commit feat(G7))
+- **Sketch-before-flip** (drawing effect Wammes 2016, +30-50% rappel).
+  Canvas HTML5 Pointer Events, pression-sensible, pencil/eraser/clear,
+  export PNG base64 stocké dans la nouvelle table `review_sketches`.
+- **Delayed-JOL Predictions** (Rhodes & Tauber 2011 méta 4554 sujets,
+  g=0.93 sur resolution). Modal polling toutes les 5 min, slider 0-100%
+  pour prédire la chance de réussir une carte vue ~30 min plus tôt.
+- **Calibration Dashboard** dans `/stats` : Goodman-Kruskal γ,
+  bias, histogramme 10 buckets predicted vs actual. **Premier SRS à
+  exposer γ aux apprenants.**
+- Migration DB v8 (review_sketches) + v9 (jol_predictions + index unresolved)
+- 2 toggles dans `<ReviewSettingsSection />`
+- 7 tests cargo + 7 tests Vitest
+
+### Vague 8 — Audio-first features (commit feat(G8))
+- **Deck Podcast (NotebookLM-style)** : transforme un deck en podcast
+  2-voix téléchargeable. Script Claude Host/Expert × 3 formats
+  (DeepDive/Brief/Critique), TTS OpenAI multi-voix, concat MP3
+  byte-level, cache SHA-256 dans `<app_cache_dir>/podcasts/`.
+- **Whisper Mode Review** : réponse vocale via OpenAI Whisper API
+  (MediaRecorder → base64 → transcription → fuzzy match Levenshtein).
+  Mutuellement exclusif avec Type-the-answer.
+- 3 commandes podcast + 1 commande whisper
+- `<DeckPodcastDialog />` + `<VoiceAnswerButton />`
+- 10 tests cargo + 6 tests Vitest
+- Cargo : +base64, reqwest +multipart
+
+### Vague 9 — Memory Palace 3D Builder (moonshot) (commit feat(G9))
+- **Memory Palace 3D Builder** (Krokos et al. 2019 +8.8% en VR vs
+  liste plate, place/grid cells naturels — Nobel 2014 O'Keefe/Moser).
+  React Three Fiber + Three.js dans Tauri WebView.
+- 3 templates 3D pré-fabriqués : House / Street / Castle
+- Caméra FPS WASD/ZQSD + OrbitControls drag-to-look
+- Loci flottants animés avec labels texte, click pour afficher carte
+- Mode Builder (placement) + mode Review (walk-through)
+- Migration DB v10 (palaces + palace_loci, FK cascade)
+- 9 commandes Tauri + 3 routes `/palaces`, `/palaces/$id`,
+  `/palaces/$id/review`
+- Sidebar : entrée "Memory Palaces" (Compass icon)
+- 10 tests cargo + 5 tests Vitest
+- pnpm : +three +@react-three/fiber +@react-three/drei +@types/three
+
+### Session 4 Final (commit feat(S4-final))
+- **`<FsrsOptimizerSection />`** UI dans settings : progress bar si
+  <1000 reviews ; warning ambre + bouton "Calibrer FSRS" si ≥1000.
+- **`.github/workflows/ci.yml`** : 3 jobs (frontend/backend/build
+  matrix linux/macos/windows), upload-artifact 14j
+- **`tauri-plugin-updater` config** dans `tauri.conf.json` (pubkey
+  vide = dormant, prêt à activer avec keypair + manifest)
+- **`docs/SESSION_4_RELEASE.md`** ~280 lignes (procédure complète
+  release/signing/updater)
+
+### Validation v0.6.0
+- **cargo test** : 165 lib + 47 integration verts (1 fail pré-existant
+  FSRS optimizer NotEnoughData, hors scope)
+- **vitest run** : 116/116 verts
+- **tsc --noEmit** : 0 erreur (107 fichiers)
+- **biome check src/** : 0 erreur
+- **Playwright E2E** : screenshots V7/V8/V9 capturés (palaces, settings
+  full, stats calibration, dark mode)
+
+---
+
 ## [0.5.0] — Vagues 1-5 (2026-05-27)
 
 Cinq vagues de fonctionnalités issues d'une revue de littérature
