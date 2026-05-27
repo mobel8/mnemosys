@@ -134,6 +134,13 @@ pub fn run() {
             commands::wellness::submit_wellness_log,
             commands::wellness::get_today_wellness,
             commands::wellness::get_recent_wellness,
+            // sketches (Vague 7 — drawing effect, Wammes 2016)
+            commands::sketches::save_sketch,
+            commands::sketches::get_card_sketches,
+            // metacognition (Vague 7 — delayed JOL + calibration)
+            commands::metacognition::record_jol,
+            commands::metacognition::get_pending_jols,
+            commands::metacognition::get_calibration_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

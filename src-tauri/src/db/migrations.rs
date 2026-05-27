@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 7;
+pub const CURRENT_VERSION: i32 = 9;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -153,6 +153,24 @@ const SCHEMA_V5: &str = include_str!("schema_v5.sql");
 /// (d≈0.52); sleep deprivation meta-analysis (g≈0.621).
 const SCHEMA_V6: &str = include_str!("schema_v6.sql");
 
+/// v8 — Drawing effect (Vague 7): optional per-review sketch storage.
+///
+/// Wammes et al. 2016/2018 measured a 30-50% recall boost when learners
+/// sketch their guess BEFORE seeing the answer. The table is keyed by
+/// `review_id` so each persisted review has at most one sketch, and is
+/// linked back to `cards(id)` for cheap « show me past sketches for
+/// this card » lookups.
+const SCHEMA_V8: &str = include_str!("schema_v8.sql");
+
+/// v9 — Delayed Judgments of Learning (Vague 7): metacognitive calibration.
+///
+/// Rhodes & Tauber 2011 meta-analysis (4554 subjects) reports a γ ≈ 0.93
+/// effect size on resolution of delayed JOLs. Stores one prediction per
+/// learner self-rating event; `resolve_prediction` flips `actual_correct`
+/// at the next review and the calibration dashboard derives γ, bias and
+/// per-confidence-band buckets from there.
+const SCHEMA_V9: &str = include_str!("schema_v9.sql");
+
 /// v7 — Pluggable schedulers (Vague 4): per-deck algorithm choice.
 ///
 /// Adds a `scheduler_kind` column to `decks` storing one of `'fsrs6'`
@@ -257,6 +275,16 @@ pub fn run(conn: &Connection) -> AppResult<()> {
     // v7 — Vague 4 pluggable schedulers: per-deck `scheduler_kind` column.
     if current < 7 {
         apply_migration(conn, 7, SCHEMA_V7)?;
+    }
+
+    // v8 — Vague 7 drawing effect: optional `review_sketches` table.
+    if current < 8 {
+        apply_migration(conn, 8, SCHEMA_V8)?;
+    }
+
+    // v9 — Vague 7 delayed JOLs: `jol_predictions` table for calibration.
+    if current < 9 {
+        apply_migration(conn, 9, SCHEMA_V9)?;
     }
 
     Ok(())

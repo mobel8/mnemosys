@@ -109,10 +109,33 @@ pub struct AppSettings {
     /// flagged. Source: Spiegel et al., Cell Reports Medicine 2023.
     #[serde(default)]
     pub cyclic_sighing_enabled: bool,
+
+    // --- Vague 7 (Tier S — sketch + delayed JOL) ----------------------------
+    /// Drawing effect: when on, the learner sketches their guess on a
+    /// canvas BEFORE flipping the card. Wammes et al. 2016/2018 measured a
+    /// 30-50% boost on free recall. Stored as PNG data URLs in
+    /// `review_sketches`. Defaults to off to keep the existing UX intact.
+    #[serde(default)]
+    pub sketch_before_flip_enabled: bool,
+    /// Delayed Judgments of Learning: the learner predicts their own
+    /// recall probability shortly after studying a card; the prompt fires
+    /// `jol_delay_minutes` later. Rhodes & Tauber 2011 meta-analysis
+    /// reports γ ≈ 0.93 on resolution.
+    #[serde(default)]
+    pub delayed_jol_enabled: bool,
+    /// Delay (in minutes) between the initial review and the delayed JOL
+    /// prompt. UI clamps to `[5, 120]`; default 30 matches the « optimal »
+    /// gap reported in the meta-analysis.
+    #[serde(default = "default_jol_delay_minutes")]
+    pub jol_delay_minutes: u32,
 }
 
 fn default_movement_break_minutes() -> u32 {
     25
+}
+
+fn default_jol_delay_minutes() -> u32 {
+    30
 }
 
 impl Default for AppSettings {
@@ -141,6 +164,10 @@ impl Default for AppSettings {
             mood_checkin_enabled: false,
             movement_break_minutes: default_movement_break_minutes(),
             cyclic_sighing_enabled: false,
+            // Vague 7 Tier S — both features opt-in.
+            sketch_before_flip_enabled: false,
+            delayed_jol_enabled: false,
+            jol_delay_minutes: default_jol_delay_minutes(),
         }
     }
 }
@@ -189,6 +216,12 @@ pub fn save_settings(
         return Err(AppError::Validation(format!(
             "movement_break_minutes out of range (10-60): {}",
             settings.movement_break_minutes
+        )));
+    }
+    if !(5..=120).contains(&settings.jol_delay_minutes) {
+        return Err(AppError::Validation(format!(
+            "jol_delay_minutes out of range (5-120): {}",
+            settings.jol_delay_minutes
         )));
     }
 

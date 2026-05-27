@@ -41,6 +41,9 @@ const DEFAULTS: AppSettings = {
   mood_checkin_enabled: false,
   movement_break_minutes: 25,
   cyclic_sighing_enabled: false,
+  sketch_before_flip_enabled: false,
+  delayed_jol_enabled: false,
+  jol_delay_minutes: 30,
 };
 
 const MIN_MINUTES = 10;

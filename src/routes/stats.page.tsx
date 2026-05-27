@@ -21,6 +21,7 @@
 
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { CalibrationDashboard } from "@/components/CalibrationDashboard";
 import { PeriodSelector } from "@/components/stats/PeriodSelector";
 import { RetentionChart } from "@/components/stats/RetentionChart";
 import { ReviewsByDayChart } from "@/components/stats/ReviewsByDayChart";
@@ -64,6 +65,8 @@ export default function StatsPage() {
         <ReviewsByDayChart period={period} />
         <RetentionChart period={period} />
       </div>
+
+      <CalibrationDashboard />
 
       {hasNoData && <NoDataCallout />}
     </div>

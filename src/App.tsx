@@ -22,6 +22,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { DelayedJolPrompt } from "@/components/DelayedJolPrompt";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { MovementBreakReminder } from "@/components/MovementBreakReminder";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
@@ -151,6 +152,7 @@ export default function App() {
             <RouterProvider router={router} />
             <ShortcutsHelpDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
             <NeuroModesShell />
+            <DelayedJolPrompt />
             <Toaster />
             <ToastViewport />
           </ToastProvider>

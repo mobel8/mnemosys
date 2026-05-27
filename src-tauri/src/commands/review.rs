@@ -32,12 +32,16 @@ use crate::scheduler::{self, SchedulerOutcome};
 /// itself is the canonical action — a missing badge is never a deal-breaker).
 /// `newly_unlocked` contains the codes of achievements unlocked by **this**
 /// review so the UI can fire a celebratory toast.
+///
+/// `review_id` is the freshly-inserted `reviews.id`. The frontend uses it
+/// as the foreign key when persisting a `review_sketches` row (Vague 7).
 #[derive(Debug, Clone, Serialize)]
 pub struct ReviewResultDTO {
     pub card: Card,
     pub scheduled_days: u32,
     pub user_stats: Option<UserStats>,
     pub newly_unlocked: Vec<String>,
+    pub review_id: i64,
 }
 
 #[tauri::command]
@@ -148,7 +152,7 @@ pub fn submit_review(
         now,
     )?;
 
-    state.db.reviews(&conn).insert(
+    let inserted_review = state.db.reviews(&conn).insert(
         NewReview {
             card_id,
             rating: rating as i64,
@@ -165,6 +169,18 @@ pub fn submit_review(
         },
         now,
     )?;
+
+    // Vague 7 — best-effort: if a JOL was waiting on this card, resolve it
+    // against this review's outcome. Swallow errors so a calibration write
+    // failure never blocks the underlying review.
+    let correct_for_jol = rating >= 3;
+    if let Err(e) = state
+        .db
+        .metacognition(&conn)
+        .resolve_prediction(card_id, correct_for_jol, now)
+    {
+        log::warn!("jol resolve_prediction failed: {}", e);
+    }
 
     // White Hat gamification — best-effort: any failure here is swallowed so
     // the user's review is always recorded.
@@ -183,6 +199,7 @@ pub fn submit_review(
         scheduled_days: scheduled_days_u32,
         user_stats,
         newly_unlocked,
+        review_id: inserted_review.id,
     })
 }
 

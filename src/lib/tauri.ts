@@ -143,6 +143,12 @@ export interface ReviewResult {
   user_stats: UserStats | null;
   /** Codes of achievements unlocked **by this review** (for celebratory toasts). */
   newly_unlocked: string[];
+  /**
+   * Vague 7 — primary key of the freshly-inserted `reviews` row. Used by
+   * the sketch-before-flip feature to attach the captured PNG to this
+   * exact review via `save_sketch(reviewId, …)`.
+   */
+  review_id: number;
 }
 
 // --- Vague 1: gamification ------------------------------------------------
@@ -240,6 +246,13 @@ export interface AppSettings {
   movement_break_minutes: number;
   /** Offer the cyclic-sighing primer (Spiegel 2023) when stress flagged. */
   cyclic_sighing_enabled: boolean;
+  // --- Vague 7 (Tier S — sketch + delayed JOL) ---
+  /** Drawing effect: sketch the answer before flipping (Wammes 2016, +30-50%). */
+  sketch_before_flip_enabled: boolean;
+  /** Delayed JOL: prompt the learner ~N min after a review to predict recall. */
+  delayed_jol_enabled: boolean;
+  /** Delay (minutes, clamped 5..120) between a review and the delayed prompt. */
+  jol_delay_minutes: number;
 }
 
 // --- Vague 3: wellness ----------------------------------------------------
@@ -329,6 +342,61 @@ export interface ConversionResult {
   stats: ConversionStats;
   /** Names of Anki decks that were skipped because Mnemosys already had that name. */
   skipped_decks: string[];
+}
+
+// --- Vague 7: drawing effect + delayed JOL --------------------------------
+
+/**
+ * One sketch captured at review time (drawing effect, Wammes 2016).
+ * `sketch_data` is a `data:image/png;base64,…` URL so the frontend can pipe
+ * it straight into `<img src>` or back onto a Canvas without conversion.
+ */
+export interface Sketch {
+  review_id: number;
+  card_id: number;
+  sketch_data: string;
+  created_at: number;
+}
+
+/**
+ * One Judgment of Learning prediction. `actual_correct` and `resolved_at`
+ * stay `null` until the next review on the same card flips them.
+ */
+export interface JolPrediction {
+  id: number;
+  card_id: number;
+  predicted_at: number;
+  /** Predicted recall probability in `[0.0, 1.0]`. */
+  predicted_prob: number;
+  prediction_horizon_days: number;
+  actual_correct: boolean | null;
+  resolved_at: number | null;
+}
+
+/** One bar of the calibration histogram. Always 10 buckets, even when empty. */
+export interface CalibrationBucket {
+  /** Lower edge of the confidence band: `0.0`, `0.1`, …, `0.9`. */
+  band: number;
+  predicted: number;
+  actual: number;
+  count: number;
+}
+
+/** Aggregated calibration stats over resolved predictions. */
+export interface CalibrationStats {
+  /** Goodman-Kruskal γ in `[-1, 1]`. */
+  gamma: number;
+  /** `mean(predicted) - mean(actual)`. Positive = overconfidence. */
+  bias: number;
+  /** Always 10 buckets, indexed by `band`. */
+  buckets: CalibrationBucket[];
+  total_resolved: number;
+}
+
+/** Pending JOL paired with the card it references, returned by `get_pending_jols`. */
+export interface PendingJol {
+  prediction: JolPrediction;
+  card: CardWithNote;
 }
 
 // --- Session 3: cloud sync -----------------------------------------------
@@ -571,6 +639,43 @@ export const api = {
     today: () => invoke<WellnessLog | null>("get_today_wellness"),
     /** Last `days` wellness logs, newest first. */
     recent: (days: number) => invoke<WellnessLog[]>("get_recent_wellness", { days }),
+  },
+  sketches: {
+    /**
+     * Persist a sketch captured BEFORE the learner flipped the card. The
+     * `reviewId` must point at a freshly-inserted `reviews` row; pair this
+     * with the `review_id` field returned by `submit_review`.
+     */
+    save: (reviewId: number, cardId: number, sketchData: string) =>
+      invoke<Sketch>("save_sketch", {
+        reviewId,
+        cardId,
+        sketchData,
+      }),
+    /** Last `limit` sketches for a card, newest first. Caps at 50 server-side. */
+    listForCard: (cardId: number, limit: number) =>
+      invoke<Sketch[]>("get_card_sketches", { cardId, limit }),
+  },
+  metacognition: {
+    /**
+     * Record a learner self-prediction. `horizonDays` defaults to 7 on the
+     * server when omitted. `predictedProb` must be in `[0.0, 1.0]`.
+     */
+    recordJol: (cardId: number, predictedProb: number, horizonDays?: number) =>
+      invoke<JolPrediction>("record_jol", {
+        cardId,
+        predictedProb,
+        horizonDays: horizonDays ?? null,
+      }),
+    /** Predictions older than `minAgeMinutes` that haven't been resolved yet. */
+    getPendingJols: (minAgeMinutes: number, limit: number) =>
+      invoke<PendingJol[]>("get_pending_jols", {
+        minAgeMinutes,
+        limit,
+      }),
+    /** Calibration stats over resolved predictions. Optionally per-deck. */
+    getCalibrationStats: (deckId?: number | null) =>
+      invoke<CalibrationStats>("get_calibration_stats", { deckId: deckId ?? null }),
   },
   sync: {
     /**

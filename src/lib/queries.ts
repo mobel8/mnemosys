@@ -21,6 +21,7 @@ import {
   type Achievement,
   type AppSettings,
   api,
+  type CalibrationStats,
   type Card,
   type CardElaboration,
   type CardWithNote,
@@ -33,12 +34,15 @@ import {
   type DeckStats,
   type GeneratedCard,
   type ImportResult,
+  type JolPrediction,
   type NextStates,
   type Note,
   type NoteTemplate,
+  type PendingJol,
   type Rating,
   type ReviewResult,
   type SchedulerKind,
+  type Sketch,
   type SyncLoginOutput,
   type SyncReport,
   type SyncStatus,
@@ -71,6 +75,11 @@ export const queryKeys = {
   achievements: ["achievements"] as const,
   todayWellness: ["today-wellness"] as const,
   recentWellness: (days: number) => ["recent-wellness", days] as const,
+  // Vague 7 — Tier S
+  cardSketches: (cardId: number, limit: number) => ["card-sketches", cardId, limit] as const,
+  pendingJols: (minAgeMinutes: number, limit: number) =>
+    ["pending-jols", minAgeMinutes, limit] as const,
+  calibrationStats: (deckId: number | null) => ["calibration-stats", deckId] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -729,6 +738,100 @@ export function useSubmitWellness(
       qc.invalidateQueries({ queryKey: ["recent-wellness"] });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Vague 7 — Tier S: sketch-before-flip + delayed JOL + calibration
+// ---------------------------------------------------------------------------
+
+/**
+ * Mutation: persist a sketch captured by the canvas BEFORE the flip. The
+ * `reviewId` comes from the result of `submit_review`. Invalidates the
+ * matching « past sketches for card » cache so the history strip refreshes
+ * the next time the user lands on that card.
+ */
+export function useSaveSketch(
+  opts?: UseMutationOptions<
+    Sketch,
+    Error,
+    { reviewId: number; cardId: number; sketchData: string }
+  >,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ reviewId, cardId, sketchData }) =>
+      api.sketches.save(reviewId, cardId, sketchData),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: ["card-sketches", variables.cardId] });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/** All sketches captured for one card, newest first (capped at 50 by backend). */
+export function useCardSketches(
+  cardId: number,
+  limit = 5,
+  opts?: Partial<UseQueryOptions<Sketch[]>>,
+) {
+  return useQuery<Sketch[]>({
+    queryKey: queryKeys.cardSketches(cardId, limit),
+    queryFn: () => api.sketches.listForCard(cardId, limit),
+    enabled: Number.isFinite(cardId) && cardId > 0,
+    ...opts,
+  });
+}
+
+/** Mutation: record one JOL prediction. Invalidates the pending list. */
+export function useRecordJol(
+  opts?: UseMutationOptions<
+    JolPrediction,
+    Error,
+    { cardId: number; predictedProb: number; horizonDays?: number }
+  >,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ cardId, predictedProb, horizonDays }) =>
+      api.metacognition.recordJol(cardId, predictedProb, horizonDays),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: ["pending-jols"] });
+      qc.invalidateQueries({ queryKey: ["calibration-stats"] });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/**
+ * Predictions still waiting for the « delayed » follow-up. Polls every 5 min
+ * by default — frequent enough to surface a prompt soon after a card becomes
+ * eligible, infrequent enough to stay invisible in the IPC profile.
+ */
+export function usePendingJols(
+  minAgeMinutes: number,
+  limit = 5,
+  opts?: Partial<UseQueryOptions<PendingJol[]>>,
+) {
+  return useQuery<PendingJol[]>({
+    queryKey: queryKeys.pendingJols(minAgeMinutes, limit),
+    queryFn: () => api.metacognition.getPendingJols(minAgeMinutes, limit),
+    refetchInterval: 5 * 60 * 1000,
+    ...opts,
+  });
+}
+
+/** Aggregated calibration metrics (γ, bias, 10 buckets). Optional deck filter. */
+export function useCalibrationStats(
+  deckId: number | null = null,
+  opts?: Partial<UseQueryOptions<CalibrationStats>>,
+) {
+  return useQuery<CalibrationStats>({
+    queryKey: queryKeys.calibrationStats(deckId),
+    queryFn: () => api.metacognition.getCalibrationStats(deckId),
+    ...opts,
   });
 }
 

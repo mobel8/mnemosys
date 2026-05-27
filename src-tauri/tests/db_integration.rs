@@ -1059,3 +1059,262 @@ fn interleaved_due_cards_shuffles_order() {
         "interleaved queue order never changed across 5 calls — shuffle missing?"
     );
 }
+
+// ---- Vague 7 — sketches + delayed JOL --------------------------------------
+
+/// Spin up a deck + a basic card + a review row, returning (card_id, review_id).
+fn seed_card_with_review(db: &Database, deck_id: i64) -> (i64, i64) {
+    let conn = db.lock();
+    db.notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::Basic,
+            json!({ "front": "Q", "back": "A" }),
+            vec![],
+        )
+        .unwrap();
+    let card_id = db
+        .cards(&conn)
+        .list_in_deck(deck_id, 10, 0)
+        .unwrap()
+        .pop()
+        .unwrap()
+        .card
+        .id;
+    let review = db
+        .reviews(&conn)
+        .insert(
+            NewReview {
+                card_id,
+                rating: 3,
+                state_before: CardState::New,
+                state_after: CardState::Review,
+                stability_before: None,
+                stability_after: 5.0,
+                difficulty_before: None,
+                difficulty_after: 5.0,
+                elapsed_days: 0,
+                scheduled_days: 5,
+                review_time: 1_000,
+                confidence: None,
+            },
+            1_700_000_000,
+        )
+        .unwrap();
+    (card_id, review.id)
+}
+
+#[test]
+fn sketch_round_trip() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let (card_id, review_id) = seed_card_with_review(&db, deck_id);
+    let conn = db.lock();
+    let s = db
+        .sketches(&conn)
+        .insert(review_id, card_id, "data:image/png;base64,AAAA", 1_700_000_100)
+        .expect("insert");
+    assert_eq!(s.card_id, card_id);
+    let listed = db.sketches(&conn).get_for_card(card_id, 5).unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].sketch_data, "data:image/png;base64,AAAA");
+    assert_eq!(listed[0].review_id, review_id);
+}
+
+#[test]
+fn sketch_deleted_with_card_cascade() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let (card_id, review_id) = seed_card_with_review(&db, deck_id);
+    {
+        let conn = db.lock();
+        db.sketches(&conn)
+            .insert(review_id, card_id, "data:image/png;base64,XYZ", 1_700_000_000)
+            .unwrap();
+        // Sanity: row is there.
+        let n: i64 = conn
+            .query_row("SELECT COUNT(*) FROM review_sketches", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 1);
+    }
+    // Deleting the parent card must cascade and drop the sketch row too.
+    {
+        let conn = db.lock();
+        conn.execute("DELETE FROM cards WHERE id = ?1", rusqlite::params![card_id])
+            .unwrap();
+        let n: i64 = conn
+            .query_row("SELECT COUNT(*) FROM review_sketches", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 0, "review_sketches must cascade on card delete");
+    }
+}
+
+#[test]
+fn jol_predict_resolve_round_trip() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let (card_id, _) = seed_card_with_review(&db, deck_id);
+    let conn = db.lock();
+    let meta = db.metacognition(&conn);
+    let p = meta
+        .record_prediction(card_id, 0.7, 7, 1_700_000_000)
+        .expect("record");
+    assert_eq!(p.card_id, card_id);
+    assert_eq!(p.actual_correct, None);
+
+    let resolved = meta
+        .resolve_prediction(card_id, true, 1_700_000_500)
+        .expect("resolve");
+    assert_eq!(resolved, 1);
+
+    // A second resolve on the same card now finds nothing pending.
+    let resolved2 = meta
+        .resolve_prediction(card_id, false, 1_700_000_600)
+        .unwrap();
+    assert_eq!(resolved2, 0);
+}
+
+#[test]
+fn jol_pending_filters_by_age_and_resolution() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let (card_a, _) = seed_card_with_review(&db, deck_id);
+    let now = 1_700_010_000_i64;
+    // Add a second card on the same deck so we have two predictions.
+    let card_b = {
+        let conn = db.lock();
+        db.notes(&conn)
+            .create(
+                deck_id,
+                NoteTemplate::Basic,
+                json!({ "front": "Q2", "back": "A2" }),
+                vec![],
+            )
+            .unwrap();
+        db.cards(&conn)
+            .list_in_deck(deck_id, 10, 0)
+            .unwrap()
+            .into_iter()
+            .map(|c| c.card)
+            .find(|c| c.id != card_a)
+            .unwrap()
+            .id
+    };
+    {
+        let conn = db.lock();
+        let meta = db.metacognition(&conn);
+        // Old prediction (90 min ago) on A — should appear as pending @30 min.
+        meta.record_prediction(card_a, 0.6, 7, now - 90 * 60).unwrap();
+        // Recent prediction (5 min ago) on B — should NOT appear at 30 min filter.
+        meta.record_prediction(card_b, 0.4, 7, now - 5 * 60).unwrap();
+    }
+    let conn = db.lock();
+    let pending = db
+        .metacognition(&conn)
+        .pending_predictions(30, 10, now)
+        .unwrap();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].card_id, card_a);
+
+    // Now resolve the old one — pending list is empty.
+    db.metacognition(&conn)
+        .resolve_prediction(card_a, true, now)
+        .unwrap();
+    assert!(db
+        .metacognition(&conn)
+        .pending_predictions(30, 10, now)
+        .unwrap()
+        .is_empty());
+}
+
+#[test]
+fn calibration_stats_returns_buckets() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let (card_id, _) = seed_card_with_review(&db, deck_id);
+    {
+        let conn = db.lock();
+        let meta = db.metacognition(&conn);
+        // 5 resolved predictions spread across 0.1..0.9.
+        for (i, (p, ok)) in [(0.05, false), (0.25, false), (0.55, true), (0.85, true), (0.95, true)]
+            .iter()
+            .enumerate()
+        {
+            let _ = meta
+                .record_prediction(card_id, *p, 7, 1_700_000_000 + i as i64)
+                .unwrap();
+            // Each prediction has to be resolved → record then immediately
+            // resolve it; the next record/resolve cycle picks the next-oldest.
+            meta.resolve_prediction(card_id, *ok, 1_700_000_100 + i as i64)
+                .unwrap();
+        }
+    }
+    let conn = db.lock();
+    let stats = db.metacognition(&conn).calibration_stats(None).unwrap();
+    assert_eq!(stats.buckets.len(), 10);
+    assert_eq!(stats.total_resolved, 5);
+    // Quick sanity: at least one bucket has non-zero count.
+    let with_data: usize = stats.buckets.iter().filter(|b| b.count > 0).count();
+    assert!(with_data >= 3);
+}
+
+#[test]
+fn calibration_gamma_perfect_correlation() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let (card_id, _) = seed_card_with_review(&db, deck_id);
+    {
+        let conn = db.lock();
+        let meta = db.metacognition(&conn);
+        // High predictions land correct; low predictions land incorrect.
+        for (i, (p, ok)) in [
+            (0.9, true),
+            (0.85, true),
+            (0.8, true),
+            (0.2, false),
+            (0.15, false),
+            (0.1, false),
+        ]
+        .iter()
+        .enumerate()
+        {
+            meta.record_prediction(card_id, *p, 7, 1_700_000_000 + i as i64).unwrap();
+            meta.resolve_prediction(card_id, *ok, 1_700_000_100 + i as i64).unwrap();
+        }
+    }
+    let conn = db.lock();
+    let stats = db.metacognition(&conn).calibration_stats(None).unwrap();
+    assert!(
+        (stats.gamma - 1.0).abs() < 1e-9,
+        "expected γ ≈ 1.0, got {}",
+        stats.gamma
+    );
+}
+
+#[test]
+fn calibration_gamma_inverse_correlation() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let (card_id, _) = seed_card_with_review(&db, deck_id);
+    {
+        let conn = db.lock();
+        let meta = db.metacognition(&conn);
+        // Confidently wrong: high predictions → incorrect, low → correct.
+        for (i, (p, ok)) in [
+            (0.9, false),
+            (0.85, false),
+            (0.8, false),
+            (0.2, true),
+            (0.15, true),
+            (0.1, true),
+        ]
+        .iter()
+        .enumerate()
+        {
+            meta.record_prediction(card_id, *p, 7, 1_700_000_000 + i as i64).unwrap();
+            meta.resolve_prediction(card_id, *ok, 1_700_000_100 + i as i64).unwrap();
+        }
+    }
+    let conn = db.lock();
+    let stats = db.metacognition(&conn).calibration_stats(None).unwrap();
+    assert!(
+        (stats.gamma + 1.0).abs() < 1e-9,
+        "expected γ ≈ -1.0, got {}",
+        stats.gamma
+    );
+    // Mean predicted ≈ 0.5, mean actual ≈ 0.5 → bias should be ≈ 0.0.
+    assert!(stats.bias.abs() < 0.01);
+}

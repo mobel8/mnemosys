@@ -36,18 +36,22 @@ use crate::error::{AppError, AppResult};
 pub mod cards;
 pub mod decks;
 pub mod gamification;
+pub mod metacognition;
 pub mod migrations;
 pub mod notes;
 pub mod params;
 pub mod reviews;
+pub mod sketches;
 pub mod wellness;
 
 pub use cards::{Card, CardRepo, CardState, CardWithNote};
 pub use decks::{Deck, DeckMastery, DeckPatch, DeckRepo, DeckStats};
 pub use gamification::{Achievement, GamificationRepo, UserStats};
+pub use metacognition::{CalibrationBucket, CalibrationStats, JolPrediction, MetacognitionRepo};
 pub use notes::{Note, NoteRepo, NoteTemplate};
 pub use params::ParamsRepo;
 pub use reviews::{DayCount, DayRetention, NewReview, Review, ReviewRepo};
+pub use sketches::{Sketch, SketchRepo};
 pub use wellness::{WellnessLog, WellnessRepo};
 
 /// Default 21-element FSRS-5 parameter vector. Used as the seed value on a
@@ -142,6 +146,14 @@ impl Database {
 
     pub fn wellness<'a>(&self, conn: &'a Connection) -> WellnessRepo<'a> {
         WellnessRepo::new(conn)
+    }
+
+    pub fn sketches<'a>(&self, conn: &'a Connection) -> SketchRepo<'a> {
+        SketchRepo::new(conn)
+    }
+
+    pub fn metacognition<'a>(&self, conn: &'a Connection) -> MetacognitionRepo<'a> {
+        MetacognitionRepo::new(conn)
     }
 }
 

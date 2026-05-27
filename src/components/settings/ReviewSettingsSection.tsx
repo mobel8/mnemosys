@@ -43,6 +43,9 @@ const DEFAULTS: AppSettings = {
   mood_checkin_enabled: false,
   movement_break_minutes: 25,
   cyclic_sighing_enabled: false,
+  sketch_before_flip_enabled: false,
+  delayed_jol_enabled: false,
+  jol_delay_minutes: 30,
 };
 
 const RETENTION_MIN = 0.8;
@@ -90,7 +93,9 @@ export function ReviewSettingsSection() {
       a.show_next_interval !== b.show_next_interval ||
       a.type_the_answer_enabled !== b.type_the_answer_enabled ||
       a.confidence_rating_enabled !== b.confidence_rating_enabled ||
-      a.pre_questioning_enabled !== b.pre_questioning_enabled
+      a.pre_questioning_enabled !== b.pre_questioning_enabled ||
+      a.sketch_before_flip_enabled !== b.sketch_before_flip_enabled ||
+      a.delayed_jol_enabled !== b.delayed_jol_enabled
     );
   }, [query.data, draft]);
 
@@ -106,6 +111,8 @@ export function ReviewSettingsSection() {
       type_the_answer_enabled: draft.type_the_answer_enabled,
       confidence_rating_enabled: draft.confidence_rating_enabled,
       pre_questioning_enabled: draft.pre_questioning_enabled,
+      sketch_before_flip_enabled: draft.sketch_before_flip_enabled,
+      delayed_jol_enabled: draft.delayed_jol_enabled,
     });
   }
 
@@ -258,6 +265,45 @@ export function ReviewSettingsSection() {
               disabled={query.isLoading}
               onCheckedChange={(checked) =>
                 setDraft((d) => ({ ...d, pre_questioning_enabled: checked }))
+              }
+            />
+          </div>
+          {/* --- Vague 7: Tier S — Sketch + Delayed-JOL ----------------------- */}
+          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="sketch-toggle" className="text-sm">
+                Dessin avant flip (drawing effect)
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Dessine ta réponse avant de retourner la carte (Wammes 2016, +30-50% rappel).
+                Capture PNG stockée localement.
+              </p>
+            </div>
+            <Switch
+              id="sketch-toggle"
+              checked={draft.sketch_before_flip_enabled}
+              disabled={query.isLoading}
+              onCheckedChange={(checked) =>
+                setDraft((d) => ({ ...d, sketch_before_flip_enabled: checked }))
+              }
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="jol-toggle" className="text-sm">
+                Prédictions de rappel différées (JOL)
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Prédis la chance de réussir une carte ~30 min après l'avoir vue (Rhodes &amp; Tauber
+                2011, g=0.93). Affiche la calibration γ + biais dans Stats.
+              </p>
+            </div>
+            <Switch
+              id="jol-toggle"
+              checked={draft.delayed_jol_enabled}
+              disabled={query.isLoading}
+              onCheckedChange={(checked) =>
+                setDraft((d) => ({ ...d, delayed_jol_enabled: checked }))
               }
             />
           </div>
