@@ -468,14 +468,32 @@ pub fn run(conn: &Connection) -> AppResult<()> {
 }
 
 /// Run `sql` inside a transaction and bump `user_version` to `version`.
+///
+/// CRITICAL — foreign keys are disabled for the duration of the migration.
+/// Several migrations rebuild a table via the SQLite "12-step recipe"
+/// (`CREATE table_new` → `INSERT … SELECT` → `DROP TABLE table` →
+/// `ALTER … RENAME`). With `foreign_keys = ON`, the `DROP TABLE notes` /
+/// `DROP TABLE decks` step fires every child `ON DELETE CASCADE`, silently
+/// wiping `cards` + `reviews` (and `notes` when rebuilding `decks`) before
+/// the rows are copied back. `PRAGMA defer_foreign_keys` does NOT help — it
+/// only defers constraint *checking*, not the CASCADE *action*. And the
+/// pragma cannot be toggled inside a transaction. So we disable FKs BEFORE
+/// `BEGIN` and restore them AFTER `COMMIT`, exactly as recommended by
+/// <https://www.sqlite.org/lang_altertable.html> ("Making Other Kinds Of
+/// Table Schema Changes"). `Database::new` re-asserts `foreign_keys = ON`
+/// for normal operation; this only relaxes it during the migration window.
 fn apply_migration(conn: &Connection, version: i32, sql: &str) -> AppResult<()> {
     log::info!("Applying DB migration v{}", version);
+
+    // Must happen OUTSIDE any transaction (SQLite ignores the pragma inside one).
+    conn.pragma_update(None, "foreign_keys", "OFF")?;
 
     conn.execute_batch("BEGIN;")?;
 
     if let Err(e) = conn.execute_batch(sql) {
         // Best-effort rollback; if it fails too we still surface the original error.
         let _ = conn.execute_batch("ROLLBACK;");
+        let _ = conn.pragma_update(None, "foreign_keys", "ON");
         return Err(AppError::Database(format!(
             "migration v{} failed: {}",
             version, e
@@ -487,12 +505,63 @@ fn apply_migration(conn: &Connection, version: i32, sql: &str) -> AppResult<()> 
     conn.execute_batch(&format!("PRAGMA user_version = {};", version))?;
     conn.execute_batch("COMMIT;")?;
 
+    // Restore enforcement for normal operation. A post-migration integrity
+    // sweep would surface any dangling reference introduced by the rebuild.
+    conn.pragma_update(None, "foreign_keys", "ON")?;
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regression guard for the foreign-key CASCADE data-loss bug: upgrading
+    /// a DB that already holds data must NOT wipe FK-linked child rows when a
+    /// migration rebuilds `notes` or `decks`. Boots a DB at v1, seeds a full
+    /// deck→note→card→review chain, then replays v2..=CURRENT and asserts
+    /// every row survives. (Pre-fix this asserted (1,0,0,0).)
+    #[test]
+    fn rebuild_migrations_preserve_existing_data() {
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory");
+        // Bootstrap at v1 only — then replay the rest through `run`.
+        apply_migration(&conn, 1, SCHEMA_V1).expect("apply v1");
+
+        conn.execute_batch(
+            "INSERT INTO decks (name, color, desired_retention, created_at, updated_at)
+               VALUES ('Deck', '#000000', 0.9, 0, 0);
+             INSERT INTO notes (deck_id, template, fields, tags, created_at, updated_at)
+               VALUES (1, 'basic', '{\"front\":\"q\",\"back\":\"a\"}', '[]', 0, 0);
+             INSERT INTO cards (note_id, deck_id, card_ord, state, created_at, updated_at)
+               VALUES (1, 1, 0, 'review', 0, 0);
+             INSERT INTO reviews (card_id, rating, state_before, state_after,
+                                  stability_after, difficulty_after, elapsed_days,
+                                  scheduled_days, review_time, reviewed_at)
+               VALUES (1, 3, 'new', 'review', 2.0, 5.0, 0, 2, 1000, 0);",
+        )
+        .expect("seed v1 data");
+
+        run(&conn).expect("replay migrations v2..=CURRENT");
+
+        let count = |table: &str| -> i64 {
+            conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
+                .unwrap_or(-1)
+        };
+        assert_eq!(count("decks"), 1, "deck wiped by a table-rebuild migration");
+        assert_eq!(count("notes"), 1, "note wiped by a table-rebuild migration");
+        assert_eq!(count("cards"), 1, "card wiped by a table-rebuild migration");
+        assert_eq!(
+            count("reviews"),
+            1,
+            "review history wiped by a table-rebuild migration"
+        );
+
+        // FK enforcement must be back ON after migrations complete.
+        let fk: i64 = conn
+            .pragma_query_value(None, "foreign_keys", |r| r.get(0))
+            .expect("read foreign_keys pragma");
+        assert_eq!(fk, 1, "foreign_keys must be re-enabled after migrations");
+    }
 
     /// `Database::for_test` runs every migration. v3 must surface
     /// `remote_id` on the three content tables and seed a single
