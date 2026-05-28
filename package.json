@@ -1,7 +1,7 @@
 {
   "name": "mnemosys",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.8.0",
   "type": "module",
   "description": "Next-gen spaced repetition (SRS) desktop app powered by Tauri 2 + React 19 + FSRS-rs",
   "scripts": {
