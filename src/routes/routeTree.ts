@@ -26,9 +26,11 @@ import { Route as musicRoute } from "./music";
 import { Route as palacesRoute } from "./palaces";
 import { Route as palacesPalaceIdRoute } from "./palaces.$palaceId";
 import { Route as palacesPalaceIdReviewRoute } from "./palaces.$palaceId.review";
+import { Route as readingRoute } from "./reading";
 import { Route as reviewDeckIdRoute } from "./review.$deckId";
 import { Route as reviewInterleavedRoute } from "./review-interleaved";
 import { Route as settingsRoute } from "./settings";
+import { Route as shadowingRoute } from "./shadowing";
 import { Route as statsRoute } from "./stats";
 
 export const routeTree = rootRoute.addChildren([
@@ -46,5 +48,7 @@ export const routeTree = rootRoute.addChildren([
   achievementsRoute,
   musicRoute,
   gestureRoute,
+  shadowingRoute,
+  readingRoute,
   settingsRoute,
 ]);

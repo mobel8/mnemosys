@@ -1,58 +1,48 @@
-# V15 — Maths Worked Example + Mastery Gating + Two-step confidence
+# V17 — Langue/lecture avancé
 
-DB v12 -> v13 (single migration doing 3 things).
+DB v13 -> v14. Git clean baseline. 3 features.
 
-## Migration v13 (schema_v13.sql) — THE PITFALL
-- [ ] Rebuild `notes` (12-step recipe, mirror v12) adding `'worked_example'` to CHECK.
-      Preserve ALL columns: id, deck_id, template, fields, tags, created_at, updated_at,
-      remote_id, frequency_band. Recreate idx_notes_remote_id + idx_notes_freq + FTS5 + triggers.
-- [ ] `ALTER TABLE decks ADD COLUMN prerequisite_deck_id INTEGER REFERENCES decks(id)` (plain, nullable).
-- [ ] `ALTER TABLE reviews ADD COLUMN confidence_post INTEGER` (plain, nullable, 1-5).
-- [ ] migrations.rs: CURRENT_VERSION = 13, SCHEMA_V13 include_str!, apply guard `if current < 13`.
+## Feature 1 — Shadowing Mode (frontend only, state local)
+- [ ] `src/components/ShadowingPractice.tsx` — TTS reference + MediaRecorder + dual waveform canvas
+- [ ] `src/routes/shadowing.tsx` + `src/routes/shadowing.page.tsx`
+- [ ] register route in `routeTree.ts`, add Sidebar entry "Shadowing" (AudioLines icon)
+- Waveform: decode AudioBuffer -> downsample ~200 points -> draw bars on canvas
+- Reuse VoiceAnswerButton MediaRecorder pattern + synthesize_audio pattern
+- Web Audio + MediaRecorder cleanup on unmount
 
-## Feature 1 — Faded Worked Example
-- [ ] notes.rs: enum `WorkedExample` + as_str/from_str `"worked_example"`.
-- [ ] validate_fields: problem (req str), steps (array >=1 non-empty str), answer (req str).
-- [ ] ords_for_template -> vec![0].
-- [ ] doc comment block.
-- [ ] tauri.ts: add to NoteTemplate union + WorkedExampleFields interface.
-- [ ] NoteEditor.tsx: "Maths" tab (Sigma icon), problem input + dynamic steps list + answer.
-- [ ] ReviewCard.tsx: worked_example recto=problem; verso reveals steps one-by-one then answer.
-- [ ] ReviewSession getCardFront: worked_example -> problem.
-- [ ] Tests: create_worked_example_creates_1_card, worked_example_requires_problem_and_answer.
+## Feature 2 — Reading Import (LingQ-style)
+- [ ] Migration v14: schema_v14.sql CREATE TABLE word_status; CURRENT_VERSION=14; wire run()
+- [ ] `src-tauri/src/db/reading.rs` — WordStatus + ReadingRepo (get_word_statuses, set_word_status, create_cards_from_words)
+- [ ] register repo in db/mod.rs
+- [ ] `src-tauri/src/commands/reading.rs` — 3 commands
+- [ ] register module commands/mod.rs + handlers lib.rs
+- [ ] TS types + api.reading in tauri.ts; query hooks queries.ts
+- [ ] `src/components/ReadingImport.tsx` — textarea, tokenize, clickable colored words, cycle status, create cards, stats
+- [ ] `src/routes/reading.tsx` + `reading.page.tsx`, routeTree, Sidebar "Lecture" (BookOpen)
 
-## Feature 2 — Mastery Gating
-- [ ] decks.rs: Deck.prerequisite_deck_id + DeckPatch.prerequisite_deck_id (double Option).
-      create() gains 7th arg prerequisite_deck_id. row_to_deck reads col 9.
-      update() handles patch field. SELECTs add prerequisite_deck_id.
-- [ ] decks.rs: MasteryStatus struct + mastery_status(deck_id) method.
-      mastered = retention(30d, deck) >= 0.9 AND >= 20 reviews. unlocked = prereq None OR prereq mastered.
-- [ ] commands/decks.rs: get_deck_mastery_status command. Fix create_deck 7th arg. lib.rs register.
-- [ ] Fix 6 other DeckRepo::create call-sites (append None): apkg, demo, io, notes tests x2, sync tests x3.
-- [ ] tauri.ts: Deck/DeckPatch + MasteryStatus + api.decks.masteryStatus + create() prerequisiteDeckId.
-- [ ] queries.ts: queryKeys.deckMasteryStatus + useDeckMasteryStatus + invalidate on review/update.
-- [ ] DeckCard.tsx: lock icon when !unlocked, disable Étudier with tooltip.
-- [ ] Create/EditDeckDialog: "Deck prérequis" dropdown (other decks).
-- [ ] Test: mastery_status_locked_until_prerequisite_mastered.
+## Feature 3 — PDF citations (lightest)
+- [ ] `commands/ai.rs:generate_cards_pdf` — derive filename from pdf_path, push tag `source:<filename>` onto each generated card
+- [ ] AiGenerator.tsx — surface source tag badge on drafts
 
-## Feature 3 — Two-step retrospective confidence
-- [ ] reviews.rs: Review.confidence_post + NewReview.confidence_post. insert + get + list + row_to_review (col 14).
-- [ ] commands/review.rs: submit_review confidence_post: Option<u8>, validate 1-5, pass to NewReview.
-- [ ] tauri.ts: submit() confidencePost + ReviewResult unaffected.
-- [ ] ReviewSession.tsx: after flip, before FSRS rate, show retrospective ConfidenceRating.
-      Reuse ConfidenceRating with a retrospective legend prop. Pass both values to submit.
-- [ ] Test: review_persists_both_confidence_values.
+## Verifs finales — ALL PASS
+- [x] cargo test: 200 lib + 55 integ, 0 failed, 1 ignored (FSRS, as required)
+- [x] tsc --noEmit: clean
+- [x] biome check src/: clean (0 errors; 3 files auto-formatted)
+- [x] vitest new files: 7 passed. Full suite: 152 passed / 35 files (3 stderr
+      errors = pre-existing tts-button error-path noise, NOT failures)
+- [x] vite build: ok
 
-## Verifications — ALL PASS
-- [x] cargo test: 192 + 55 ok, 0 failed, 2 ignored (returns_21_params left as-is)
-- [x] tsc --noEmit: clean (exit 0)
-- [x] biome check src/: clean (5 files auto-formatted)
-- [x] vitest run --no-file-parallelism: 141 passed / 31 files (3 stderr errors are
-      pre-existing tts-button.test.tsx error-path noise, NOT failures)
+## Tests
+- [x] tests/unit/reading-import.test.tsx (tokenize + 3 component tests = 4)
+- [x] tests/unit/shadowing.test.tsx (computeWaveformPeaks x2 + render = 3)
+- [x] Rust: 6 ReadingRepo tests + 2 pdf_source_filename tests
 
 ## Review
-- Migration v13 = 1 file (schema_v13.sql): notes 12-step rebuild adds
-  'worked_example' to CHECK preserving all 9 cols + both indices + FTS5; then
-  plain ALTER ADD prerequisite_deck_id on decks, ALTER ADD confidence_post on reviews.
-- DeckRepo::create widened to 7 args (prerequisite_deck_id) — 9 call-sites fixed.
-- All 3 features delivered + tested. No residual bugs found.
+- F1 Shadowing: ShadowingPractice.tsx (Web Audio decode→peaks→canvas, MediaRecorder,
+  TTS reuse, full cleanup) + route /shadowing + Sidebar (AudioLines). No DB.
+- F2 Reading: migration v14 (word_status, pure CREATE TABLE) + db/reading.rs (ReadingRepo)
+  + commands/reading.rs (3 cmds) + tauri.ts/queries.ts + ReadingImport.tsx + route /reading
+  + Sidebar (BookOpen). Optimistic status cycling, coverage stats, card creation.
+- F3 PDF citations: generate_cards_pdf tags each card `source:<filename>` (dedup) +
+  AiGenerator source badge. Page mapping intentionally skipped (pdf-extract flattens).
+- No new deps. NoteRepo::create / DeckRepo::create call-sites untouched. No residual bugs.

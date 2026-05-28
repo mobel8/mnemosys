@@ -18,6 +18,7 @@ pub mod media;
 pub mod metacognition;
 pub mod palaces;
 pub mod podcast;
+pub mod reading;
 pub mod review;
 pub mod settings;
 pub mod sketches;

@@ -87,11 +87,31 @@ pub async fn generate_cards_text(
         .map_err(|e| AppError::Other(e.to_string()))
 }
 
+/// Extract the file name (no directory) from a path. Falls back to the raw
+/// path string if the OS-specific basename can't be derived (e.g. a path
+/// ending in `..`). Always returns a non-empty string for a non-empty input.
+fn pdf_source_filename(pdf_path: &str) -> String {
+    std::path::Path::new(pdf_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(str::to_string)
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| pdf_path.to_string())
+}
+
 /// Generate cards from a PDF on disk.
 ///
 /// The path is read server-side (Tauri commands run in the Rust process)
 /// so the user can hand us either a file picker path or any absolute path
 /// the OS lets us open.
+///
+/// Vague 17 — PaperQA-style provenance: every card minted from a PDF gets a
+/// `source:<filename>` tag appended (deduplicated) so the learner can trace a
+/// card back to the document it came from. We use a tag rather than a new
+/// `fields` key because tags already flow through `create_note`, the FTS
+/// index, and the knowledge graph without any schema change. The exact page
+/// number is intentionally omitted: `pdf-extract` flattens the document to a
+/// single text stream, so a per-page mapping would be unreliable.
 #[tauri::command]
 pub async fn generate_cards_pdf(
     app: AppHandle,
@@ -111,9 +131,19 @@ pub async fn generate_cards_pdf(
 
     let api_key = resolve_api_key(&app)?;
     let client = ClaudeClient::new(api_key);
-    generate_cards_from_pdf(&client, &bytes, max_cards, &language)
+    let mut cards = generate_cards_from_pdf(&client, &bytes, max_cards, &language)
         .await
-        .map_err(|e| AppError::Other(e.to_string()))
+        .map_err(|e| AppError::Other(e.to_string()))?;
+
+    // Tag every card with its source document for traceability. The tag is
+    // idempotent — re-running on the same file never stacks duplicates.
+    let source_tag = format!("source:{}", pdf_source_filename(&pdf_path));
+    for card in &mut cards {
+        if !card.tags.iter().any(|t| t == &source_tag) {
+            card.tags.push(source_tag.clone());
+        }
+    }
+    Ok(cards)
 }
 
 // ---------------------------------------------------------------------------
@@ -355,5 +385,22 @@ mod tests {
     fn front_back_rejects_occlusion() {
         let fields = serde_json::json!({"image_path": "/tmp/x.png", "masks": []});
         assert!(front_back_from_fields(&fields).is_err());
+    }
+
+    #[test]
+    fn pdf_source_filename_strips_directory() {
+        assert_eq!(
+            pdf_source_filename("/home/u/docs/biology chapter 3.pdf"),
+            "biology chapter 3.pdf"
+        );
+        assert_eq!(pdf_source_filename("notes.pdf"), "notes.pdf");
+    }
+
+    #[test]
+    fn pdf_source_filename_falls_back_for_pathological_path() {
+        // A path with no extractable basename falls back to the raw string
+        // (never empty) so the resulting tag is always meaningful.
+        let raw = "..";
+        assert_eq!(pdf_source_filename(raw), raw);
     }
 }

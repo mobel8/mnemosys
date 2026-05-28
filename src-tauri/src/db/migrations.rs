@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 13;
+pub const CURRENT_VERSION: i32 = 14;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -228,6 +228,15 @@ const SCHEMA_V12: &str = include_str!("schema_v12.sql");
 ///      answer, complementing the prospective `confidence` column from v5).
 const SCHEMA_V13: &str = include_str!("schema_v13.sql");
 
+/// v14 — Reading Import (Vague 17): LingQ-style per-word knowledge tracking.
+///
+/// Adds a single `word_status` table keyed by the composite `(word,
+/// language)` so the same spelling can carry an independent status across
+/// language decks. `status` is constrained to `new` / `learning` / `known`;
+/// the absence of a row is treated as `new` by the UI. Pure additive
+/// `CREATE TABLE IF NOT EXISTS` — no `notes` rebuild, no data migration.
+const SCHEMA_V14: &str = include_str!("schema_v14.sql");
+
 /// v7 — Pluggable schedulers (Vague 4): per-deck algorithm choice.
 ///
 /// Adds a `scheduler_kind` column to `decks` storing one of `'fsrs6'`
@@ -364,6 +373,11 @@ pub fn run(conn: &Connection) -> AppResult<()> {
     // `prerequisite_deck_id` on decks + `confidence_post` on reviews.
     if current < 13 {
         apply_migration(conn, 13, SCHEMA_V13)?;
+    }
+
+    // v14 — Vague 17 Reading Import: `word_status` table.
+    if current < 14 {
+        apply_migration(conn, 14, SCHEMA_V14)?;
     }
 
     Ok(())

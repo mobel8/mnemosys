@@ -66,6 +66,8 @@ import {
   type TTSVoice,
   type UserStats,
   type WellnessLog,
+  type WordStatus,
+  type WordStatusKind,
 } from "@/lib/tauri";
 
 export const queryKeys = {
@@ -106,6 +108,9 @@ export const queryKeys = {
   totalReviewsCount: ["total-reviews-count"] as const,
   // Vague 11 — Knowledge Graph (tag co-occurrence)
   tagGraph: (deckId: number | null) => ["tag-graph", deckId] as const,
+  // Vague 17 — Reading Import (word status lookup, keyed by sorted words)
+  wordStatuses: (words: string[], language: string) =>
+    ["word-statuses", language, [...words].sort()] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -1245,6 +1250,68 @@ export function useOptimizeFsrsParams(
       qc.invalidateQueries({ queryKey: ["interleaved-due-cards"] });
       qc.invalidateQueries({ queryKey: queryKeys.todayStats });
       qc.invalidateQueries({ queryKey: queryKeys.totalReviewsCount });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Vague 17 — Reading Import (LingQ-style word tracking)
+// ---------------------------------------------------------------------------
+
+/**
+ * Look up the stored status of every word in `words` for `language`. Words
+ * with no row are absent from the result — the component maps those to `new`.
+ * `enabled` lets the caller hold the query until a text has been tokenised.
+ */
+export function useWordStatuses(
+  words: string[],
+  language: string,
+  opts?: Partial<UseQueryOptions<WordStatus[]>>,
+) {
+  return useQuery({
+    queryKey: queryKeys.wordStatuses(words, language),
+    queryFn: () => api.reading.getWordStatuses(words, language),
+    ...opts,
+  });
+}
+
+/**
+ * Upsert one word's status. Invalidates every `word-statuses` query so the
+ * in-text highlight re-renders regardless of which word-set it was keyed by.
+ */
+export function useSetWordStatus(
+  opts?: UseMutationOptions<
+    WordStatus,
+    Error,
+    { word: string; status: WordStatusKind; language: string }
+  >,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ word, status, language }) => api.reading.setWordStatus(word, status, language),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: ["word-statuses"] });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/**
+ * Create Basic cards from a batch of words. Touches the target deck's stats +
+ * card list so the deck detail page reflects the freshly-minted notes.
+ */
+export function useCreateCardsFromWords(
+  opts?: UseMutationOptions<number, Error, { deckId: number; words: string[] }>,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ deckId, words }) => api.reading.createCardsFromWords(deckId, words),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.deckStats(variables.deckId) });
+      qc.invalidateQueries({ queryKey: ["cards-in-deck", variables.deckId] });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

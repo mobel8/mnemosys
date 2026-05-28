@@ -856,11 +856,27 @@ function DraftCard({ draft, index, disabled, onChange, onRemove, onApplyFix }: D
                 Qualité {scorePct}%
               </Badge>
             )}
-            {draft.tags.map((tag) => (
-              <Badge key={tag} variant="outline" className="font-normal">
-                {tag}
-              </Badge>
-            ))}
+            {draft.tags.map((tag) => {
+              // Vague 17 — PDF provenance tag (`source:<file>`) gets a distinct
+              // pill with a document icon so the learner spots the citation.
+              const source = parseSourceTag(tag);
+              return source !== null ? (
+                <Badge
+                  key={tag}
+                  variant="outline"
+                  className="gap-1 border-primary/40 font-normal text-primary"
+                  data-testid="draft-source-badge"
+                  title={`Source : ${source}`}
+                >
+                  <FileText className="h-3 w-3" aria-hidden />
+                  {source}
+                </Badge>
+              ) : (
+                <Badge key={tag} variant="outline" className="font-normal">
+                  {tag}
+                </Badge>
+              );
+            })}
           </div>
           <Button
             type="button"
@@ -980,6 +996,17 @@ function DraftCard({ draft, index, disabled, onChange, onRemove, onApplyFix }: D
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Vague 17 — extract the filename from a PaperQA-style `source:<file>` tag.
+ * Returns the (trimmed, non-empty) filename, or `null` when `tag` is an
+ * ordinary topical tag. Used to render the provenance pill distinctly.
+ */
+function parseSourceTag(tag: string): string | null {
+  if (!tag.startsWith("source:")) return null;
+  const value = tag.slice("source:".length).trim();
+  return value.length > 0 ? value : null;
+}
 
 /** Parse an integer from a text-input value, falling back to `fallback`. */
 function parseIntSafe(raw: string, fallback: number): number {

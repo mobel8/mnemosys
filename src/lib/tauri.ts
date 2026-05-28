@@ -689,6 +689,24 @@ export interface OptimizeResult {
   previous_params: number[];
 }
 
+// --- Vague 17: Reading Import (LingQ-style word tracking) ------------------
+
+/** Learner classification of one word while reading an imported text. */
+export type WordStatusKind = "new" | "learning" | "known";
+
+/**
+ * One persisted `(word, language)` classification. `word` and `language` are
+ * the normalised (trimmed, lower-cased) forms the backend stored. Mirrors the
+ * Rust `WordStatus` struct.
+ */
+export interface WordStatus {
+  word: string;
+  language: string;
+  status: WordStatusKind;
+  /** unix seconds. */
+  updated_at: number;
+}
+
 // ---------------------------------------------------------------------------
 // API surface
 // ---------------------------------------------------------------------------
@@ -1075,6 +1093,25 @@ export const api = {
         y: data.y,
         z: data.z,
       }),
+  },
+  reading: {
+    /**
+     * Vague 17 — fetch the stored status of each word in `words` for
+     * `language`. Words with no row are simply absent from the result; the
+     * caller treats those as `new`. Casing/whitespace are normalised server
+     * side, so pass words however the tokenizer produced them.
+     */
+    getWordStatuses: (words: string[], language: string) =>
+      invoke<WordStatus[]>("get_word_statuses", { words, language }),
+    /** Upsert one word's status (`new` / `learning` / `known`). Idempotent. */
+    setWordStatus: (word: string, status: WordStatusKind, language: string) =>
+      invoke<WordStatus>("set_word_status", { word, status, language }),
+    /**
+     * Create one Basic card (front = word, back = « (à traduire) ») per
+     * distinct word in `words`, inside `deckId`. Returns the count created.
+     */
+    createCardsFromWords: (deckId: number, words: string[]) =>
+      invoke<number>("create_cards_from_words", { deckId, words }),
   },
   fsrsOptimizer: {
     /**

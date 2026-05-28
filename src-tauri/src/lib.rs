@@ -168,6 +168,10 @@ pub fn run() {
             commands::palaces::remove_palace_locus,
             commands::palaces::reorder_palace_loci,
             commands::palaces::move_palace_locus,
+            // reading import (Vague 17 — LingQ-style word tracking)
+            commands::reading::get_word_statuses,
+            commands::reading::set_word_status,
+            commands::reading::create_cards_from_words,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
