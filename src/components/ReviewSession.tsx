@@ -32,12 +32,14 @@
  */
 
 import { useNavigate } from "@tanstack/react-router";
+import { Headphones } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { AmbientPlayer } from "@/components/AmbientPlayer";
 import { ConfidenceRating } from "@/components/ConfidenceRating";
 import { CyclicSighing } from "@/components/CyclicSighing";
 import { FocusGuard } from "@/components/FocusGuard";
+import { HandsFreeReview } from "@/components/HandsFreeReview";
 import { MoodCheckIn } from "@/components/MoodCheckIn";
 import { PreQuestioning } from "@/components/PreQuestioning";
 import { PretestPrompt } from "@/components/PretestPrompt";
@@ -46,6 +48,7 @@ import { ReviewControls } from "@/components/ReviewControls";
 import { ReviewProgress } from "@/components/ReviewProgress";
 import { type ReviewedLog, ReviewSummary } from "@/components/ReviewSummary";
 import { SelfExplanationPrompt } from "@/components/SelfExplanationPrompt";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -109,6 +112,10 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   // Vague 18 — context ambient sound (Godden & Baddeley). Independent of the
   // neuro master switch; gated only by its own setting.
   const ambientSound = settings.data?.ambient_sound ?? "none";
+  // Vague 23 — hands-free (audio + voice) review mode. Gated by its setting;
+  // `handsFreeActive` toggles the alternative UI for the current session only.
+  const handsFreeEnabled = settings.data?.hands_free_enabled ?? false;
+  const [handsFreeActive, setHandsFreeActive] = useState(false);
   // Per-card pretest gate: which card index has already shown (or skipped)
   // its pretest prompt. Reset implicitly because we key on the index.
   const [pretestDoneForIndex, setPretestDoneForIndex] = useState<number | null>(null);
@@ -291,6 +298,36 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
     ],
   );
 
+  // Vague 23 — hands-free grade handler. HandsFreeReview owns its own cursor
+  // over the same `cards` snapshot, so here we only persist the grade, append
+  // to the reviewed log, and nudge the shared store pill. The queue cursor +
+  // "next card" transition live inside HandsFreeReview; `onDone` flips us to
+  // the summary.
+  const handleHandsFreeSubmit = useCallback(
+    (cardId: number, rating: Rating, reviewTimeMs: number) => {
+      submitReview.mutate(
+        { cardId, rating, reviewTimeMs, confidence: null, confidencePost: null },
+        {
+          onSuccess: () => {
+            setReviewed((log) => [
+              ...log,
+              { rating, review_time_ms: reviewTimeMs, correct: rating >= 3 },
+            ]);
+            advanceInStore();
+          },
+          onError: (err) => {
+            pushToast({
+              title: "Échec de l'enregistrement",
+              description: err.message,
+              variant: "destructive",
+            });
+          },
+        },
+      );
+    },
+    [advanceInStore, pushToast, submitReview],
+  );
+
   const handleQuit = useCallback(() => {
     navigate({ to: "/decks/$deckId", params: { deckId } });
   }, [deckId, navigate]);
@@ -466,6 +503,37 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
     !selfExplanationDone &&
     current.card.id % 5 === 0;
 
+  // --- Vague 23 — hands-free mode -----------------------------------------
+  // When active, an audio/voice loop replaces the classic flip/rate UI for the
+  // remainder of the session. It drives its own cursor over the snapshot from
+  // the current card onward; we feed it the not-yet-reviewed slice so an
+  // already-graded card isn't replayed if the learner toggled mid-session.
+  if (handsFreeActive) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <ReviewProgress
+          current={displayedIndex}
+          total={totalForBar}
+          startedAt={startedAtRef.current}
+          reviewedCount={reviewed.length}
+          onQuit={handleQuit}
+          onHelp={() => setHelpOpen(true)}
+        />
+        <HandsFreeReview
+          cards={cards.slice(currentIndex)}
+          language="fr"
+          onSubmit={handleHandsFreeSubmit}
+          onExit={() => setHandsFreeActive(false)}
+          onDone={() => {
+            setHandsFreeActive(false);
+            setPhase("done");
+          }}
+        />
+        {ambientSound !== "none" && <AmbientPlayer kind={ambientSound} />}
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ReviewProgress
@@ -476,6 +544,21 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
         onQuit={handleQuit}
         onHelp={() => setHelpOpen(true)}
       />
+
+      {/* Vague 23 — switch the current session into the audio/voice loop. */}
+      {handsFreeEnabled && (
+        <div className="flex justify-center pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setHandsFreeActive(true)}
+          >
+            <Headphones className="mr-1 h-4 w-4" aria-hidden />
+            Mode mains-libres
+          </Button>
+        </div>
+      )}
 
       {showPretest ? (
         <div className="flex flex-1 items-center justify-center px-4 py-8">

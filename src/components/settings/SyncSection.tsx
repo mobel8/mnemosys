@@ -65,6 +65,7 @@ const DEFAULTS: AppSettings = {
   ollama_model: null,
   chronotype: null,
   ambient_sound: "none",
+  hands_free_enabled: false,
 };
 
 function formatLastSync(ts: number | null): string {

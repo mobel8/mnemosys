@@ -50,6 +50,7 @@ const DEFAULTS: AppSettings = {
   ollama_model: null,
   chronotype: null,
   ambient_sound: "none",
+  hands_free_enabled: false,
 };
 
 interface SettingsState extends AppSettings {

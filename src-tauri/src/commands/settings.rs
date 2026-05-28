@@ -196,6 +196,15 @@ pub struct AppSettings {
     /// `"brown"` / `"rain"`. Defaults to `"none"` (silent).
     #[serde(default = "default_ambient_sound")]
     pub ambient_sound: String,
+
+    // --- Vague 23 (hands-free review) ---------------------------------------
+    /// Hands-free Review Mode: when on, the review session offers a 🎧 toggle
+    /// that runs an audio-driven loop (TTS reads the question, the learner
+    /// thinks aloud, TTS reads the answer, the learner grades by voice via
+    /// Whisper or large touch buttons). Designed for reviewing while walking
+    /// or cooking. Defaults off — the classic flip/rate flow is untouched.
+    #[serde(default)]
+    pub hands_free_enabled: bool,
 }
 
 fn default_ambient_sound() -> String {
@@ -256,6 +265,8 @@ impl Default for AppSettings {
             ollama_model: None,
             chronotype: None,
             ambient_sound: default_ambient_sound(),
+            // Vague 23 — hands-free review off by default.
+            hands_free_enabled: false,
         }
     }
 }

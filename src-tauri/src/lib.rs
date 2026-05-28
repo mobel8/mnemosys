@@ -106,6 +106,8 @@ pub fn run() {
             commands::stats::get_retention_by_day,
             // concept mastery (Vague 20 — Bayesian Knowledge Tracing)
             commands::mastery::get_concept_mastery,
+            // temporal mastery graph (Vague 23 — retention trajectory by week/tag)
+            commands::mastery::get_mastery_timeline,
             // demo
             commands::demo::load_demo_decks,
             // settings

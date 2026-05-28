@@ -388,6 +388,8 @@ export interface AppSettings {
   chronotype: string | null;
   /** Context ambient sound during reviews (Godden & Baddeley 1975). */
   ambient_sound: "none" | "white" | "pink" | "brown" | "rain";
+  /** Vague 23 — enable the hands-free (audio + voice) review mode toggle. */
+  hands_free_enabled: boolean;
 }
 
 // --- Vague 3: wellness ----------------------------------------------------
@@ -604,6 +606,28 @@ export interface ConceptMastery {
   mastery: number;
   /** Number of reviews that fed the estimate. */
   reviews: number;
+}
+
+/**
+ * One tag's retention trajectory across the timeline's weeks (Vague 23).
+ * `points[i]` aligns with `MasteryTimeline.weeks[i]`; `null` means the tag
+ * had no reviews that week (the chart draws a gap, not a misleading 0%).
+ */
+export interface TagSeries {
+  tag: string;
+  points: (number | null)[];
+}
+
+/**
+ * Retention-over-time for the busiest tags, bucketed by ISO week (Vague 23 —
+ * Temporal Mastery Graph). Complements `ConceptMastery` (a single snapshot)
+ * by exposing the *trajectory* of each concept's recall.
+ */
+export interface MasteryTimeline {
+  /** ISO-week labels oldest → newest, e.g. `"2026-W18"`. */
+  weeks: string[];
+  /** One trajectory per surfaced tag (top 8 by review volume). */
+  series: TagSeries[];
 }
 
 // --- Vague 8: Deck Podcast + Whisper Mode Review -------------------------
@@ -899,6 +923,8 @@ export const api = {
     retentionByDay: (days: number) => invoke<DayRetention[]>("get_retention_by_day", { days }),
     /** BKT concept-mastery breakdown by tag (Vague 20). */
     conceptMastery: () => invoke<ConceptMastery[]>("get_concept_mastery"),
+    /** Retention trajectory by ISO week, grouped by tag (Vague 23). */
+    masteryTimeline: (weeks: number) => invoke<MasteryTimeline>("get_mastery_timeline", { weeks }),
   },
   demo: {
     load: () => invoke<number>("load_demo_decks"),

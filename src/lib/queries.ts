@@ -40,6 +40,7 @@ import {
   type ImportResult,
   type JolPrediction,
   type MasteryStatus,
+  type MasteryTimeline,
   type NextStates,
   type Note,
   type NoteTemplate,
@@ -91,6 +92,7 @@ export const queryKeys = {
   reviewsByDay: (days: number) => ["reviews-by-day", days] as const,
   retentionByDay: (days: number) => ["retention-by-day", days] as const,
   conceptMastery: ["concept-mastery"] as const,
+  masteryTimeline: (weeks: number) => ["mastery-timeline", weeks] as const,
   settings: ["settings"] as const,
   ttsCacheSize: ["tts-cache-size"] as const,
   syncStatus: ["sync-status"] as const,
@@ -294,6 +296,15 @@ export function useConceptMastery(opts?: Partial<UseQueryOptions<ConceptMastery[
   return useQuery<ConceptMastery[]>({
     queryKey: queryKeys.conceptMastery,
     queryFn: () => api.stats.conceptMastery(),
+    ...opts,
+  });
+}
+
+/** Retention trajectory by ISO week, grouped by tag (Vague 23). */
+export function useMasteryTimeline(weeks = 12, opts?: Partial<UseQueryOptions<MasteryTimeline>>) {
+  return useQuery<MasteryTimeline>({
+    queryKey: queryKeys.masteryTimeline(weeks),
+    queryFn: () => api.stats.masteryTimeline(weeks),
     ...opts,
   });
 }

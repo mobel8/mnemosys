@@ -70,6 +70,7 @@ const DEFAULTS: AppSettings = {
   ollama_model: null,
   chronotype: null,
   ambient_sound: "none",
+  hands_free_enabled: false,
 };
 
 const MIN_MINUTES = 10;

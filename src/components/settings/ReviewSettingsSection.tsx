@@ -60,6 +60,7 @@ const DEFAULTS: AppSettings = {
   ollama_model: null,
   chronotype: null,
   ambient_sound: "none",
+  hands_free_enabled: false,
 };
 
 const RETENTION_MIN = 0.8;
@@ -113,7 +114,8 @@ export function ReviewSettingsSection() {
       a.voice_answer_enabled !== b.voice_answer_enabled ||
       a.pretest_mode_enabled !== b.pretest_mode_enabled ||
       a.self_explanation_enabled !== b.self_explanation_enabled ||
-      a.focus_guard_enabled !== b.focus_guard_enabled
+      a.focus_guard_enabled !== b.focus_guard_enabled ||
+      a.hands_free_enabled !== b.hands_free_enabled
     );
   }, [query.data, draft]);
 
@@ -135,6 +137,7 @@ export function ReviewSettingsSection() {
       pretest_mode_enabled: draft.pretest_mode_enabled,
       self_explanation_enabled: draft.self_explanation_enabled,
       focus_guard_enabled: draft.focus_guard_enabled,
+      hands_free_enabled: draft.hands_free_enabled,
     });
   }
 
@@ -409,6 +412,28 @@ export function ReviewSettingsSection() {
               disabled={query.isLoading}
               onCheckedChange={(checked) =>
                 setDraft((d) => ({ ...d, focus_guard_enabled: checked }))
+              }
+            />
+          </div>
+          {/* --- Vague 23: Hands-free review (audio + voice) ---------------- */}
+          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="hands-free-toggle" className="text-sm">
+                Mode mains-libres (audio + voix)
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Ajoute un bouton 🎧 en session : la question est lue (TTS), tu réponds à voix haute,
+                la réponse est lue, puis tu notes à la voix (« encore / difficile / bien / facile »
+                via Whisper) ou via de gros boutons. Pensé pour réviser en marchant. Nécessite une
+                voix TTS (OpenAI/Piper) et, pour la notation vocale, une clé OpenAI.
+              </p>
+            </div>
+            <Switch
+              id="hands-free-toggle"
+              checked={draft.hands_free_enabled}
+              disabled={query.isLoading}
+              onCheckedChange={(checked) =>
+                setDraft((d) => ({ ...d, hands_free_enabled: checked }))
               }
             />
           </div>
