@@ -169,9 +169,7 @@ pub(super) fn parse_script_response(response: &str) -> Result<Vec<PodcastLine>, 
     // OpenAI TTS rejects them and they'd produce a 0-byte MP3 anyway.
     let cleaned: Vec<PodcastLine> = lines
         .into_iter()
-        .filter(|l| {
-            (l.speaker == "host" || l.speaker == "expert") && !l.text.trim().is_empty()
-        })
+        .filter(|l| (l.speaker == "host" || l.speaker == "expert") && !l.text.trim().is_empty())
         .collect();
 
     if cleaned.is_empty() {

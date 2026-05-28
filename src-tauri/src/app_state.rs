@@ -53,10 +53,7 @@ impl AppState {
             self.db.params(&conn).get()?
         };
         let new_scheduler = CardScheduler::new(&params, desired_retention)?;
-        let mut guard = self
-            .scheduler
-            .lock()
-            .expect("scheduler mutex poisoned");
+        let mut guard = self.scheduler.lock().expect("scheduler mutex poisoned");
         *guard = new_scheduler;
         Ok(())
     }

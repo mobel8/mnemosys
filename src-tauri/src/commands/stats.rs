@@ -66,20 +66,14 @@ pub fn get_today_stats(state: State<'_, AppState>) -> AppResult<TodayStatsDTO> {
 }
 
 #[tauri::command]
-pub fn get_reviews_by_day(
-    state: State<'_, AppState>,
-    days: u32,
-) -> AppResult<Vec<DayCount>> {
+pub fn get_reviews_by_day(state: State<'_, AppState>, days: u32) -> AppResult<Vec<DayCount>> {
     let now = chrono::Utc::now().timestamp();
     let conn = state.db.lock();
     state.db.reviews(&conn).reviews_by_day(days, now)
 }
 
 #[tauri::command]
-pub fn get_retention_by_day(
-    state: State<'_, AppState>,
-    days: u32,
-) -> AppResult<Vec<DayRetention>> {
+pub fn get_retention_by_day(state: State<'_, AppState>, days: u32) -> AppResult<Vec<DayRetention>> {
     let now = chrono::Utc::now().timestamp();
     let conn = state.db.lock();
     state.db.reviews(&conn).retention_by_day(days, now)

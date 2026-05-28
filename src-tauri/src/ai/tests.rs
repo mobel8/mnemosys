@@ -95,7 +95,8 @@ fn parse_cards_response_strips_markdown_fences() {
 
 #[test]
 fn parse_cards_response_strips_bare_fences() {
-    let body = "```\n[{\"template\":\"cloze\",\"fields\":{\"text\":\"x {{c1::y}}\"},\"tags\":[]}]\n```";
+    let body =
+        "```\n[{\"template\":\"cloze\",\"fields\":{\"text\":\"x {{c1::y}}\"},\"tags\":[]}]\n```";
     let cards = parse_cards_response(body).expect("bare-fenced JSON must parse");
     assert_eq!(cards.len(), 1);
     assert!(matches!(cards[0].template, CardTemplate::Cloze));

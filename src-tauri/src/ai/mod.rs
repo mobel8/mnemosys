@@ -24,9 +24,7 @@ pub mod podcast;
 #[cfg(test)]
 mod tests;
 
-pub use cards::{
-    generate_cards_from_pdf, generate_cards_from_text, CardTemplate, GeneratedCard,
-};
+pub use cards::{generate_cards_from_pdf, generate_cards_from_text, CardTemplate, GeneratedCard};
 pub use claude::{ClaudeClient, ClaudeError};
 pub use critic::{critique_cards, CardCritique};
 pub use image::{build_image_prompt, ImageClient};

@@ -73,10 +73,7 @@ pub fn get_today_wellness(state: State<'_, AppState>) -> AppResult<Option<Wellne
 
 /// Last `days` wellness logs (newest first). Used by future stats UI.
 #[tauri::command]
-pub fn get_recent_wellness(
-    state: State<'_, AppState>,
-    days: i64,
-) -> AppResult<Vec<WellnessLog>> {
+pub fn get_recent_wellness(state: State<'_, AppState>, days: i64) -> AppResult<Vec<WellnessLog>> {
     let conn = state.db.lock();
     state.db.wellness(&conn).recent_logs(days)
 }

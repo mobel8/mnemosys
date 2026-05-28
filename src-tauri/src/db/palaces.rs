@@ -282,9 +282,9 @@ impl<'a> PalaceRepo<'a> {
         }
 
         // Load current loci ids.
-        let mut stmt = self.conn.prepare(
-            "SELECT id FROM palace_loci WHERE palace_id = ?1 ORDER BY ordinal ASC",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id FROM palace_loci WHERE palace_id = ?1 ORDER BY ordinal ASC")?;
         let mut existing: Vec<i64> = Vec::new();
         for r in stmt.query_map(params![palace_id], |row| row.get::<_, i64>(0))? {
             existing.push(r?);
@@ -460,9 +460,7 @@ mod tests {
         let card_id = seed_deck_and_card(&db);
         let conn = db.lock();
         let repo = PalaceRepo::new(&conn);
-        let p = repo
-            .create("House", None, "house", 1_700_000_000)
-            .unwrap();
+        let p = repo.create("House", None, "house", 1_700_000_000).unwrap();
         // Seed a 2nd card so we can pin two distinct cards.
         db.notes(&conn)
             .create(
@@ -498,9 +496,7 @@ mod tests {
         let card_id = seed_deck_and_card(&db);
         let conn = db.lock();
         let repo = PalaceRepo::new(&conn);
-        let p = repo
-            .create("House", None, "house", 1_700_000_000)
-            .unwrap();
+        let p = repo.create("House", None, "house", 1_700_000_000).unwrap();
         repo.add_locus(p.id, card_id, 0.0, 0.0, 0.0, None, 1_700_000_001)
             .unwrap();
         let err = repo
@@ -519,9 +515,7 @@ mod tests {
         let card_id = seed_deck_and_card(&db);
         let conn = db.lock();
         let repo = PalaceRepo::new(&conn);
-        let p = repo
-            .create("House", None, "house", 1_700_000_000)
-            .unwrap();
+        let p = repo.create("House", None, "house", 1_700_000_000).unwrap();
         repo.add_locus(p.id, card_id, 0.0, 0.0, 0.0, None, 1_700_000_001)
             .unwrap();
         let before: i64 = conn
@@ -541,9 +535,7 @@ mod tests {
         let card_id = seed_deck_and_card(&db);
         let conn = db.lock();
         let repo = PalaceRepo::new(&conn);
-        let p = repo
-            .create("House", None, "house", 1_700_000_000)
-            .unwrap();
+        let p = repo.create("House", None, "house", 1_700_000_000).unwrap();
         let l = repo
             .add_locus(p.id, card_id, 0.0, 0.0, 0.0, None, 1_700_000_001)
             .unwrap();

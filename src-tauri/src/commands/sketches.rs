@@ -54,5 +54,8 @@ pub fn get_card_sketches(
     limit: u32,
 ) -> AppResult<Vec<Sketch>> {
     let conn = state.db.lock();
-    state.db.sketches(&conn).get_for_card(card_id, limit.min(50))
+    state
+        .db
+        .sketches(&conn)
+        .get_for_card(card_id, limit.min(50))
 }

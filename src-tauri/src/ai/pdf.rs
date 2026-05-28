@@ -39,7 +39,11 @@ pub fn chunk_text(text: &str, target_chars: usize) -> Vec<String> {
     let mut chunks: Vec<String> = Vec::new();
     let mut current = String::new();
 
-    for paragraph in trimmed.split("\n\n").map(str::trim).filter(|p| !p.is_empty()) {
+    for paragraph in trimmed
+        .split("\n\n")
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+    {
         // If appending the next paragraph would blow the budget *and* we
         // already have content buffered, flush before starting fresh.
         if !current.is_empty() && current.len() + paragraph.len() + 2 > target_chars {

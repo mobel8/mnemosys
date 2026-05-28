@@ -95,7 +95,10 @@ fn extract_reviews_skips_unsynced_parent_cards() {
     let db = Database::for_test();
     let conn = db.lock();
 
-    let deck = db.decks(&conn).create("D", None, "#fff", 0.9, None, None, None).unwrap();
+    let deck = db
+        .decks(&conn)
+        .create("D", None, "#fff", 0.9, None, None, None)
+        .unwrap();
     let note = db
         .notes(&conn)
         .create(
@@ -154,9 +157,11 @@ fn apply_decks_inserts_unknown_remote_row() {
     assert_eq!(stats.inserted, 1);
 
     let name: String = conn
-        .query_row("SELECT name FROM decks WHERE remote_id = ?1", params!["deck-uuid-1"], |r| {
-            r.get(0)
-        })
+        .query_row(
+            "SELECT name FROM decks WHERE remote_id = ?1",
+            params!["deck-uuid-1"],
+            |r| r.get(0),
+        )
         .unwrap();
     assert_eq!(name, "Cloud Deck");
 }
@@ -188,7 +193,11 @@ fn apply_decks_lww_keeps_local_when_remote_older() {
     assert_eq!(stats.updated, 0);
 
     let name: String = conn
-        .query_row("SELECT name FROM decks WHERE remote_id = 'uuid-x'", [], |r| r.get(0))
+        .query_row(
+            "SELECT name FROM decks WHERE remote_id = 'uuid-x'",
+            [],
+            |r| r.get(0),
+        )
         .unwrap();
     assert_eq!(name, "Local newer");
 }
@@ -290,7 +299,10 @@ fn apply_reviews_unions_by_card_and_reviewed_at() {
     let db = Database::for_test();
     let conn = db.lock();
 
-    let deck = db.decks(&conn).create("D", None, "#fff", 0.9, None, None, None).unwrap();
+    let deck = db
+        .decks(&conn)
+        .create("D", None, "#fff", 0.9, None, None, None)
+        .unwrap();
     conn.execute(
         "UPDATE decks SET remote_id = 'd-uuid' WHERE id = ?1",
         params![deck.id],
@@ -377,7 +389,10 @@ fn apply_cards_inserts_when_parents_exist() {
     let db = Database::for_test();
     let conn = db.lock();
     // Seed parent deck + note.
-    let deck = db.decks(&conn).create("D", None, "#fff", 0.9, None, None, None).unwrap();
+    let deck = db
+        .decks(&conn)
+        .create("D", None, "#fff", 0.9, None, None, None)
+        .unwrap();
     conn.execute(
         "UPDATE decks SET remote_id = 'd2' WHERE id = ?1",
         params![deck.id],

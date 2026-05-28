@@ -94,11 +94,7 @@ struct AuthUser {
 /// frontend can surface them in a toast without leaking the underlying
 /// reqwest details. A non-2xx HTTP status is folded into `AppError::Validation`
 /// because the most common case is « wrong password » — actionable user input.
-pub async fn login(
-    config: &SupabaseConfig,
-    email: &str,
-    password: &str,
-) -> AppResult<SyncSession> {
+pub async fn login(config: &SupabaseConfig, email: &str, password: &str) -> AppResult<SyncSession> {
     if email.trim().is_empty() {
         return Err(AppError::Validation("email must not be empty".into()));
     }
@@ -219,18 +215,14 @@ mod auth_tests {
 
     #[test]
     fn supabase_config_rejects_missing_anon_key() {
-        let err =
-            SupabaseConfig::from_settings(Some("https://x.supabase.co"), None).unwrap_err();
+        let err = SupabaseConfig::from_settings(Some("https://x.supabase.co"), None).unwrap_err();
         assert!(matches!(err, AppError::Validation(_)));
     }
 
     #[test]
     fn supabase_config_strips_trailing_slash() {
-        let cfg = SupabaseConfig::from_settings(
-            Some("https://x.supabase.co/"),
-            Some("anon-key"),
-        )
-        .expect("valid config");
+        let cfg = SupabaseConfig::from_settings(Some("https://x.supabase.co/"), Some("anon-key"))
+            .expect("valid config");
         assert_eq!(cfg.url, "https://x.supabase.co");
         assert_eq!(cfg.anon_key, "anon-key");
     }

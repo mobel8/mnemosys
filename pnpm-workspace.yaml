@@ -1,5 +1,12 @@
+# Single-package repo (NOT a monorepo). This file only carries pnpm settings
+# that, since pnpm 10, must live here instead of the package.json "pnpm" field.
+#
+# pnpm blocks dependency build/postinstall scripts by default and records the
+# per-dependency decision in `allowBuilds` (the map it templates with "set this
+# to true or false"). We fill it explicitly so `pnpm install` is deterministic,
+# exits 0, and never rewrites this file:
+#   - esbuild → true  : its postinstall fetches the platform binary `vite build` needs.
+#   - core-js → false : its postinstall only prints a funding banner; skip it.
 allowBuilds:
-  core-js: set this to true or false
-  esbuild: set this to true or false
-onlyBuiltDependencies:
-  - esbuild
+  esbuild: true
+  core-js: false

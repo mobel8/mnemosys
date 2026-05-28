@@ -500,7 +500,14 @@ mod tests {
     /// Seed `count` reviews for the first card of `deck_id` at time `now`, all
     /// with `rating` (≥3 = correct for retention). Creates a basic note (hence
     /// a card) first.
-    fn seed_reviews(db: &Database, conn: &rusqlite::Connection, deck_id: i64, rating: i64, count: i64, now: i64) {
+    fn seed_reviews(
+        db: &Database,
+        conn: &rusqlite::Connection,
+        deck_id: i64,
+        rating: i64,
+        count: i64,
+        now: i64,
+    ) {
         let note = db
             .notes(conn)
             .create(
@@ -550,19 +557,28 @@ mod tests {
 
         // Before any reviews: A not mastered, B locked.
         let status_b = db.decks(&conn).mastery_status(deck_b.id).unwrap();
-        assert!(!status_b.unlocked, "B should be locked before A is mastered");
+        assert!(
+            !status_b.unlocked,
+            "B should be locked before A is mastered"
+        );
         assert_eq!(status_b.prerequisite_id, Some(deck_a.id));
         assert!(!status_b.prerequisite_mastered);
 
         // Too few reviews (only 10, all correct) — still below the 20 floor.
         seed_reviews(&db, &conn, deck_a.id, 4, 10, now);
         let status_b = db.decks(&conn).mastery_status(deck_b.id).unwrap();
-        assert!(!status_b.unlocked, "10 reviews is below the 20-review floor");
+        assert!(
+            !status_b.unlocked,
+            "10 reviews is below the 20-review floor"
+        );
 
         // Now push A well past 20 reviews, all correct → retention 1.0 ≥ 0.9.
         seed_reviews(&db, &conn, deck_a.id, 4, 15, now);
         let status_a = db.decks(&conn).mastery_status(deck_a.id).unwrap();
-        assert!(status_a.mastered, "A should be mastered (25 correct reviews)");
+        assert!(
+            status_a.mastered,
+            "A should be mastered (25 correct reviews)"
+        );
         assert!((status_a.retention_rate - 1.0).abs() < 1e-9);
         assert_eq!(status_a.review_count, 25);
 
@@ -596,7 +612,10 @@ mod tests {
         assert_eq!(status_a.review_count, 25);
 
         let status_b = db.decks(&conn).mastery_status(deck_b.id).unwrap();
-        assert!(!status_b.unlocked, "B stays locked when A's retention is low");
+        assert!(
+            !status_b.unlocked,
+            "B stays locked when A's retention is low"
+        );
     }
 
     #[test]

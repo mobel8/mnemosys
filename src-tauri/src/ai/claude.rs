@@ -172,7 +172,10 @@ impl ClaudeClient {
             // Surface the raw body — Anthropic embeds a JSON `{"type":
             // "error", "error": {"type": "...", "message": "..."}}` which is
             // already human-readable enough for our top-level toast.
-            let body = resp.text().await.unwrap_or_else(|_| "<no body>".to_string());
+            let body = resp
+                .text()
+                .await
+                .unwrap_or_else(|_| "<no body>".to_string());
             return Err(ClaudeError::Api {
                 status: status.as_u16(),
                 message: body,

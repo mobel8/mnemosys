@@ -208,14 +208,13 @@ pub fn apply_import(db: &Database, import: ExportFile) -> AppResult<ImportResult
         for note in deck_data.notes {
             // NoteRepo::create also materialises every derived card row, so
             // we don't need a separate card-count pass per template.
-            db.notes(&conn)
-                .create(
-                    deck.id,
-                    note.template,
-                    note.fields,
-                    note.tags,
-                    note.frequency_band,
-                )?;
+            db.notes(&conn).create(
+                deck.id,
+                note.template,
+                note.fields,
+                note.tags,
+                note.frequency_band,
+            )?;
             notes_imported += 1;
         }
 
@@ -241,10 +240,7 @@ pub fn apply_import(db: &Database, import: ExportFile) -> AppResult<ImportResult
 
 /// Read a Mnemosys JSON export from `path` and ingest it into the live DB.
 #[tauri::command]
-pub fn import_json(
-    state: State<'_, AppState>,
-    path: String,
-) -> AppResult<ImportResult> {
+pub fn import_json(state: State<'_, AppState>, path: String) -> AppResult<ImportResult> {
     let content = std::fs::read_to_string(&path)?;
     let import: ExportFile = serde_json::from_str(&content)
         .map_err(|e| AppError::Validation(format!("Invalid Mnemosys JSON: {}", e)))?;
@@ -308,7 +304,12 @@ mod tests {
         let db = seed_db_with_two_decks();
         let deck_ids: Vec<i64> = {
             let conn = db.lock();
-            db.decks(&conn).list().unwrap().iter().map(|d| d.id).collect()
+            db.decks(&conn)
+                .list()
+                .unwrap()
+                .iter()
+                .map(|d| d.id)
+                .collect()
         };
 
         let export = build_export(&db, &deck_ids).unwrap();

@@ -20,12 +20,12 @@
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
+use crate::ai::cards::{build_card_prompt, parse_cards_response, SYSTEM_PROMPT};
+use crate::ai::ollama::{DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL};
 use crate::ai::{
     build_image_prompt, critique_cards, generate_cards_from_pdf, generate_cards_from_text,
     generate_mnemonic, CardCritique, ClaudeClient, GeneratedCard, ImageClient, OllamaClient,
 };
-use crate::ai::cards::{build_card_prompt, parse_cards_response, SYSTEM_PROMPT};
-use crate::ai::ollama::{DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL};
 use crate::app_state::AppState;
 use crate::db::CardRepo;
 use crate::error::{AppError, AppResult};
@@ -198,9 +198,8 @@ pub async fn generate_cards_pdf(
         ));
     }
 
-    let bytes = std::fs::read(&pdf_path).map_err(|e| {
-        AppError::Validation(format!("cannot read PDF at {}: {}", pdf_path, e))
-    })?;
+    let bytes = std::fs::read(&pdf_path)
+        .map_err(|e| AppError::Validation(format!("cannot read PDF at {}: {}", pdf_path, e)))?;
 
     let api_key = resolve_api_key(&app)?;
     let client = ClaudeClient::new(api_key);

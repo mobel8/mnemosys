@@ -73,9 +73,7 @@ pub fn get_interleaved_due_cards(
         ));
     }
     if limit == 0 {
-        return Err(AppError::Validation(
-            "limit must be at least 1".to_string(),
-        ));
+        return Err(AppError::Validation("limit must be at least 1".to_string()));
     }
     let now = chrono::Utc::now().timestamp();
     let conn = state.db.lock();
@@ -86,10 +84,7 @@ pub fn get_interleaved_due_cards(
 }
 
 #[tauri::command]
-pub fn preview_next_states(
-    state: State<'_, AppState>,
-    card_id: i64,
-) -> AppResult<NextStatesDTO> {
+pub fn preview_next_states(state: State<'_, AppState>, card_id: i64) -> AppResult<NextStatesDTO> {
     let now = chrono::Utc::now().timestamp();
     let (card, kind) = {
         let conn = state.db.lock();
@@ -315,4 +310,3 @@ fn outcome_to_dto(o: &SchedulerOutcome) -> NextStateDTO {
         interval_days: o.scheduled_days as f32,
     }
 }
-

@@ -124,9 +124,7 @@ fn sample_deck_excerpts(state: &AppState, deck_id: i64) -> AppResult<Vec<String>
          LIMIT ?2",
     )?;
     let limit = MAX_SOURCE_NOTES as i64;
-    let rows = stmt.query_map(rusqlite::params![deck_id, limit], |r| {
-        r.get::<_, String>(0)
-    })?;
+    let rows = stmt.query_map(rusqlite::params![deck_id, limit], |r| r.get::<_, String>(0))?;
     let mut all_excerpts = Vec::new();
     for fields_json in rows.flatten() {
         if let Some(excerpt) = excerpt_from_fields(&fields_json) {
@@ -184,7 +182,11 @@ pub async fn generate_pre_questions(
     if n != count && count != 0 {
         log::debug!("generate_pre_questions: clamped count {} to {}", count, n);
     }
-    let target = if n == 0 { DEFAULT_PRE_QUESTION_COUNT } else { n };
+    let target = if n == 0 {
+        DEFAULT_PRE_QUESTION_COUNT
+    } else {
+        n
+    };
 
     let excerpts = sample_deck_excerpts(&state, deck_id)?;
     if excerpts.is_empty() {

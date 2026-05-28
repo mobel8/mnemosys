@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.8.0",
   "type": "module",
+  "packageManager": "pnpm@11.3.0",
   "description": "Next-gen spaced repetition (SRS) desktop app powered by Tauri 2 + React 19 + FSRS-rs",
   "scripts": {
     "dev": "vite",

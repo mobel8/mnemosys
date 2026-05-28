@@ -646,6 +646,9 @@ mod tests {
              VALUES ('bad', '#3b82f6', 0.9, 'anki21', ?1, ?1)",
             rusqlite::params![now],
         );
-        assert!(bad.is_err(), "unknown scheduler_kind must violate the CHECK");
+        assert!(
+            bad.is_err(),
+            "unknown scheduler_kind must violate the CHECK"
+        );
     }
 }

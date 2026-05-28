@@ -157,14 +157,18 @@ mod tests {
 
         assert_eq!(crit[1].card_index, 1);
         assert_eq!(crit[1].issues.len(), 2);
-        let fix = crit[1].suggested_fix.as_ref().expect("low score must carry a fix");
+        let fix = crit[1]
+            .suggested_fix
+            .as_ref()
+            .expect("low score must carry a fix");
         assert!(matches!(fix.template, CardTemplate::Basic));
         assert_eq!(fix.fields["front"], "Q ?");
     }
 
     #[test]
     fn parses_critique_with_markdown_fences() {
-        let raw = "```json\n[{\"card_index\":0,\"score\":1.0,\"issues\":[],\"suggested_fix\":null}]\n```";
+        let raw =
+            "```json\n[{\"card_index\":0,\"score\":1.0,\"issues\":[],\"suggested_fix\":null}]\n```";
         let crit = parse_critique_response(raw).expect("fenced JSON must parse");
         assert_eq!(crit.len(), 1);
         assert!((crit[0].score - 1.0).abs() < 1e-6);

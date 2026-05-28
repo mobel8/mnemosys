@@ -157,12 +157,7 @@ impl<'a> NoteRepo<'a> {
         Self { conn }
     }
 
-    pub fn list_in_deck(
-        &self,
-        deck_id: i64,
-        limit: u32,
-        offset: u32,
-    ) -> AppResult<Vec<Note>> {
+    pub fn list_in_deck(&self, deck_id: i64, limit: u32, offset: u32) -> AppResult<Vec<Note>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, deck_id, template, fields, tags, created_at, updated_at, frequency_band
              FROM notes
@@ -468,12 +463,14 @@ fn validate_fields(template: NoteTemplate, fields: &serde_json::Value) -> AppRes
     match template {
         NoteTemplate::Basic | NoteTemplate::BasicReverse => {
             for key in ["front", "back"] {
-                let v = obj
-                    .get(key)
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| AppError::Validation(format!("missing string field '{}'", key)))?;
+                let v = obj.get(key).and_then(|v| v.as_str()).ok_or_else(|| {
+                    AppError::Validation(format!("missing string field '{}'", key))
+                })?;
                 if v.trim().is_empty() {
-                    return Err(AppError::Validation(format!("field '{}' must not be empty", key)));
+                    return Err(AppError::Validation(format!(
+                        "field '{}' must not be empty",
+                        key
+                    )));
                 }
             }
         }
@@ -500,12 +497,9 @@ fn validate_fields(template: NoteTemplate, fields: &serde_json::Value) -> AppRes
                     "occlusion note 'image_path' must not be empty".into(),
                 ));
             }
-            let masks = obj
-                .get("masks")
-                .and_then(|v| v.as_array())
-                .ok_or_else(|| {
-                    AppError::Validation("occlusion note requires a 'masks' array".into())
-                })?;
+            let masks = obj.get("masks").and_then(|v| v.as_array()).ok_or_else(|| {
+                AppError::Validation("occlusion note requires a 'masks' array".into())
+            })?;
             if masks.is_empty() {
                 return Err(AppError::Validation(
                     "occlusion note must declare at least one mask".into(),
@@ -543,12 +537,9 @@ fn validate_fields(template: NoteTemplate, fields: &serde_json::Value) -> AppRes
             // those because « no notes » and « unknown languages » are
             // both perfectly valid.
             for key in ["source", "target"] {
-                let v = obj
-                    .get(key)
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        AppError::Validation(format!("missing string field '{}'", key))
-                    })?;
+                let v = obj.get(key).and_then(|v| v.as_str()).ok_or_else(|| {
+                    AppError::Validation(format!("missing string field '{}'", key))
+                })?;
                 if v.trim().is_empty() {
                     return Err(AppError::Validation(format!(
                         "field '{}' must not be empty",
@@ -613,12 +604,9 @@ fn validate_fields(template: NoteTemplate, fields: &serde_json::Value) -> AppRes
             // Both the misconception and its correction are required — the
             // whole card hinges on the contrast.
             for key in ["misconception", "correct"] {
-                let v = obj
-                    .get(key)
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        AppError::Validation(format!("missing string field '{}'", key))
-                    })?;
+                let v = obj.get(key).and_then(|v| v.as_str()).ok_or_else(|| {
+                    AppError::Validation(format!("missing string field '{}'", key))
+                })?;
                 if v.trim().is_empty() {
                     return Err(AppError::Validation(format!(
                         "field '{}' must not be empty",
@@ -639,12 +627,9 @@ fn validate_fields(template: NoteTemplate, fields: &serde_json::Value) -> AppRes
             // The problem statement (recto) and the final answer are both
             // required and non-blank — the card is meaningless without either.
             for key in ["problem", "answer"] {
-                let v = obj
-                    .get(key)
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        AppError::Validation(format!("missing string field '{}'", key))
-                    })?;
+                let v = obj.get(key).and_then(|v| v.as_str()).ok_or_else(|| {
+                    AppError::Validation(format!("missing string field '{}'", key))
+                })?;
                 if v.trim().is_empty() {
                     return Err(AppError::Validation(format!(
                         "field '{}' must not be empty",
@@ -654,12 +639,9 @@ fn validate_fields(template: NoteTemplate, fields: &serde_json::Value) -> AppRes
             }
             // `steps` is the faded scaffolding — an array of strings with at
             // least one non-empty entry. Each entry must itself be a string.
-            let steps = obj
-                .get("steps")
-                .and_then(|v| v.as_array())
-                .ok_or_else(|| {
-                    AppError::Validation("worked example requires a 'steps' array".into())
-                })?;
+            let steps = obj.get("steps").and_then(|v| v.as_array()).ok_or_else(|| {
+                AppError::Validation("worked example requires a 'steps' array".into())
+            })?;
             let non_empty_steps = steps
                 .iter()
                 .filter(|s| s.as_str().map(|t| !t.trim().is_empty()).unwrap_or(false))
@@ -683,10 +665,7 @@ fn validate_fields(template: NoteTemplate, fields: &serde_json::Value) -> AppRes
 }
 
 /// Determine the ordinal list for the cards belonging to a freshly-created note.
-fn ords_for_template(
-    template: NoteTemplate,
-    fields: &serde_json::Value,
-) -> AppResult<Vec<i64>> {
+fn ords_for_template(template: NoteTemplate, fields: &serde_json::Value) -> AppResult<Vec<i64>> {
     match template {
         NoteTemplate::Basic => Ok(vec![0]),
         NoteTemplate::BasicReverse => Ok(vec![0, 1]),
@@ -742,7 +721,9 @@ pub(crate) fn extract_cloze_ords(text: &str) -> Vec<u32> {
             let mut num = 0u32;
             let mut any_digit = false;
             while j < bytes.len() && bytes[j].is_ascii_digit() {
-                num = num.saturating_mul(10).saturating_add((bytes[j] - b'0') as u32);
+                num = num
+                    .saturating_mul(10)
+                    .saturating_add((bytes[j] - b'0') as u32);
                 any_digit = true;
                 j += 1;
             }
@@ -823,9 +804,7 @@ mod tests {
 
         let ords: Vec<i64> = {
             let mut stmt = conn
-                .prepare(
-                    "SELECT card_ord FROM cards WHERE note_id = ?1 ORDER BY card_ord ASC",
-                )
+                .prepare("SELECT card_ord FROM cards WHERE note_id = ?1 ORDER BY card_ord ASC")
                 .unwrap();
             stmt.query_map(rusqlite::params![note.id], |r| r.get::<_, i64>(0))
                 .unwrap()
@@ -839,7 +818,10 @@ mod tests {
     fn occlusion_rejects_empty_masks() {
         let db = Database::for_test();
         let conn = db.lock();
-        let deck = db.decks(&conn).create("X", None, "#3b82f6", 0.9, None, None, None).unwrap();
+        let deck = db
+            .decks(&conn)
+            .create("X", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
 
         let err = db
             .notes(&conn)
@@ -863,7 +845,10 @@ mod tests {
     fn occlusion_rejects_missing_image_path() {
         let db = Database::for_test();
         let conn = db.lock();
-        let deck = db.decks(&conn).create("Y", None, "#3b82f6", 0.9, None, None, None).unwrap();
+        let deck = db
+            .decks(&conn)
+            .create("Y", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
 
         let err = db
             .notes(&conn)

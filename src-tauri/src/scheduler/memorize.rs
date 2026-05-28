@@ -138,11 +138,7 @@ fn interval_from_rate(n: f64) -> i64 {
 /// Pure transition: scale the forgetting rate by the rating's factor and
 /// pick the next lifecycle bucket. Mirrors the other schedulers' state rules
 /// (Again → Relearning; first correct graduates out of New/Learning).
-fn apply_rating(
-    state_before: CardState,
-    n_prev: f64,
-    rating: MemorizeRating,
-) -> (CardState, f64) {
+fn apply_rating(state_before: CardState, n_prev: f64, rating: MemorizeRating) -> (CardState, f64) {
     let factor = match rating {
         MemorizeRating::Again => AGAIN_FACTOR,
         MemorizeRating::Hard => HARD_FACTOR,
@@ -241,7 +237,10 @@ mod tests {
             easy.scheduled_days,
             good.scheduled_days
         );
-        assert!(easy.difficulty < good.difficulty, "Easy lowers the rate more");
+        assert!(
+            easy.difficulty < good.difficulty,
+            "Easy lowers the rate more"
+        );
     }
 
     #[test]

@@ -12,8 +12,8 @@ use zip::write::SimpleFileOptions;
 use zip::CompressionMethod;
 use zip::ZipWriter;
 
-use super::parser::parse_apkg;
 use super::converter::convert_to_mnemosys;
+use super::parser::parse_apkg;
 use crate::db::Database;
 use crate::error::AppError;
 
@@ -105,7 +105,8 @@ fn build_apkg(inserts: &str) -> Vec<u8> {
 /// canonical happy-path fixture across multiple tests.
 fn minimal_basic_apkg() -> Vec<u8> {
     let decks = r#"{"1001":{"id":1001,"name":"Test Deck","desc":"Test deck"}}"#;
-    let models = r#"{"2001":{"id":2001,"name":"Basic","type":0,"flds":[{"name":"Front"},{"name":"Back"}]}}"#;
+    let models =
+        r#"{"2001":{"id":2001,"name":"Basic","type":0,"flds":[{"name":"Front"},{"name":"Back"}]}}"#;
     let inserts = format!(
         r#"
         INSERT INTO col (id, decks, models) VALUES (1, '{decks}', '{models}');
@@ -225,7 +226,8 @@ fn media_manifest_is_parsed_when_present() {
         zip.start_file("collection.anki2", opts).unwrap();
         zip.write_all(&db_bytes).unwrap();
         zip.start_file("media", opts).unwrap();
-        zip.write_all(br#"{"0":"front.jpg","1":"audio.mp3"}"#).unwrap();
+        zip.write_all(br#"{"0":"front.jpg","1":"audio.mp3"}"#)
+            .unwrap();
         zip.finish().unwrap();
     }
 
@@ -288,7 +290,8 @@ fn convert_skips_decks_with_existing_names() {
 #[test]
 fn convert_handles_cloze_model() {
     let decks = r#"{"1100":{"id":1100,"name":"Cloze Deck","desc":""}}"#;
-    let models = r#"{"2100":{"id":2100,"name":"Cloze","type":1,"flds":[{"name":"Text"},{"name":"Extra"}]}}"#;
+    let models =
+        r#"{"2100":{"id":2100,"name":"Cloze","type":1,"flds":[{"name":"Text"},{"name":"Extra"}]}}"#;
     let cloze_text = "The capital of {{c1::France}} is {{c2::Paris}}";
     let inserts = format!(
         r#"
@@ -351,7 +354,8 @@ fn convert_skips_notes_with_empty_fields() {
     // Anki technically allows blank `flds`; Mnemosys' NoteRepo refuses them.
     // The importer must absorb the validation error rather than aborting.
     let decks = r#"{"1300":{"id":1300,"name":"Blanky","desc":""}}"#;
-    let models = r#"{"2300":{"id":2300,"name":"Basic","type":0,"flds":[{"name":"Front"},{"name":"Back"}]}}"#;
+    let models =
+        r#"{"2300":{"id":2300,"name":"Basic","type":0,"flds":[{"name":"Front"},{"name":"Back"}]}}"#;
     let inserts = format!(
         r#"
         INSERT INTO col (id, decks, models) VALUES (1, '{decks}', '{models}');
@@ -369,14 +373,18 @@ fn convert_skips_notes_with_empty_fields() {
 
     assert_eq!(result.stats.decks_imported, 1);
     assert_eq!(result.stats.notes_imported, 0);
-    assert_eq!(result.stats.notes_skipped, 1, "empty field note must be skipped");
+    assert_eq!(
+        result.stats.notes_skipped, 1,
+        "empty field note must be skipped"
+    );
 }
 
 #[test]
 fn convert_counts_orphan_notes_separately() {
     // Note 3400 has no matching card row → orphan.
     let decks = r#"{"1400":{"id":1400,"name":"Orphan Deck","desc":""}}"#;
-    let models = r#"{"2400":{"id":2400,"name":"Basic","type":0,"flds":[{"name":"Front"},{"name":"Back"}]}}"#;
+    let models =
+        r#"{"2400":{"id":2400,"name":"Basic","type":0,"flds":[{"name":"Front"},{"name":"Back"}]}}"#;
     let inserts = format!(
         r#"
         INSERT INTO col (id, decks, models) VALUES (1, '{decks}', '{models}');
@@ -398,7 +406,8 @@ fn convert_skips_anki_default_deck() {
     // Anki's built-in Default deck (id=1) is silently dropped so we don't
     // collide with a user's existing inbox.
     let decks = r#"{"1":{"id":1,"name":"Default","desc":""},"1500":{"id":1500,"name":"Real Deck","desc":""}}"#;
-    let models = r#"{"2500":{"id":2500,"name":"Basic","type":0,"flds":[{"name":"Front"},{"name":"Back"}]}}"#;
+    let models =
+        r#"{"2500":{"id":2500,"name":"Basic","type":0,"flds":[{"name":"Front"},{"name":"Back"}]}}"#;
     let inserts = format!(
         r#"
         INSERT INTO col (id, decks, models) VALUES (1, '{decks}', '{models}');

@@ -46,10 +46,12 @@ pub fn record_jol(
     }
     let now = Utc::now().timestamp();
     let conn = state.db.lock();
-    state
-        .db
-        .metacognition(&conn)
-        .record_prediction(card_id, predicted_prob, horizon_days.unwrap_or(7), now)
+    state.db.metacognition(&conn).record_prediction(
+        card_id,
+        predicted_prob,
+        horizon_days.unwrap_or(7),
+        now,
+    )
 }
 
 #[tauri::command]
@@ -61,10 +63,11 @@ pub fn get_pending_jols(
     let now = Utc::now().timestamp();
     let conn = state.db.lock();
 
-    let pending = state
-        .db
-        .metacognition(&conn)
-        .pending_predictions(min_age_minutes, limit.min(20), now)?;
+    let pending =
+        state
+            .db
+            .metacognition(&conn)
+            .pending_predictions(min_age_minutes, limit.min(20), now)?;
 
     let mut out = Vec::with_capacity(pending.len());
     for prediction in pending {

@@ -52,8 +52,7 @@ pub fn convert_to_mnemosys(db: &Database, anki: AnkiCollection) -> AppResult<Con
     let conn = db.lock();
 
     // Index models by id so we don't do a linear scan per note.
-    let models_by_id: HashMap<i64, &AnkiModel> =
-        anki.models.iter().map(|m| (m.id, m)).collect();
+    let models_by_id: HashMap<i64, &AnkiModel> = anki.models.iter().map(|m| (m.id, m)).collect();
 
     // Anki notes with zero cards (orphans) are rare but not impossible.
     // Build a quick `note_id -> Vec<deck_id>` index so we can both detect

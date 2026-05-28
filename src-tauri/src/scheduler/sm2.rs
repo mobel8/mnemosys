@@ -168,7 +168,10 @@ fn apply_rating(
         }
         Sm2Rating::Easy => {
             let ef_next = (ef_prev + 0.15).min(EF_MAX);
-            let interval = clamp_interval((prev_interval as f64) * ef_next * EASY_BONUS, interval_floor);
+            let interval = clamp_interval(
+                (prev_interval as f64) * ef_next * EASY_BONUS,
+                interval_floor,
+            );
             (CardState::Review, interval, ef_next)
         }
     }

@@ -158,7 +158,12 @@ mod tests {
         let conn = db.lock();
         let repo = SketchRepo::new(&conn);
         let s = repo
-            .insert(review_id, card_id, "data:image/png;base64,iVBOR=", 1_700_000_001)
+            .insert(
+                review_id,
+                card_id,
+                "data:image/png;base64,iVBOR=",
+                1_700_000_001,
+            )
             .unwrap();
         assert_eq!(s.card_id, card_id);
         let listed = repo.get_for_card(card_id, 5).unwrap();
@@ -172,7 +177,8 @@ mod tests {
         let (card_id, review_id) = seed_card_and_review(&db);
         let conn = db.lock();
         let repo = SketchRepo::new(&conn);
-        repo.insert(review_id, card_id, "data:image/png;base64,A", 1).unwrap();
+        repo.insert(review_id, card_id, "data:image/png;base64,A", 1)
+            .unwrap();
         let deleted = repo.delete_for_card(card_id).unwrap();
         assert_eq!(deleted, 1);
         assert!(repo.get_for_card(card_id, 5).unwrap().is_empty());

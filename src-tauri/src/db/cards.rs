@@ -45,7 +45,10 @@ impl FromStr for CardState {
             "learning" => Ok(CardState::Learning),
             "review" => Ok(CardState::Review),
             "relearning" => Ok(CardState::Relearning),
-            other => Err(AppError::Database(format!("invalid card state '{}'", other))),
+            other => Err(AppError::Database(format!(
+                "invalid card state '{}'",
+                other
+            ))),
         }
     }
 }
@@ -135,12 +138,7 @@ impl<'a> CardRepo<'a> {
     }
 
     /// Create a brand-new card for an existing note. Used by `NoteRepo::create`.
-    pub fn create_for_note(
-        &self,
-        note_id: i64,
-        deck_id: i64,
-        card_ord: i64,
-    ) -> AppResult<Card> {
+    pub fn create_for_note(&self, note_id: i64, deck_id: i64, card_ord: i64) -> AppResult<Card> {
         let now = Utc::now().timestamp();
         self.conn.execute(
             "INSERT INTO cards (note_id, deck_id, card_ord, state, created_at, updated_at)
@@ -168,7 +166,12 @@ impl<'a> CardRepo<'a> {
         let card = self.get(id)?;
         let next_review = reviewed_at + scheduled_days * 86_400;
         let new_reps = card.reps + 1;
-        let new_lapses = card.lapses + if matches!(state, CardState::Relearning) { 1 } else { 0 };
+        let new_lapses = card.lapses
+            + if matches!(state, CardState::Relearning) {
+                1
+            } else {
+                0
+            };
         let elapsed = card
             .last_review
             .map(|prev| (reviewed_at - prev).max(0) / 86_400)
@@ -410,10 +413,7 @@ impl<'a> CardRepo<'a> {
         params_dyn.push(rusqlite::types::Value::Integer(now));
         params_dyn.push(rusqlite::types::Value::Integer(prefetch_cap as i64));
 
-        let rows = stmt.query_map(
-            rusqlite::params_from_iter(params_dyn.iter()),
-            row_to_card,
-        )?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(params_dyn.iter()), row_to_card)?;
 
         let mut cards = Vec::new();
         for r in rows {
@@ -474,8 +474,13 @@ fn shuffle_in_place<T>(items: &mut [T]) {
 
 fn row_to_card(row: &Row<'_>) -> rusqlite::Result<Card> {
     let state_str: String = row.get(4)?;
-    let state = CardState::from_str(&state_str)
-        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, Box::new(std::io::Error::other(e.to_string()))))?;
+    let state = CardState::from_str(&state_str).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(
+            4,
+            rusqlite::types::Type::Text,
+            Box::new(std::io::Error::other(e.to_string())),
+        )
+    })?;
     let suspended_int: i64 = row.get(13)?;
     Ok(Card {
         id: row.get(0)?,
@@ -647,7 +652,11 @@ mod tests {
 
         let due = cards.due_cards(Some(deck.id), NOW, 50).unwrap();
         let ids: Vec<i64> = due.iter().map(|c| c.card.id).collect();
-        assert_eq!(ids, vec![due_id], "only the past-due, unsuspended card is returned");
+        assert_eq!(
+            ids,
+            vec![due_id],
+            "only the past-due, unsuspended card is returned"
+        );
 
         // The count helper must agree with the list.
         assert_eq!(cards.due_cards_count(Some(deck.id), NOW).unwrap(), 1);
@@ -684,7 +693,11 @@ mod tests {
         let all = cards
             .due_cards_interleaved(&[deck_a, deck_b], NOW, 50)
             .unwrap();
-        assert_eq!(all.len(), 3, "every past-due card across both decks is pulled");
+        assert_eq!(
+            all.len(),
+            3,
+            "every past-due card across both decks is pulled"
+        );
         let decks_seen: std::collections::HashSet<i64> =
             all.iter().map(|c| c.card.deck_id).collect();
         assert!(decks_seen.contains(&deck_a) && decks_seen.contains(&deck_b));
@@ -696,7 +709,10 @@ mod tests {
         assert_eq!(capped.len(), 2, "limit caps the returned queue");
 
         // Empty inputs short-circuit to an empty queue (no panic, no SQL).
-        assert!(cards.due_cards_interleaved(&[], NOW, 10).unwrap().is_empty());
+        assert!(cards
+            .due_cards_interleaved(&[], NOW, 10)
+            .unwrap()
+            .is_empty());
         assert!(cards
             .due_cards_interleaved(&[deck_a], NOW, 0)
             .unwrap()

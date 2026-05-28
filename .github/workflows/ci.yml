@@ -38,9 +38,9 @@ jobs:
           node-version: "20"
 
       - name: Setup pnpm
+        # No `version:` — action-setup reads `packageManager` from
+        # package.json so CI matches the pnpm that generated the lockfile.
         uses: pnpm/action-setup@v4
-        with:
-          version: "9"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -119,9 +119,9 @@ jobs:
           node-version: "20"
 
       - name: Setup pnpm
+        # No `version:` — action-setup reads `packageManager` from
+        # package.json so CI matches the pnpm that generated the lockfile.
         uses: pnpm/action-setup@v4
-        with:
-          version: "9"
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable

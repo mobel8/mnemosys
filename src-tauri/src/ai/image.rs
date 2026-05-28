@@ -35,7 +35,9 @@ const REQUEST_TIMEOUT_SECS: u64 = 120;
 /// can surface a "configure your OpenAI key" CTA on [`ImageError::NoApiKey`].
 #[derive(Debug, thiserror::Error)]
 pub enum ImageError {
-    #[error("OpenAI API key not configured. Set OPENAI_API_KEY env var or configure it in Settings.")]
+    #[error(
+        "OpenAI API key not configured. Set OPENAI_API_KEY env var or configure it in Settings."
+    )]
     NoApiKey,
     #[error("HTTP error: {0}")]
     Http(String),
@@ -252,7 +254,10 @@ mod tests {
     #[test]
     fn decode_b64_rejects_garbage() {
         assert!(decode_b64_png("not*base64!").is_none());
-        assert!(decode_b64_png("abc").is_none(), "length not a multiple of 4");
+        assert!(
+            decode_b64_png("abc").is_none(),
+            "length not a multiple of 4"
+        );
         assert!(decode_b64_png("").is_none());
     }
 

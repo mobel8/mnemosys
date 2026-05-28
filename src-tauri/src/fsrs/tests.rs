@@ -181,9 +181,7 @@ fn schedule_invariant_good_geq_hard_after_first_review() {
 fn second_review_good_increases_stability() {
     let s = CardScheduler::with_defaults().unwrap();
     let first = s.apply_review(None, 0, Rating::Good).unwrap();
-    let second = s
-        .apply_review(Some(first.memory), 5, Rating::Good)
-        .unwrap();
+    let second = s.apply_review(Some(first.memory), 5, Rating::Good).unwrap();
     assert!(
         second.memory.stability > first.memory.stability,
         "stability should grow: {} -> {}",

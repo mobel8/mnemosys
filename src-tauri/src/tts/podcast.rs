@@ -87,7 +87,10 @@ pub async fn synthesize_podcast(
 /// natural speech, so we count words and convert to seconds. Used only for a
 /// UI label ("≈4 min") so a 20% error is fine.
 pub fn estimate_duration_seconds(lines: &[PodcastLine]) -> u32 {
-    let word_count: usize = lines.iter().map(|l| l.text.split_whitespace().count()).sum();
+    let word_count: usize = lines
+        .iter()
+        .map(|l| l.text.split_whitespace().count())
+        .sum();
     // 150 wpm → 2.5 wps → seconds = words / 2.5.
     let seconds = (word_count as f64 / 2.5).round();
     seconds.max(1.0) as u32

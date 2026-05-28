@@ -102,7 +102,9 @@ pub fn synthesize_piper(binary: &str, model: &str, text: &str, out_path: &Path) 
             AppError::Other("Piper unavailable: failed to open child stdin.".to_string())
         })?;
         stdin.write_all(text.as_bytes()).map_err(|e| {
-            AppError::Other(format!("Piper unavailable: failed to write text to stdin ({e})."))
+            AppError::Other(format!(
+                "Piper unavailable: failed to write text to stdin ({e})."
+            ))
         })?;
     }
 

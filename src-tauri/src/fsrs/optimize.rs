@@ -264,7 +264,11 @@ mod tests {
         let err = optimize_params_from_history(&db).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("Insufficient"), "got: {}", msg);
-        assert!(msg.contains("1000"), "should mention threshold, got: {}", msg);
+        assert!(
+            msg.contains("1000"),
+            "should mention threshold, got: {}",
+            msg
+        );
     }
 
     #[test]

@@ -49,9 +49,12 @@ fn list_decks_alphabetical() {
     let db = Database::for_test();
     let conn = db.lock();
     let repo = db.decks(&conn);
-    repo.create("Charlie", None, "#000000", 0.9, None, None, None).unwrap();
-    repo.create("alpha", None, "#000000", 0.9, None, None, None).unwrap();
-    repo.create("Bravo", None, "#000000", 0.9, None, None, None).unwrap();
+    repo.create("Charlie", None, "#000000", 0.9, None, None, None)
+        .unwrap();
+    repo.create("alpha", None, "#000000", 0.9, None, None, None)
+        .unwrap();
+    repo.create("Bravo", None, "#000000", 0.9, None, None, None)
+        .unwrap();
 
     let decks = repo.list().unwrap();
     let names: Vec<&str> = decks.iter().map(|d| d.name.as_str()).collect();
@@ -636,7 +639,7 @@ fn deck_mastery_distribution_buckets_by_stability() {
                 NoteTemplate::Basic,
                 json!({ "front": format!("Q{}", i), "back": "A" }),
                 vec![],
-            None,
+                None,
             )
             .unwrap();
     }
@@ -680,7 +683,15 @@ fn wellness_log_round_trip() {
     let repo = db.wellness(&conn);
 
     let log = repo
-        .insert_log("2026-05-26", Some(4), Some(7.5), Some(2), true, false, 1_700_000_000)
+        .insert_log(
+            "2026-05-26",
+            Some(4),
+            Some(7.5),
+            Some(2),
+            true,
+            false,
+            1_700_000_000,
+        )
         .expect("insert");
     assert!(log.id > 0);
 
@@ -725,9 +736,20 @@ fn wellness_recent_logs_returns_newest_first() {
     let db = Database::for_test();
     let conn = db.lock();
     let repo = db.wellness(&conn);
-    for (i, date) in ["2026-05-24", "2026-05-25", "2026-05-26"].iter().enumerate() {
-        repo.insert_log(date, Some((i + 1) as i64), None, None, false, false, i as i64 + 1)
-            .unwrap();
+    for (i, date) in ["2026-05-24", "2026-05-25", "2026-05-26"]
+        .iter()
+        .enumerate()
+    {
+        repo.insert_log(
+            date,
+            Some((i + 1) as i64),
+            None,
+            None,
+            false,
+            false,
+            i as i64 + 1,
+        )
+        .unwrap();
     }
     let logs = repo.recent_logs(2).unwrap();
     assert_eq!(logs.len(), 2);
@@ -959,7 +981,7 @@ fn fresh_db_with_two_decks_of_due_cards(cards_per_deck: usize) -> (Database, i64
                             "back":  format!("{}-A{}", deck.name, i),
                         }),
                         vec![],
-                    None,
+                        None,
                     )
                     .unwrap();
                 let card_id = db
@@ -1134,7 +1156,12 @@ fn sketch_round_trip() {
     let conn = db.lock();
     let s = db
         .sketches(&conn)
-        .insert(review_id, card_id, "data:image/png;base64,AAAA", 1_700_000_100)
+        .insert(
+            review_id,
+            card_id,
+            "data:image/png;base64,AAAA",
+            1_700_000_100,
+        )
         .expect("insert");
     assert_eq!(s.card_id, card_id);
     let listed = db.sketches(&conn).get_for_card(card_id, 5).unwrap();
@@ -1150,7 +1177,12 @@ fn sketch_deleted_with_card_cascade() {
     {
         let conn = db.lock();
         db.sketches(&conn)
-            .insert(review_id, card_id, "data:image/png;base64,XYZ", 1_700_000_000)
+            .insert(
+                review_id,
+                card_id,
+                "data:image/png;base64,XYZ",
+                1_700_000_000,
+            )
             .unwrap();
         // Sanity: row is there.
         let n: i64 = conn
@@ -1161,8 +1193,11 @@ fn sketch_deleted_with_card_cascade() {
     // Deleting the parent card must cascade and drop the sketch row too.
     {
         let conn = db.lock();
-        conn.execute("DELETE FROM cards WHERE id = ?1", rusqlite::params![card_id])
-            .unwrap();
+        conn.execute(
+            "DELETE FROM cards WHERE id = ?1",
+            rusqlite::params![card_id],
+        )
+        .unwrap();
         let n: i64 = conn
             .query_row("SELECT COUNT(*) FROM review_sketches", [], |r| r.get(0))
             .unwrap();
@@ -1208,7 +1243,7 @@ fn jol_pending_filters_by_age_and_resolution() {
                 NoteTemplate::Basic,
                 json!({ "front": "Q2", "back": "A2" }),
                 vec![],
-            None,
+                None,
             )
             .unwrap();
         db.cards(&conn)
@@ -1224,9 +1259,11 @@ fn jol_pending_filters_by_age_and_resolution() {
         let conn = db.lock();
         let meta = db.metacognition(&conn);
         // Old prediction (90 min ago) on A — should appear as pending @30 min.
-        meta.record_prediction(card_a, 0.6, 7, now - 90 * 60).unwrap();
+        meta.record_prediction(card_a, 0.6, 7, now - 90 * 60)
+            .unwrap();
         // Recent prediction (5 min ago) on B — should NOT appear at 30 min filter.
-        meta.record_prediction(card_b, 0.4, 7, now - 5 * 60).unwrap();
+        meta.record_prediction(card_b, 0.4, 7, now - 5 * 60)
+            .unwrap();
     }
     let conn = db.lock();
     let pending = db
@@ -1255,9 +1292,15 @@ fn calibration_stats_returns_buckets() {
         let conn = db.lock();
         let meta = db.metacognition(&conn);
         // 5 resolved predictions spread across 0.1..0.9.
-        for (i, (p, ok)) in [(0.05, false), (0.25, false), (0.55, true), (0.85, true), (0.95, true)]
-            .iter()
-            .enumerate()
+        for (i, (p, ok)) in [
+            (0.05, false),
+            (0.25, false),
+            (0.55, true),
+            (0.85, true),
+            (0.95, true),
+        ]
+        .iter()
+        .enumerate()
         {
             let _ = meta
                 .record_prediction(card_id, *p, 7, 1_700_000_000 + i as i64)
@@ -1296,8 +1339,10 @@ fn calibration_gamma_perfect_correlation() {
         .iter()
         .enumerate()
         {
-            meta.record_prediction(card_id, *p, 7, 1_700_000_000 + i as i64).unwrap();
-            meta.resolve_prediction(card_id, *ok, 1_700_000_100 + i as i64).unwrap();
+            meta.record_prediction(card_id, *p, 7, 1_700_000_000 + i as i64)
+                .unwrap();
+            meta.resolve_prediction(card_id, *ok, 1_700_000_100 + i as i64)
+                .unwrap();
         }
     }
     let conn = db.lock();
@@ -1328,8 +1373,10 @@ fn calibration_gamma_inverse_correlation() {
         .iter()
         .enumerate()
         {
-            meta.record_prediction(card_id, *p, 7, 1_700_000_000 + i as i64).unwrap();
-            meta.resolve_prediction(card_id, *ok, 1_700_000_100 + i as i64).unwrap();
+            meta.record_prediction(card_id, *p, 7, 1_700_000_000 + i as i64)
+                .unwrap();
+            meta.resolve_prediction(card_id, *ok, 1_700_000_100 + i as i64)
+                .unwrap();
         }
     }
     let conn = db.lock();
@@ -1355,7 +1402,7 @@ fn seed_n_cards(db: &Database, deck_id: i64, n: usize) -> Vec<i64> {
                 NoteTemplate::Basic,
                 json!({ "front": format!("Q{}", i), "back": format!("A{}", i) }),
                 vec![],
-            None,
+                None,
             )
             .unwrap();
     }
@@ -1377,10 +1424,26 @@ fn palace_round_trip() {
         .create("My House", Some("Childhood home"), "house", 1_700_000_000)
         .expect("create palace");
     db.palaces(&conn)
-        .add_locus(p.id, cards[0], 0.0, 1.7, 0.0, Some("kitchen"), 1_700_000_001)
+        .add_locus(
+            p.id,
+            cards[0],
+            0.0,
+            1.7,
+            0.0,
+            Some("kitchen"),
+            1_700_000_001,
+        )
         .unwrap();
     db.palaces(&conn)
-        .add_locus(p.id, cards[1], 4.0, 1.7, 0.0, Some("bedroom"), 1_700_000_002)
+        .add_locus(
+            p.id,
+            cards[1],
+            4.0,
+            1.7,
+            0.0,
+            Some("bedroom"),
+            1_700_000_002,
+        )
         .unwrap();
     let full = db.palaces(&conn).get(p.id).unwrap();
     assert_eq!(full.palace.name, "My House");
@@ -1410,7 +1473,9 @@ fn palace_locus_unique_per_card() {
         .unwrap_err();
     let msg = format!("{}", err);
     assert!(
-        msg.contains("UNIQUE") || msg.contains("unique") || msg.to_lowercase().contains("constraint"),
+        msg.contains("UNIQUE")
+            || msg.contains("unique")
+            || msg.to_lowercase().contains("constraint"),
         "expected a UNIQUE constraint error, got: {}",
         msg
     );
@@ -1451,8 +1516,11 @@ fn delete_card_cascades_to_palace_loci() {
         .add_locus(p.id, cards[0], 0.0, 0.0, 0.0, None, 1_700_000_001)
         .unwrap();
     // Removing the underlying card should drop the locus row.
-    conn.execute("DELETE FROM cards WHERE id = ?1", rusqlite::params![cards[0]])
-        .unwrap();
+    conn.execute(
+        "DELETE FROM cards WHERE id = ?1",
+        rusqlite::params![cards[0]],
+    )
+    .unwrap();
     let count: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM palace_loci WHERE palace_id = ?1",

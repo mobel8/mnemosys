@@ -227,7 +227,9 @@ mod tests {
 
         repo.set_word_status("hola", "new", "es").expect("first");
         repo.set_word_status("hola", "known", "es").expect("update");
-        let got = repo.get_word_statuses(&["hola".to_string()], "es").expect("get");
+        let got = repo
+            .get_word_statuses(&["hola".to_string()], "es")
+            .expect("get");
         assert_eq!(got.len(), 1, "upsert must not create a duplicate row");
         assert_eq!(got[0].status, "known");
     }
@@ -240,8 +242,12 @@ mod tests {
 
         repo.set_word_status("chat", "known", "fr").expect("fr");
         repo.set_word_status("chat", "learning", "en").expect("en");
-        let fr = repo.get_word_statuses(&["chat".to_string()], "fr").expect("fr get");
-        let en = repo.get_word_statuses(&["chat".to_string()], "en").expect("en get");
+        let fr = repo
+            .get_word_statuses(&["chat".to_string()], "fr")
+            .expect("fr get");
+        let en = repo
+            .get_word_statuses(&["chat".to_string()], "en")
+            .expect("en get");
         assert_eq!(fr[0].status, "known");
         assert_eq!(en[0].status, "learning");
     }
@@ -276,7 +282,9 @@ mod tests {
             "  ".to_string(),    // blank, skipped
             "banana".to_string(),
         ];
-        let n = repo.create_cards_from_words(deck_id, &words).expect("create");
+        let n = repo
+            .create_cards_from_words(deck_id, &words)
+            .expect("create");
         assert_eq!(n, 2, "only two distinct non-blank words become cards");
 
         // The notes really landed in the deck.

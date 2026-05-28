@@ -230,7 +230,10 @@ mod tests {
         assert_eq!(updated.deck_id, None);
         assert_eq!(updated.days, "[]");
         assert!(!updated.enabled);
-        assert_eq!(updated.created_at, created.created_at, "created_at preserved");
+        assert_eq!(
+            updated.created_at, created.created_at,
+            "created_at preserved"
+        );
 
         // Delete removes it.
         repo.delete(created.id).expect("delete");
@@ -244,7 +247,15 @@ mod tests {
         let repo = PlanRepo::new(&conn);
 
         let plan = repo
-            .create("after_habit", "après le café", "Réviser", None, "[]", true, 1)
+            .create(
+                "after_habit",
+                "après le café",
+                "Réviser",
+                None,
+                "[]",
+                true,
+                1,
+            )
             .expect("create");
         assert!(plan.enabled);
 

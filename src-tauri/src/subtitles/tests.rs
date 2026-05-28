@@ -178,7 +178,10 @@ fn import_unknown_deck_errors() {
 
 #[test]
 fn mode_parse_rejects_garbage() {
-    assert_eq!(SubtitleMode::parse("sentence").unwrap(), SubtitleMode::Sentence);
+    assert_eq!(
+        SubtitleMode::parse("sentence").unwrap(),
+        SubtitleMode::Sentence
+    );
     assert_eq!(SubtitleMode::parse("cloze").unwrap(), SubtitleMode::Cloze);
     assert!(SubtitleMode::parse("bogus").is_err());
 }

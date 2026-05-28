@@ -140,12 +140,7 @@ impl<'a> MetacognitionRepo<'a> {
     /// Resolve the OLDEST unresolved prediction for `card_id` against the
     /// observed outcome. Used by `submit_review` as a best-effort hook;
     /// returns the number of rows updated (0 when nothing matched).
-    pub fn resolve_prediction(
-        &self,
-        card_id: i64,
-        correct: bool,
-        now: i64,
-    ) -> AppResult<usize> {
+    pub fn resolve_prediction(&self, card_id: i64, correct: bool, now: i64) -> AppResult<usize> {
         // SQLite has no « UPDATE … LIMIT 1 » without a subselect, so we do
         // the lookup explicitly. Cheap thanks to the partial index on
         // `actual_correct IS NULL`.
@@ -243,7 +238,10 @@ impl<'a> MetacognitionRepo<'a> {
             0.0
         } else {
             let mean_p: f64 = pairs.iter().map(|(p, _)| *p).sum::<f64>() / total_resolved as f64;
-            let mean_a: f64 = pairs.iter().map(|(_, a)| if *a { 1.0 } else { 0.0 }).sum::<f64>()
+            let mean_a: f64 = pairs
+                .iter()
+                .map(|(_, a)| if *a { 1.0 } else { 0.0 })
+                .sum::<f64>()
                 / total_resolved as f64;
             mean_p - mean_a
         };
@@ -259,12 +257,12 @@ impl<'a> MetacognitionRepo<'a> {
         let total_post = retro.len() as i64;
         let (gamma_post, bias_post) = if total_post >= RETRO_MIN_SAMPLE {
             let mean_p: f64 = retro.iter().map(|(p, _)| *p).sum::<f64>() / total_post as f64;
-            let mean_a: f64 = retro.iter().map(|(_, a)| if *a { 1.0 } else { 0.0 }).sum::<f64>()
+            let mean_a: f64 = retro
+                .iter()
+                .map(|(_, a)| if *a { 1.0 } else { 0.0 })
+                .sum::<f64>()
                 / total_post as f64;
-            (
-                Some(goodman_kruskal_gamma(&retro)),
-                Some(mean_p - mean_a),
-            )
+            (Some(goodman_kruskal_gamma(&retro)), Some(mean_p - mean_a))
         } else {
             (None, None)
         };
@@ -506,7 +504,9 @@ mod tests {
         // the sample count is zero (dashboard hides the second line).
         {
             let conn = db.lock();
-            let empty = MetacognitionRepo::new(&conn).calibration_stats(None).unwrap();
+            let empty = MetacognitionRepo::new(&conn)
+                .calibration_stats(None)
+                .unwrap();
             assert_eq!(empty.total_post, 0);
             assert!(empty.gamma_post.is_none());
             assert!(empty.bias_post.is_none());
@@ -524,7 +524,9 @@ mod tests {
         }
 
         let conn = db.lock();
-        let stats = MetacognitionRepo::new(&conn).calibration_stats(None).unwrap();
+        let stats = MetacognitionRepo::new(&conn)
+            .calibration_stats(None)
+            .unwrap();
         assert_eq!(stats.total_post, 12, "every review carries confidence_post");
         let gamma_post = stats.gamma_post.expect("retrospective γ should be present");
         assert!(
@@ -533,7 +535,9 @@ mod tests {
         );
         // Mean confidence (≈ (1.0 + 0.0)/2 = 0.5) ≈ mean correct (6/12 = 0.5),
         // so the retrospective bias is near zero.
-        let bias_post = stats.bias_post.expect("retrospective bias should be present");
+        let bias_post = stats
+            .bias_post
+            .expect("retrospective bias should be present");
         assert!(
             bias_post.abs() < 0.1,
             "expected near-zero retrospective bias, got {bias_post}"
@@ -545,12 +549,7 @@ mod tests {
     #[test]
     fn gamma_returns_one_for_perfect_correlation() {
         // High predictions → correct, low predictions → incorrect.
-        let pairs = vec![
-            (0.9, true),
-            (0.8, true),
-            (0.2, false),
-            (0.1, false),
-        ];
+        let pairs = vec![(0.9, true), (0.8, true), (0.2, false), (0.1, false)];
         let g = goodman_kruskal_gamma(&pairs);
         assert!((g - 1.0).abs() < 1e-9, "expected γ ≈ 1.0, got {}", g);
     }
@@ -558,12 +557,7 @@ mod tests {
     #[test]
     fn gamma_returns_minus_one_for_inverse_correlation() {
         // High predictions → incorrect (the classic « confident-wrong »).
-        let pairs = vec![
-            (0.9, false),
-            (0.8, false),
-            (0.2, true),
-            (0.1, true),
-        ];
+        let pairs = vec![(0.9, false), (0.8, false), (0.2, true), (0.1, true)];
         let g = goodman_kruskal_gamma(&pairs);
         assert!((g + 1.0).abs() < 1e-9, "expected γ ≈ -1.0, got {}", g);
     }

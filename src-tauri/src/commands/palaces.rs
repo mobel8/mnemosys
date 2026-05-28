@@ -62,16 +62,11 @@ pub fn update_palace(
     let conn = state.db.lock();
     // Map Option<Option<String>> → Option<Option<&str>> without dropping
     // the « clear vs leave alone » distinction.
-    let desc_borrowed = description
-        .as_ref()
-        .map(|inner| inner.as_deref());
-    state.db.palaces(&conn).update(
-        id,
-        name.as_deref(),
-        desc_borrowed,
-        template.as_deref(),
-        now,
-    )
+    let desc_borrowed = description.as_ref().map(|inner| inner.as_deref());
+    state
+        .db
+        .palaces(&conn)
+        .update(id, name.as_deref(), desc_borrowed, template.as_deref(), now)
 }
 
 #[tauri::command]

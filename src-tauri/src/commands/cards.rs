@@ -25,11 +25,7 @@ pub fn list_cards_in_deck(
 }
 
 #[tauri::command]
-pub fn search_notes(
-    state: State<'_, AppState>,
-    query: String,
-    limit: u32,
-) -> AppResult<Vec<Note>> {
+pub fn search_notes(state: State<'_, AppState>, query: String, limit: u32) -> AppResult<Vec<Note>> {
     let conn = state.db.lock();
     state.db.notes(&conn).search(&query, limit)
 }
@@ -71,11 +67,7 @@ pub fn delete_note(state: State<'_, AppState>, id: i64) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn suspend_card(
-    state: State<'_, AppState>,
-    id: i64,
-    suspended: bool,
-) -> AppResult<()> {
+pub fn suspend_card(state: State<'_, AppState>, id: i64, suspended: bool) -> AppResult<()> {
     let conn = state.db.lock();
     state.db.cards(&conn).suspend(id, suspended)
 }

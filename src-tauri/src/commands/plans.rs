@@ -18,7 +18,12 @@ const TRIGGER_TYPES: [&str; 3] = ["time", "place", "after_habit"];
 
 /// Validate the shared fields of a create/update payload. Returns the
 /// canonical `days` JSON string (compacted) on success.
-fn validate(trigger_type: &str, trigger_value: &str, action: &str, days: &str) -> AppResult<String> {
+fn validate(
+    trigger_type: &str,
+    trigger_value: &str,
+    action: &str,
+    days: &str,
+) -> AppResult<String> {
     if !TRIGGER_TYPES.contains(&trigger_type) {
         return Err(AppError::Validation(format!(
             "unknown trigger_type: {trigger_type}"

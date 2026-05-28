@@ -112,11 +112,9 @@ pub fn parse_apkg(bytes: &[u8]) -> AppResult<AnkiCollection> {
         let conn = Connection::open(&collection_path)?;
 
         let (decks_json, models_json): (String, String) = conn
-            .query_row(
-                "SELECT decks, models FROM col LIMIT 1",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
+            .query_row("SELECT decks, models FROM col LIMIT 1", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
             .map_err(|e| AppError::Database(format!("read col row: {e}")))?;
 
         let decks = parse_decks_json(&decks_json)?;
@@ -205,10 +203,7 @@ fn read_notes(conn: &Connection) -> AppResult<Vec<AnkiNote>> {
     for row in rows {
         let (id, mid, flds, tags) = row?;
         let fields: Vec<String> = flds.split('\x1f').map(String::from).collect();
-        let tags: Vec<String> = tags
-            .split_whitespace()
-            .map(String::from)
-            .collect();
+        let tags: Vec<String> = tags.split_whitespace().map(String::from).collect();
         out.push(AnkiNote {
             id,
             model_id: mid,

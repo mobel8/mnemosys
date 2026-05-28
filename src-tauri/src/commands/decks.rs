@@ -53,11 +53,7 @@ pub fn create_deck(
 }
 
 #[tauri::command]
-pub fn update_deck(
-    state: State<'_, AppState>,
-    id: i64,
-    patch: DeckPatch,
-) -> AppResult<Deck> {
+pub fn update_deck(state: State<'_, AppState>, id: i64, patch: DeckPatch) -> AppResult<Deck> {
     let conn = state.db.lock();
     state.db.decks(&conn).update(id, patch)
 }

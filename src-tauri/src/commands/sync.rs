@@ -126,7 +126,10 @@ pub async fn sync_logout(app: AppHandle) -> AppResult<()> {
 #[tauri::command]
 pub fn sync_status(app: AppHandle, state: State<'_, AppState>) -> AppResult<SyncStatus> {
     let settings = load_settings(&app)?;
-    let configured = settings.supabase_url.as_deref().is_some_and(|u| !u.trim().is_empty())
+    let configured = settings
+        .supabase_url
+        .as_deref()
+        .is_some_and(|u| !u.trim().is_empty())
         && settings
             .supabase_anon_key
             .as_deref()

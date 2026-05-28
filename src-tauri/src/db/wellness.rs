@@ -164,7 +164,15 @@ mod tests {
         let conn = db.lock();
         let repo = WellnessRepo::new(&conn);
         let log = repo
-            .insert_log("2026-05-26", Some(4), Some(7.5), Some(2), true, false, 1_700_000_000)
+            .insert_log(
+                "2026-05-26",
+                Some(4),
+                Some(7.5),
+                Some(2),
+                true,
+                false,
+                1_700_000_000,
+            )
             .expect("insert");
         assert_eq!(log.date, "2026-05-26");
         assert_eq!(log.mood, Some(4));

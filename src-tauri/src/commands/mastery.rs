@@ -111,11 +111,7 @@ pub fn get_concept_mastery(state: State<'_, AppState>) -> AppResult<Vec<ConceptM
 
     // Rank by review volume (most-practised concepts first); break ties by
     // tag name so the output is deterministic. Keep the top N.
-    out.sort_by(|a, b| {
-        b.reviews
-            .cmp(&a.reviews)
-            .then_with(|| a.tag.cmp(&b.tag))
-    });
+    out.sort_by(|a, b| b.reviews.cmp(&a.reviews).then_with(|| a.tag.cmp(&b.tag)));
     out.truncate(TOP_N_TAGS);
 
     Ok(out)
@@ -202,10 +198,7 @@ struct TimedObservation {
 }
 
 #[tauri::command]
-pub fn get_mastery_timeline(
-    state: State<'_, AppState>,
-    weeks: u32,
-) -> AppResult<MasteryTimeline> {
+pub fn get_mastery_timeline(state: State<'_, AppState>, weeks: u32) -> AppResult<MasteryTimeline> {
     let weeks = weeks.clamp(1, TIMELINE_MAX_WEEKS);
     let now = Utc::now().timestamp();
 
@@ -243,10 +236,10 @@ pub fn get_mastery_timeline(
         };
         let correct = rating >= 3;
         for tag in tags {
-            by_tag
-                .entry(tag)
-                .or_default()
-                .push(TimedObservation { reviewed_at, correct });
+            by_tag.entry(tag).or_default().push(TimedObservation {
+                reviewed_at,
+                correct,
+            });
         }
     }
 
@@ -348,7 +341,10 @@ mod tests {
     #[test]
     fn bkt_mastery_increases_with_correct_reviews() {
         let none = bkt_mastery(&[]);
-        assert!((none - P_L0).abs() < 1e-9, "empty history returns the prior");
+        assert!(
+            (none - P_L0).abs() < 1e-9,
+            "empty history returns the prior"
+        );
 
         let few = bkt_mastery(&[true, true]);
         let many = bkt_mastery(&[true, true, true, true, true, true]);
@@ -391,16 +387,31 @@ mod tests {
         by_tag.insert(
             "anatomie".into(),
             vec![
-                TimedObservation { reviewed_at: now, correct: true },
-                TimedObservation { reviewed_at: now - 3_600, correct: true },
-                TimedObservation { reviewed_at: now - WEEK, correct: true },
-                TimedObservation { reviewed_at: now - WEEK - 3_600, correct: false },
+                TimedObservation {
+                    reviewed_at: now,
+                    correct: true,
+                },
+                TimedObservation {
+                    reviewed_at: now - 3_600,
+                    correct: true,
+                },
+                TimedObservation {
+                    reviewed_at: now - WEEK,
+                    correct: true,
+                },
+                TimedObservation {
+                    reviewed_at: now - WEEK - 3_600,
+                    correct: false,
+                },
             ],
         );
         // "physio": only two weeks ago → 0/1 (a single wrong answer).
         by_tag.insert(
             "physio".into(),
-            vec![TimedObservation { reviewed_at: now - 2 * WEEK, correct: false }],
+            vec![TimedObservation {
+                reviewed_at: now - 2 * WEEK,
+                correct: false,
+            }],
         );
 
         let timeline = build_timeline(&by_tag, 3, now);

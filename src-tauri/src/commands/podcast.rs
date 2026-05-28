@@ -164,9 +164,7 @@ fn fetch_deck_cards(state: &AppState, deck_id: i64) -> AppResult<(String, Vec<(S
             |row| row.get::<_, String>(0),
         )
         .map_err(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => {
-                AppError::NotFound(format!("deck {deck_id}"))
-            }
+            rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!("deck {deck_id}")),
             other => AppError::Database(other.to_string()),
         })?;
 
@@ -177,9 +175,7 @@ fn fetch_deck_cards(state: &AppState, deck_id: i64) -> AppResult<(String, Vec<(S
          LIMIT ?2",
     )?;
     let limit = MAX_CARDS_PER_PODCAST as i64;
-    let rows = stmt.query_map(rusqlite::params![deck_id, limit], |r| {
-        r.get::<_, String>(0)
-    })?;
+    let rows = stmt.query_map(rusqlite::params![deck_id, limit], |r| r.get::<_, String>(0))?;
 
     let mut cards = Vec::new();
     for row in rows {

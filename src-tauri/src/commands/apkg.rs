@@ -7,8 +7,8 @@
 
 use tauri::State;
 
-use crate::app_state::AppState;
 use crate::apkg::{convert_to_mnemosys, parse_apkg, ConversionResult};
+use crate::app_state::AppState;
 use crate::error::{AppError, AppResult};
 
 /// Import an Anki `.apkg` from a local filesystem path.
@@ -20,9 +20,8 @@ use crate::error::{AppError, AppResult};
 /// - `Database` — SQLite read failure or downstream Mnemosys insert error.
 #[tauri::command]
 pub fn import_apkg(state: State<'_, AppState>, path: String) -> AppResult<ConversionResult> {
-    let bytes = std::fs::read(&path).map_err(|e| {
-        AppError::Validation(format!("Could not read .apkg at '{path}': {e}"))
-    })?;
+    let bytes = std::fs::read(&path)
+        .map_err(|e| AppError::Validation(format!("Could not read .apkg at '{path}': {e}")))?;
     let collection = parse_apkg(&bytes)?;
     convert_to_mnemosys(&state.db, collection)
 }

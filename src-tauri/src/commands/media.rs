@@ -31,7 +31,13 @@ const MAX_IMAGE_BYTES: u64 = 25 * 1024 * 1024;
 fn sanitise_basename(raw: &str) -> String {
     let mut out: String = raw
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     if out.is_empty() {
         out = "image".to_string();

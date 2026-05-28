@@ -334,10 +334,7 @@ pub fn save_settings(
     }
     if let Some(ct) = settings.chronotype.as_deref() {
         if !matches!(ct, "morning" | "intermediate" | "evening") {
-            return Err(AppError::Validation(format!(
-                "invalid chronotype: {}",
-                ct
-            )));
+            return Err(AppError::Validation(format!("invalid chronotype: {}", ct)));
         }
     }
 

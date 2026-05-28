@@ -147,7 +147,10 @@ impl SyncClient {
         let resp = self
             .http
             .post(&url)
-            .header("Prefer", "resolution=merge-duplicates,return=representation")
+            .header(
+                "Prefer",
+                "resolution=merge-duplicates,return=representation",
+            )
             .json(batch)
             .send()
             .await
@@ -177,7 +180,10 @@ impl SyncClient {
         let resp = self
             .http
             .post(&url)
-            .header("Prefer", "resolution=merge-duplicates,return=representation")
+            .header(
+                "Prefer",
+                "resolution=merge-duplicates,return=representation",
+            )
             .json(batch)
             .send()
             .await
@@ -207,7 +213,10 @@ impl SyncClient {
         let resp = self
             .http
             .post(&url)
-            .header("Prefer", "resolution=merge-duplicates,return=representation")
+            .header(
+                "Prefer",
+                "resolution=merge-duplicates,return=representation",
+            )
             .json(batch)
             .send()
             .await
@@ -268,6 +277,5 @@ where
     if body.trim().is_empty() {
         return Ok(Vec::new());
     }
-    serde_json::from_str(&body)
-        .map_err(|e| AppError::Other(format!("decode response: {}", e)))
+    serde_json::from_str(&body).map_err(|e| AppError::Other(format!("decode response: {}", e)))
 }

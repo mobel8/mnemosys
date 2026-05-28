@@ -173,7 +173,10 @@ mod tests {
             "llama3.2".to_string(),
         )
         .expect("client builds");
-        assert_eq!(client.generate_endpoint(), "http://localhost:11434/api/generate");
+        assert_eq!(
+            client.generate_endpoint(),
+            "http://localhost:11434/api/generate"
+        );
         assert_eq!(client.model(), "llama3.2");
     }
 
@@ -203,6 +206,9 @@ mod tests {
             stream: false,
         };
         let json = serde_json::to_value(&body).expect("serialise");
-        assert!(json.get("system").is_none(), "system key must be skipped when None");
+        assert!(
+            json.get("system").is_none(),
+            "system key must be skipped when None"
+        );
     }
 }
