@@ -294,6 +294,13 @@ export interface AppSettings {
    * Requires an OpenAI API key. Defaults to false.
    */
   voice_answer_enabled: boolean;
+  // --- Vague 12 (cognitive features, opt-in) ---
+  /** Pretest mode: guess the answer of a brand-new card before the flip (pretesting effect — Pan 2023). */
+  pretest_mode_enabled: boolean;
+  /** Self-explanation: on ~1/5 reviews, prompt "why is this the answer?" after the flip (Chi 1989, g≈0.55). */
+  self_explanation_enabled: boolean;
+  /** Focus Guard: opt-in local webcam mind-wandering detection during a session (Hutt 2024). */
+  focus_guard_enabled: boolean;
 }
 
 // --- Vague 3: wellness ----------------------------------------------------

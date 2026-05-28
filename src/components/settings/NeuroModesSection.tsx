@@ -45,6 +45,9 @@ const DEFAULTS: AppSettings = {
   delayed_jol_enabled: false,
   jol_delay_minutes: 30,
   voice_answer_enabled: false,
+  pretest_mode_enabled: false,
+  self_explanation_enabled: false,
+  focus_guard_enabled: false,
 };
 
 const MIN_MINUTES = 10;

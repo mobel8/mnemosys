@@ -35,12 +35,15 @@ import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { CyclicSighing } from "@/components/CyclicSighing";
+import { FocusGuard } from "@/components/FocusGuard";
 import { MoodCheckIn } from "@/components/MoodCheckIn";
 import { PreQuestioning } from "@/components/PreQuestioning";
+import { PretestPrompt } from "@/components/PretestPrompt";
 import { ReviewCard } from "@/components/ReviewCard";
 import { ReviewControls } from "@/components/ReviewControls";
 import { ReviewProgress } from "@/components/ReviewProgress";
 import { type ReviewedLog, ReviewSummary } from "@/components/ReviewSummary";
+import { SelfExplanationPrompt } from "@/components/SelfExplanationPrompt";
 import {
   Dialog,
   DialogContent,
@@ -94,6 +97,16 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   const voiceAnswerEnabled = settings.data?.voice_answer_enabled ?? false;
   const confidenceEnabled = settings.data?.confidence_rating_enabled ?? false;
   const preQuestioningEnabled = settings.data?.pre_questioning_enabled ?? false;
+  // --- Vague 12 — cognitive features --------------------------------------
+  const pretestModeEnabled = settings.data?.pretest_mode_enabled ?? false;
+  const selfExplanationEnabled = settings.data?.self_explanation_enabled ?? false;
+  const focusGuardEnabled = settings.data?.focus_guard_enabled ?? false;
+  // Per-card pretest gate: which card index has already shown (or skipped)
+  // its pretest prompt. Reset implicitly because we key on the index.
+  const [pretestDoneForIndex, setPretestDoneForIndex] = useState<number | null>(null);
+  // Self-explanation: once shown for the current card we set this so the
+  // prompt doesn't re-trigger after the learner continues. Reset per card.
+  const [selfExplanationDone, setSelfExplanationDone] = useState(false);
   // --- Vague 3 — neuro modes state ----------------------------------------
   const neuroEnabled = settings.data?.neuro_modes_enabled ?? false;
   const moodCheckinEnabled = (settings.data?.mood_checkin_enabled ?? false) && neuroEnabled;
@@ -186,17 +199,33 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
     });
     // Reset the per-card confidence buffer so each card starts fresh.
     setConfidence(null);
+    // Reset the self-explanation gate for the next card.
+    setSelfExplanationDone(false);
     advanceInStore();
   }, [advanceInStore, cards.length, markShown]);
 
   const handleFlip = useCallback(() => {
-    if (phase !== "question") return;
+    if (phase !== "question" || !current) return;
+    // Vague 12 — block the flip while the pretest prompt is still up for a
+    // new card; the learner must reveal via the prompt's own button first.
+    if (
+      pretestModeEnabled &&
+      current.card.state === "new" &&
+      pretestDoneForIndex !== currentIndex
+    ) {
+      return;
+    }
     setPhase("answer");
-  }, [phase]);
+  }, [phase, current, pretestModeEnabled, pretestDoneForIndex, currentIndex]);
 
   const handleRate = useCallback(
     (rating: Rating) => {
       if (phase !== "answer" || !current) return;
+      // Vague 12 — if the self-explanation prompt is still showing for this
+      // card, the rating row (and its 1-4 hotkeys) is gated until continue.
+      if (selfExplanationEnabled && !selfExplanationDone && current.card.id % 5 === 0) {
+        return;
+      }
       const reviewTimeMs = Math.max(0, Date.now() - cardShownAtRef.current);
       setPhase("submitting");
       setPendingRating(rating);
@@ -235,7 +264,17 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
         },
       );
     },
-    [advanceToNext, confidence, confidenceEnabled, current, phase, pushToast, submitReview],
+    [
+      advanceToNext,
+      confidence,
+      confidenceEnabled,
+      current,
+      phase,
+      pushToast,
+      submitReview,
+      selfExplanationEnabled,
+      selfExplanationDone,
+    ],
   );
 
   const handleQuit = useCallback(() => {
@@ -394,6 +433,25 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
     );
   }
 
+  // --- Vague 12 — pretest gate --------------------------------------------
+  // For a brand-new card, when pretest mode is on and we haven't yet cleared
+  // the prompt for this card index, intercept the question phase with a guess
+  // prompt before the normal flip flow resumes.
+  const showPretest =
+    pretestModeEnabled &&
+    phase === "question" &&
+    current.card.state === "new" &&
+    pretestDoneForIndex !== currentIndex;
+
+  // --- Vague 12 — self-explanation gate -----------------------------------
+  // After the flip (answer phase) on ~1 card in 5 (deterministic via the
+  // card id), ask the learner to explain the answer before the rating row.
+  const showSelfExplanation =
+    selfExplanationEnabled &&
+    phase === "answer" &&
+    !selfExplanationDone &&
+    current.card.id % 5 === 0;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ReviewProgress
@@ -405,25 +463,50 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
         onHelp={() => setHelpOpen(true)}
       />
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-8">
-        <ReviewCard
-          note={current.note}
-          phase={phase}
-          cardOrd={current.card.card_ord}
-          typeTheAnswerEnabled={typeTheAnswerEnabled}
-          voiceAnswerEnabled={voiceAnswerEnabled}
-        />
-        <ReviewControls
-          phase={phase}
-          cardId={current.card.id}
-          onFlip={handleFlip}
-          onRate={handleRate}
-          pendingRating={pendingRating}
-          confidenceEnabled={confidenceEnabled}
-          confidenceValue={confidence}
-          onConfidenceChange={setConfidence}
-        />
-      </div>
+      {showPretest ? (
+        <div className="flex flex-1 items-center justify-center px-4 py-8">
+          <PretestPrompt
+            key={`pretest-${current.card.id}`}
+            front={getCardFront(current)}
+            onComplete={() => {
+              // The guess isn't scored — clearing the gate resumes the flip
+              // flow on the very same (still-unflipped) card.
+              setPretestDoneForIndex(currentIndex);
+              cardShownAtRef.current = Date.now();
+            }}
+          />
+        </div>
+      ) : (
+        <div className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-8">
+          <ReviewCard
+            note={current.note}
+            phase={phase}
+            cardOrd={current.card.card_ord}
+            typeTheAnswerEnabled={typeTheAnswerEnabled}
+            voiceAnswerEnabled={voiceAnswerEnabled}
+          />
+          {showSelfExplanation ? (
+            <SelfExplanationPrompt
+              key={`self-expl-${current.card.id}`}
+              onContinue={() => setSelfExplanationDone(true)}
+            />
+          ) : (
+            <ReviewControls
+              phase={phase}
+              cardId={current.card.id}
+              onFlip={handleFlip}
+              onRate={handleRate}
+              pendingRating={pendingRating}
+              confidenceEnabled={confidenceEnabled}
+              confidenceValue={confidence}
+              onConfidenceChange={setConfidence}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Vague 12 — opt-in webcam focus guard (consent-gated, 100% local). */}
+      {focusGuardEnabled && <FocusGuard enabled={focusGuardEnabled} />}
 
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent>
@@ -487,6 +570,29 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       )}
     </div>
   );
+}
+
+/**
+ * Best-effort recto text for the pretest prompt. Mirrors the field logic in
+ * `ReviewCard` (basic `front`, cloze `text`, sentence/bidirectional
+ * `source`/`target` by ordinal) so the learner sees the same prompt they'd
+ * get on the question face. Occlusion notes have no textual recto; we fall
+ * back to an empty string and `PretestPrompt` renders its « recto vide »
+ * placeholder (the pretest gate only fires for `new` cards anyway, and
+ * occlusion cards still benefit from the guess box even without a stem).
+ */
+function getCardFront(cwn: CardWithNote): string {
+  const { note, card } = cwn;
+  const f = note.fields;
+  if (note.template === "cloze") {
+    return typeof f.text === "string" ? f.text : "";
+  }
+  if (note.template === "sentence" || note.template === "bidirectional") {
+    const source = typeof f.source === "string" ? f.source : "";
+    const target = typeof f.target === "string" ? f.target : "";
+    return card.card_ord === 1 ? target : source;
+  }
+  return typeof f.front === "string" ? f.front : "";
 }
 
 function Shortcut({ keys, label }: { keys: string; label: string }) {

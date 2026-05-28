@@ -47,6 +47,10 @@ const DEFAULTS: AppSettings = {
   delayed_jol_enabled: false,
   jol_delay_minutes: 30,
   voice_answer_enabled: false,
+  // Vague 12 cognitive features — opt-in.
+  pretest_mode_enabled: false,
+  self_explanation_enabled: false,
+  focus_guard_enabled: false,
 };
 
 const RETENTION_MIN = 0.8;
@@ -97,7 +101,10 @@ export function ReviewSettingsSection() {
       a.pre_questioning_enabled !== b.pre_questioning_enabled ||
       a.sketch_before_flip_enabled !== b.sketch_before_flip_enabled ||
       a.delayed_jol_enabled !== b.delayed_jol_enabled ||
-      a.voice_answer_enabled !== b.voice_answer_enabled
+      a.voice_answer_enabled !== b.voice_answer_enabled ||
+      a.pretest_mode_enabled !== b.pretest_mode_enabled ||
+      a.self_explanation_enabled !== b.self_explanation_enabled ||
+      a.focus_guard_enabled !== b.focus_guard_enabled
     );
   }, [query.data, draft]);
 
@@ -116,6 +123,9 @@ export function ReviewSettingsSection() {
       sketch_before_flip_enabled: draft.sketch_before_flip_enabled,
       delayed_jol_enabled: draft.delayed_jol_enabled,
       voice_answer_enabled: draft.voice_answer_enabled,
+      pretest_mode_enabled: draft.pretest_mode_enabled,
+      self_explanation_enabled: draft.self_explanation_enabled,
+      focus_guard_enabled: draft.focus_guard_enabled,
     });
   }
 
@@ -328,6 +338,68 @@ export function ReviewSettingsSection() {
               disabled={query.isLoading}
               onCheckedChange={(checked) =>
                 setDraft((d) => ({ ...d, voice_answer_enabled: checked }))
+              }
+            />
+          </div>
+          {/* --- Vague 12: Pretest + Self-explanation + Focus Guard --------- */}
+          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="pretest-mode-toggle" className="text-sm">
+                Mode pré-test
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Devine la réponse d'une carte neuve avant de la révéler, même en cas d'erreur
+                (pretesting effect — Pan et al. 2023).
+              </p>
+            </div>
+            <Switch
+              id="pretest-mode-toggle"
+              checked={draft.pretest_mode_enabled}
+              disabled={query.isLoading}
+              onCheckedChange={(checked) =>
+                setDraft((d) => ({ ...d, pretest_mode_enabled: checked }))
+              }
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="self-explanation-toggle" className="text-sm">
+                Auto-explication
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Sur ~1 carte sur 5, explique en une phrase pourquoi c'est la réponse, après le flip
+                (Chi 1989, g=0.55). Texte libre, non noté.
+              </p>
+            </div>
+            <Switch
+              id="self-explanation-toggle"
+              checked={draft.self_explanation_enabled}
+              disabled={query.isLoading}
+              onCheckedChange={(checked) =>
+                setDraft((d) => ({ ...d, self_explanation_enabled: checked }))
+              }
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="focus-guard-toggle" className="text-sm">
+                Focus Guard (webcam)
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Détecte le décrochage d'attention via la webcam pendant une session (Hutt 2024).
+                <strong className="text-foreground/80">
+                  {" "}
+                  100 % local : aucune image n'est enregistrée ni envoyée.
+                </strong>{" "}
+                Consentement demandé au premier lancement.
+              </p>
+            </div>
+            <Switch
+              id="focus-guard-toggle"
+              checked={draft.focus_guard_enabled}
+              disabled={query.isLoading}
+              onCheckedChange={(checked) =>
+                setDraft((d) => ({ ...d, focus_guard_enabled: checked }))
               }
             />
           </div>

@@ -136,6 +136,26 @@ pub struct AppSettings {
     /// an OpenAI API key. Defaults off — existing typed/flip flow is intact.
     #[serde(default)]
     pub voice_answer_enabled: bool,
+
+    // --- Vague 12 (cognitive features, opt-in) ------------------------------
+    /// Pretest mode: for a brand-new card the learner first types a guess at
+    /// the answer BEFORE the recto/verso flow — even one likely to be wrong.
+    /// The guess is never scored; the value of the « pretesting effect » is
+    /// the failed-retrieval attempt itself (Pan et al. 2023). Defaults off.
+    #[serde(default)]
+    pub pretest_mode_enabled: bool,
+    /// Self-explanation prompts: on a fraction of reviews (~1/5), after the
+    /// flip and before rating, ask the learner to explain in one sentence
+    /// WHY the answer holds (elaborative interrogation — Chi et al. 1989;
+    /// Bisra meta g≈0.55). Free text, never scored. Defaults off.
+    #[serde(default)]
+    pub self_explanation_enabled: bool,
+    /// WebGazer Focus Guard: opt-in webcam mind-wandering detection during a
+    /// review session. 100% local (no frame ever leaves the device); a
+    /// discreet nudge appears when the gaze leaves the card for >5s (Hutt et
+    /// al., ACM 2024). Requires explicit consent. Defaults off.
+    #[serde(default)]
+    pub focus_guard_enabled: bool,
 }
 
 fn default_movement_break_minutes() -> u32 {
@@ -178,6 +198,10 @@ impl Default for AppSettings {
             jol_delay_minutes: default_jol_delay_minutes(),
             // Vague 8 — voice answer opt-in.
             voice_answer_enabled: false,
+            // Vague 12 cognitive features — all opt-in.
+            pretest_mode_enabled: false,
+            self_explanation_enabled: false,
+            focus_guard_enabled: false,
         }
     }
 }

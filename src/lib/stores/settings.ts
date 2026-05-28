@@ -37,6 +37,10 @@ const DEFAULTS: AppSettings = {
   delayed_jol_enabled: false,
   jol_delay_minutes: 30,
   voice_answer_enabled: false,
+  // Vague 12 cognitive features — all opt-in.
+  pretest_mode_enabled: false,
+  self_explanation_enabled: false,
+  focus_guard_enabled: false,
 };
 
 interface SettingsState extends AppSettings {
