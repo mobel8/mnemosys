@@ -24,6 +24,62 @@ function biasInterpretation(b: number): string {
   return `Sous-confiance de ${(-b * 100).toFixed(0)}%`;
 }
 
+/**
+ * Vague 22 — retrospective calibration block (Bang & Fleming 2018, two-step
+ * confidence). Shown only when the backend reports a `gamma_post` (≥ 10
+ * reviews carry a post-answer confidence). Compares "once you'd seen the
+ * answer, did your confidence track reality?" against the prospective γ.
+ */
+function RetrospectiveCalibration({
+  gammaPost,
+  biasPost,
+  totalPost,
+  gammaProspective,
+}: {
+  gammaPost: number;
+  biasPost: number;
+  totalPost: number;
+  gammaProspective: number | null;
+}) {
+  const gInt = gammaInterpretation(gammaPost);
+  const improves =
+    gammaProspective != null && gammaPost > gammaProspective + 0.05
+      ? "Ta confiance s'affine après avoir vu la réponse."
+      : gammaProspective != null && gammaPost < gammaProspective - 0.05
+        ? "Ta confiance prospective (avant) est mieux calibrée que la rétrospective."
+        : "Confiance prospective et rétrospective sont proches.";
+
+  return (
+    <div className="space-y-2 border-t pt-4" data-testid="retrospective-calibration">
+      <p className="text-sm font-medium">Calibration rétrospective (après avoir vu la réponse)</p>
+      <p className="text-xs text-muted-foreground">
+        Confiance post-réponse vs réussite réelle (Bang &amp; Fleming 2018) sur {totalPost} reviews.
+      </p>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">γ rétrospectif</p>
+          <p className="font-mono text-2xl font-semibold">{gammaPost.toFixed(2)}</p>
+          <p className={`text-xs ${gInt.color}`}>{gInt.label}</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Biais rétro.</p>
+          <p className="font-mono text-2xl font-semibold">
+            {biasPost >= 0 ? "+" : ""}
+            {(biasPost * 100).toFixed(0)}%
+          </p>
+          <p className="text-xs text-muted-foreground">{biasInterpretation(biasPost)}</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Reviews</p>
+          <p className="font-mono text-2xl font-semibold">{totalPost}</p>
+          <p className="text-xs text-muted-foreground">avec confiance post</p>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">{improves}</p>
+    </div>
+  );
+}
+
 export function CalibrationDashboard() {
   const { data: stats, isLoading } = useCalibrationStats();
 
@@ -51,12 +107,20 @@ export function CalibrationDashboard() {
             sauras dans 1 semaine est le meilleur signal métacognitif.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
           <p className="text-sm text-muted-foreground">
             {stats
               ? `${stats.total_resolved} / 30 prédictions résolues — reviens dans quelques jours.`
               : "Aucune prédiction résolue pour l'instant."}
           </p>
+          {stats?.gamma_post != null && stats.bias_post != null && (
+            <RetrospectiveCalibration
+              gammaPost={stats.gamma_post}
+              biasPost={stats.bias_post}
+              totalPost={stats.total_post}
+              gammaProspective={null}
+            />
+          )}
         </CardContent>
       </Card>
     );
@@ -154,6 +218,15 @@ export function CalibrationDashboard() {
             surconfiance
           </p>
         </div>
+
+        {stats.gamma_post != null && stats.bias_post != null && (
+          <RetrospectiveCalibration
+            gammaPost={stats.gamma_post}
+            biasPost={stats.bias_post}
+            totalPost={stats.total_post}
+            gammaProspective={stats.gamma}
+          />
+        )}
       </CardContent>
     </Card>
   );

@@ -325,6 +325,13 @@ export interface AppSettings {
   tts_voice: string | null;
   /** Default TTS playback rate (0.25..=4.0). `null` falls back to `1.0`. */
   tts_speed: number | null;
+  // --- Vague 22 (local offline TTS via Piper) ---
+  /** When on, the 🔊 button synthesises speech locally via Piper (offline, free, private). */
+  piper_enabled: boolean;
+  /** Path to the Piper binary. Empty falls back to the bare name `"piper"` ($PATH lookup). */
+  piper_binary_path: string;
+  /** Path to the `.onnx` Piper voice model. Empty -> local synthesis errors with a download hint. */
+  piper_model_path: string;
   /** Anthropic API key for AI card generation. `null` falls back to env var. */
   anthropic_api_key: string | null;
   // --- Session 3 (cloud sync) ---
@@ -570,6 +577,13 @@ export interface CalibrationStats {
   /** Always 10 buckets, indexed by `band`. */
   buckets: CalibrationBucket[];
   total_resolved: number;
+  // --- Vague 22 — retrospective calibration (confidence_post, Bang & Fleming 2018) ---
+  /** Retrospective γ from `confidence_post` vs Good/Easy. `null` below the minimum sample. */
+  gamma_post: number | null;
+  /** Retrospective bias (mean post-confidence - mean correct). `null` below the minimum sample. */
+  bias_post: number | null;
+  /** Number of reviews carrying a `confidence_post` value (retrospective sample size). */
+  total_post: number;
 }
 
 /** Pending JOL paired with the card it references, returned by `get_pending_jols`. */
@@ -956,12 +970,29 @@ export const api = {
      */
     generateMnemonic: (cardId: number, language: string) =>
       invoke<string>("generate_card_mnemonic", { cardId, language }),
+    /**
+     * Vague 22 — generate (or reuse) a DALL·E mnemonic image for a card the
+     * learner keeps forgetting. Builds an absurd-scene prompt server-side from
+     * the card's front/back and writes a PNG under the app data dir. Returns
+     * the absolute path; pass through `convertFileSrc()` before `<img src>`.
+     * Throws with a "configure your OpenAI key" message when no key is set.
+     */
+    generateMnemonicImage: (cardId: number) =>
+      invoke<string>("generate_card_mnemonic_image", { cardId }),
   },
   tts: {
     /** Synthesise speech. Hits cache first; otherwise calls OpenAI. */
     synthesize: (text: string, voice: TTSVoice, speed?: number) =>
       invoke<TTSResult>("synthesize_audio", { text, voice, speed: speed ?? null }),
-    /** Wipe every cached `*.mp3` from the TTS cache directory. */
+    /**
+     * Vague 22 — synthesise speech **locally** via the Piper CLI (offline,
+     * free, private). Hits the same on-disk cache first (as a WAV). The voice
+     * comes from the configured Piper model, so no `voice` argument is taken.
+     * Throws "Piper unavailable: …" when the binary or model is missing.
+     */
+    synthesizeLocal: (text: string, speed?: number) =>
+      invoke<TTSResult>("synthesize_audio_local", { text, speed: speed ?? null }),
+    /** Wipe every cached audio file (`*.mp3` + `*.wav`) from the TTS cache directory. */
     clearCache: () => invoke<void>("clear_tts_cache"),
     /** Total bytes occupied by the TTS cache directory. */
     cacheSize: () => invoke<number>("get_tts_cache_size"),

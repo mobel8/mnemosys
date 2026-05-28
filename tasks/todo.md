@@ -1,48 +1,43 @@
-# V17 — Langue/lecture avancé
+# V22 — Compléments IA/audio (no DB migration, DB stays v16)
 
-DB v13 -> v14. Git clean baseline. 3 features.
+## Feature 1 — Piper TTS local
+- [x] `tts/cache.rs`: generalize cache with extension param (mp3 default + wav for piper); `clear()` removes both
+- [x] `tts/piper.rs` (new): `synthesize_piper(binary, model, text, out_path)` via process::Command, text on stdin
+- [x] `tts/mod.rs`: register `pub mod piper`
+- [x] `commands/tts.rs`: `synthesize_audio_local` cmd (piper, cache key "piper:<model>", wav)
+- [x] `lib.rs`: register `synthesize_audio_local`
+- [x] settings.rs: 3 fields piper_enabled/piper_binary_path/piper_model_path + defaults
+- [x] Test: `piper_command_construction` (no real process)
+- [x] tauri.ts: 3 AppSettings fields + api.tts.synthesizeLocal
+- [x] queries.ts: route useSynthesizeAudio to piper when piper_enabled
+- [x] IntegrationsSection: "TTS local (Piper)" section + 3 DEFAULTS fields
 
-## Feature 1 — Shadowing Mode (frontend only, state local)
-- [ ] `src/components/ShadowingPractice.tsx` — TTS reference + MediaRecorder + dual waveform canvas
-- [ ] `src/routes/shadowing.tsx` + `src/routes/shadowing.page.tsx`
-- [ ] register route in `routeTree.ts`, add Sidebar entry "Shadowing" (AudioLines icon)
-- Waveform: decode AudioBuffer -> downsample ~200 points -> draw bars on canvas
-- Reuse VoiceAnswerButton MediaRecorder pattern + synthesize_audio pattern
-- Web Audio + MediaRecorder cleanup on unmount
+## Feature 2 — Mnemonic image (DALL-E)
+- [x] `ai/image.rs` (new): `generate_image(key, prompt) -> path` (OpenAI Images API, save png under app_data/mnemonic-images/<sha>.png)
+- [x] `ai/mod.rs`: register `pub mod image`
+- [x] `commands/ai.rs`: `generate_card_mnemonic_image(card_id) -> path` + resolve OpenAI key
+- [x] `lib.rs`: register cmd
+- [x] Test: `mnemonic_image_prompt_from_card` (prompt build, no network)
+- [x] tauri.ts + queries.ts: api.ai.generateMnemonicImage + useGenerateMnemonicImage
+- [x] CardList: "Image mnémotechnique" menu item (lapses>=3) + dialog w/ convertFileSrc
 
-## Feature 2 — Reading Import (LingQ-style)
-- [ ] Migration v14: schema_v14.sql CREATE TABLE word_status; CURRENT_VERSION=14; wire run()
-- [ ] `src-tauri/src/db/reading.rs` — WordStatus + ReadingRepo (get_word_statuses, set_word_status, create_cards_from_words)
-- [ ] register repo in db/mod.rs
-- [ ] `src-tauri/src/commands/reading.rs` — 3 commands
-- [ ] register module commands/mod.rs + handlers lib.rs
-- [ ] TS types + api.reading in tauri.ts; query hooks queries.ts
-- [ ] `src/components/ReadingImport.tsx` — textarea, tokenize, clickable colored words, cycle status, create cards, stats
-- [ ] `src/routes/reading.tsx` + `reading.page.tsx`, routeTree, Sidebar "Lecture" (BookOpen)
+## Feature 3 — Calibration rétrospectif
+- [x] metacognition.rs: extend CalibrationStats with gamma_post/bias_post (Option<f64>) from reviews.confidence_post vs rating>=3
+- [x] Test: `calibration_includes_retrospective`
+- [x] tauri.ts CalibrationStats: + gamma_post/bias_post
+- [x] CalibrationDashboard: 2nd line "Calibration rétrospective"
 
-## Feature 3 — PDF citations (lightest)
-- [ ] `commands/ai.rs:generate_cards_pdf` — derive filename from pdf_path, push tag `source:<filename>` onto each generated card
-- [ ] AiGenerator.tsx — surface source tag badge on drafts
+## Verifs finales
+- [x] cargo test --no-fail-fast | grep "test result"
+- [x] tsc --noEmit
+- [x] biome check . | tail -3
+- [x] cargo clippy --all-targets -- -D warnings | tail -3
+- [x] vitest run --no-file-parallelism | tail -6
 
-## Verifs finales — ALL PASS
-- [x] cargo test: 200 lib + 55 integ, 0 failed, 1 ignored (FSRS, as required)
-- [x] tsc --noEmit: clean
-- [x] biome check src/: clean (0 errors; 3 files auto-formatted)
-- [x] vitest new files: 7 passed. Full suite: 152 passed / 35 files (3 stderr
-      errors = pre-existing tts-button error-path noise, NOT failures)
-- [x] vite build: ok
-
-## Tests
-- [x] tests/unit/reading-import.test.tsx (tokenize + 3 component tests = 4)
-- [x] tests/unit/shadowing.test.tsx (computeWaveformPeaks x2 + render = 3)
-- [x] Rust: 6 ReadingRepo tests + 2 pdf_source_filename tests
-
-## Review
-- F1 Shadowing: ShadowingPractice.tsx (Web Audio decode→peaks→canvas, MediaRecorder,
-  TTS reuse, full cleanup) + route /shadowing + Sidebar (AudioLines). No DB.
-- F2 Reading: migration v14 (word_status, pure CREATE TABLE) + db/reading.rs (ReadingRepo)
-  + commands/reading.rs (3 cmds) + tauri.ts/queries.ts + ReadingImport.tsx + route /reading
-  + Sidebar (BookOpen). Optimistic status cycling, coverage stats, card creation.
-- F3 PDF citations: generate_cards_pdf tags each card `source:<filename>` (dedup) +
-  AiGenerator source badge. Page mapping intentionally skipped (pdf-extract flattens).
-- No new deps. NoteRepo::create / DeckRepo::create call-sites untouched. No residual bugs.
+## Review (résultats)
+- Rust: 235 + 55 tests OK, 1 ignored (FSRS). 12 nouveaux tests V22 verts.
+- tsc: clean. biome: 202 fichiers, 0 erreur. clippy: 0 warning. vitest: 177/177 (41 fichiers).
+- DB inchangée : CURRENT_VERSION = 16. Aucun nouveau .sql.
+- 2 nouveaux fichiers (tts/piper.rs, ai/image.rs) ; 5 DEFAULTS mis à jour.
+- Fix test : mock `useGenerateMnemonicImage` ajouté à mnemonic-helper.test.tsx (CardList l'importe désormais).
+- Compromis : cache TTSCache généralisé (mp3+wav) ; routing Piper via getQueryData(settings) pour ne pas changer la signature de useSynthesizeAudio/TtsButton ; b64 décodé à la main (zéro dépendance Cargo) ; DALL·E en b64_json (un seul aller-retour).

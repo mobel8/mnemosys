@@ -10,7 +10,7 @@
  * for the MVP; Session 3+ will migrate them to the OS keychain.
  */
 
-import { Cpu, Key, Loader2, Trash2 } from "lucide-react";
+import { AudioLines, Cpu, Key, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,6 +58,9 @@ const DEFAULTS: AppSettings = {
   openai_api_key: null,
   tts_voice: null,
   tts_speed: null,
+  piper_enabled: false,
+  piper_binary_path: "",
+  piper_model_path: "",
   anthropic_api_key: null,
   supabase_url: null,
   supabase_anon_key: null,
@@ -119,6 +122,10 @@ export function IntegrationsSection() {
   const [ollamaEnabled, setOllamaEnabled] = useState(false);
   const [ollamaUrl, setOllamaUrl] = useState("");
   const [ollamaModel, setOllamaModel] = useState("");
+  // Vague 22 — local TTS (Piper) config.
+  const [piperEnabled, setPiperEnabled] = useState(false);
+  const [piperBinary, setPiperBinary] = useState("");
+  const [piperModel, setPiperModel] = useState("");
 
   // Hydrate local state once settings arrive from the backend.
   useEffect(() => {
@@ -130,6 +137,9 @@ export function IntegrationsSection() {
     setOllamaEnabled(s.ollama_enabled);
     setOllamaUrl(s.ollama_url ?? "");
     setOllamaModel(s.ollama_model ?? "");
+    setPiperEnabled(s.piper_enabled);
+    setPiperBinary(s.piper_binary_path ?? "");
+    setPiperModel(s.piper_model_path ?? "");
   }, [query.data]);
 
   async function handleSave() {
@@ -143,6 +153,9 @@ export function IntegrationsSection() {
       ollama_enabled: ollamaEnabled,
       ollama_url: ollamaUrl.trim() === "" ? null : ollamaUrl.trim(),
       ollama_model: ollamaModel.trim() === "" ? null : ollamaModel.trim(),
+      piper_enabled: piperEnabled,
+      piper_binary_path: piperBinary.trim(),
+      piper_model_path: piperModel.trim(),
     };
     save.mutate(next);
   }
@@ -290,6 +303,67 @@ export function IntegrationsSection() {
                 step={SPEED_STEP}
                 onValueChange={(value) => setSpeed(value[0] ?? 1.0)}
               />
+            </div>
+          </div>
+        </section>
+
+        {/* ---- Local TTS (Piper) ---- */}
+        <section className="space-y-4">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <AudioLines className="h-4 w-4" />
+            TTS local (Piper)
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Synthèse vocale entièrement hors-ligne, gratuite et privée — aucune donnée envoyée.
+            Télécharge le binaire <strong>Piper</strong> et un modèle de voix (<code>.onnx</code>)
+            sur <code>github.com/OHF-Voice/piper1-gpl</code>, puis indique leurs chemins ci-dessous.
+            Une fois activé, le bouton 🔊 des cartes utilise Piper au lieu d'OpenAI.
+          </p>
+          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="piper-enabled" className="text-sm">
+                Activer la synthèse vocale locale
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Route le bouton 🔊 vers Piper. Sans modèle valide, la lecture affiche une erreur
+                claire.
+              </p>
+            </div>
+            <Switch
+              id="piper-enabled"
+              data-testid="piper-enabled-switch"
+              checked={piperEnabled}
+              onCheckedChange={setPiperEnabled}
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="piper-binary">Chemin du binaire Piper</Label>
+              <Input
+                id="piper-binary"
+                type="text"
+                autoComplete="off"
+                placeholder="piper"
+                value={piperBinary}
+                onChange={(e) => setPiperBinary(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Vide = <code>piper</code> (cherché dans le <code>PATH</code>).
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="piper-model">Chemin du modèle de voix (.onnx)</Label>
+              <Input
+                id="piper-model"
+                type="text"
+                autoComplete="off"
+                placeholder="/chemin/vers/fr_FR-siwis-medium.onnx"
+                value={piperModel}
+                onChange={(e) => setPiperModel(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Obligatoire : télécharge une voix <code>.onnx</code> et pointe vers elle.
+              </p>
             </div>
           </div>
         </section>

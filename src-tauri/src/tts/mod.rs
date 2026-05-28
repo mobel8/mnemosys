@@ -22,6 +22,7 @@
 
 pub mod cache;
 pub mod openai;
+pub mod piper;
 pub mod podcast;
 pub mod whisper;
 
@@ -30,4 +31,5 @@ mod tests;
 
 pub use cache::TTSCache;
 pub use openai::{OpenAIClient, TTSError, Voice};
+pub use piper::synthesize_piper;
 pub use whisper::{WhisperClient, WhisperError};

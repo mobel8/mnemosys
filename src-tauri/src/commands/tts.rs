@@ -22,7 +22,11 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
 use crate::error::{AppError, AppResult};
-use crate::tts::{OpenAIClient, TTSCache, Voice};
+use crate::tts::{synthesize_piper, OpenAIClient, TTSCache, Voice};
+
+/// Default Piper binary name — resolved through `$PATH` when the user hasn't
+/// set an absolute path. Mirrors the upstream install convention.
+const DEFAULT_PIPER_BINARY: &str = "piper";
 
 /// Frontend-visible result of [`synthesize_audio`].
 #[derive(Debug, serde::Serialize)]
@@ -149,7 +153,110 @@ pub async fn synthesize_audio(
     })
 }
 
-/// Wipe every `*.mp3` file from the cache directory.
+/// Piper configuration pulled from persisted settings (Vague 22).
+struct PiperConfig {
+    binary: String,
+    model: String,
+}
+
+/// Resolve the Piper binary + voice-model paths from `AppSettings`.
+///
+/// `piper_binary_path` falls back to the bare name `"piper"` (PATH lookup) when
+/// blank/absent. `piper_model_path` has no sane default — an empty string is
+/// returned and [`synthesize_piper`] turns it into an actionable error. Unlike
+/// the OpenAI key there's no secret to miss, so this never errors here.
+fn resolve_piper_config(app: &AppHandle) -> PiperConfig {
+    let mut binary = DEFAULT_PIPER_BINARY.to_string();
+    let mut model = String::new();
+
+    use tauri_plugin_store::StoreExt;
+    if let Ok(store) = app.store("settings.json") {
+        if let Some(value) = store.get("app_settings") {
+            if let Some(b) = value
+                .get("piper_binary_path")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                binary = b.to_string();
+            }
+            if let Some(m) = value
+                .get("piper_model_path")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                model = m.to_string();
+            }
+        }
+    }
+    PiperConfig { binary, model }
+}
+
+/// Synthesise speech **locally and offline** via the Piper CLI (Vague 22).
+///
+/// Mirrors [`synthesize_audio`] but routes through a sidecar `piper` process
+/// instead of OpenAI: nothing leaves the machine. The result is a WAV (Piper's
+/// native output) cached under the same `<app_cache_dir>/tts/` directory. The
+/// cache key folds the model path into a `piper:<model>` voice slug so local
+/// entries never collide with cloud MP3s even for identical text.
+///
+/// `speed` is accepted for signature parity with [`synthesize_audio`] (and to
+/// keep it in the cache key) but is **not** forwarded to Piper, whose phrase
+/// rate is baked into the chosen voice model. The frontend should keep the
+/// same value it would pass to the cloud path so a later speed change still
+/// busts the cache.
+///
+/// Fails cleanly (`AppError::Other("Piper unavailable: …")`) when the binary or
+/// model is missing — see [`synthesize_piper`].
+#[tauri::command]
+pub async fn synthesize_audio_local(
+    app: AppHandle,
+    text: String,
+    speed: Option<f32>,
+) -> AppResult<TTSResult> {
+    if text.trim().is_empty() {
+        return Err(AppError::Validation("text must not be empty".to_string()));
+    }
+
+    let speed = speed.unwrap_or(1.0);
+    let config = resolve_piper_config(&app);
+    // Fold the model into the voice slug so two different voice models cache
+    // independently and never alias the OpenAI path.
+    let voice_key = format!("piper:{}", config.model);
+
+    let cache = TTSCache::new_with_ext(cache_dir(&app)?, "wav")?;
+
+    // Fast path: already synthesised this exact (text, model, speed).
+    if cache.exists(&text, &voice_key, speed) {
+        let path = cache.path_for(&text, &voice_key, speed);
+        let size = std::fs::metadata(&path)
+            .map(|m| m.len() as usize)
+            .unwrap_or(0);
+        return Ok(TTSResult {
+            path: path.to_string_lossy().into_owned(),
+            cached: true,
+            size_bytes: size,
+        });
+    }
+
+    // Cache miss — run Piper. It writes the WAV straight to the cache path; on
+    // failure we leave nothing behind (synthesize_piper validates the output).
+    let out_path = cache.path_for(&text, &voice_key, speed);
+    synthesize_piper(&config.binary, &config.model, &text, &out_path)?;
+
+    let size_bytes = std::fs::metadata(&out_path)
+        .map(|m| m.len() as usize)
+        .unwrap_or(0);
+
+    Ok(TTSResult {
+        path: out_path.to_string_lossy().into_owned(),
+        cached: false,
+        size_bytes,
+    })
+}
+
+/// Wipe every cached audio file (`*.mp3` + `*.wav`) from the cache directory.
 ///
 /// No-op (returns `Ok(())`) if the directory does not yet exist — that
 /// matches the "first launch, nothing to clear" scenario.

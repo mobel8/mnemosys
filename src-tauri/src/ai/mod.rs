@@ -15,6 +15,7 @@
 pub mod cards;
 pub mod claude;
 pub mod critic;
+pub mod image;
 pub mod mnemonic;
 pub mod ollama;
 pub mod pdf;
@@ -28,6 +29,7 @@ pub use cards::{
 };
 pub use claude::{ClaudeClient, ClaudeError};
 pub use critic::{critique_cards, CardCritique};
+pub use image::{build_image_prompt, ImageClient};
 pub use mnemonic::generate_mnemonic;
 pub use ollama::OllamaClient;
 pub use pdf::{chunk_text, extract_pdf_text};

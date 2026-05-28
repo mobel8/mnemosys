@@ -12,9 +12,11 @@
  */
 
 import { useNavigate } from "@tanstack/react-router";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import {
   ChevronLeft,
   ChevronRight,
+  ImagePlus,
   Lightbulb,
   Loader2,
   MoreHorizontal,
@@ -45,6 +47,7 @@ import {
   useCardsInDeck,
   useDeleteNote,
   useGenerateMnemonic,
+  useGenerateMnemonicImage,
   useResetCard,
   useSearchNotes,
   useSuspendCard,
@@ -333,6 +336,29 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
     generateMnemonic.mutate({ cardId: card.id, language: MNEMONIC_LANGUAGE });
   }
 
+  // Vague 22 — mnemonic image (DALL·E). Same high-lapse gate; the generated
+  // PNG path is shown in its own dialog via convertFileSrc().
+  const [imageOpen, setImageOpen] = useState(false);
+  const [imagePath, setImagePath] = useState<string | null>(null);
+  const generateImage = useGenerateMnemonicImage({
+    onSuccess: (path) => setImagePath(path),
+    onError: (err) => {
+      setImageOpen(false);
+      toast({
+        title: "Image mnémotechnique indisponible",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  function handleGenerateMnemonicImage() {
+    if (!card) return;
+    setImagePath(null);
+    setImageOpen(true);
+    generateImage.mutate({ cardId: card.id });
+  }
+
   return (
     <tr
       className={cn(
@@ -432,6 +458,11 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
                 <Lightbulb className="h-4 w-4" /> Aide mnémotechnique
               </DropdownMenuItem>
             )}
+            {showMnemonicItem && (
+              <DropdownMenuItem onSelect={() => handleGenerateMnemonicImage()}>
+                <ImagePlus className="h-4 w-4" /> Image mnémotechnique
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
@@ -471,6 +502,35 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
               >
                 {mnemonic}
               </p>
+            ) : null}
+          </DialogContent>
+        </Dialog>
+
+        {/* Vague 22 — mnemonic image dialog for high-lapse cards. */}
+        <Dialog open={imageOpen} onOpenChange={setImageOpen}>
+          <DialogContent data-testid="mnemonic-image-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ImagePlus className="h-5 w-5 text-primary" />
+                Image mnémotechnique
+              </DialogTitle>
+              <DialogDescription>{noteFrontPreview(note)}</DialogDescription>
+            </DialogHeader>
+            {generateImage.isPending ? (
+              <div
+                className="flex items-center gap-2 text-sm text-muted-foreground"
+                data-testid="mnemonic-image-loading"
+              >
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Génération de l'image (DALL·E)…
+              </div>
+            ) : imagePath ? (
+              <img
+                src={convertFileSrc(imagePath)}
+                alt={`Aide visuelle pour « ${noteFrontPreview(note)} »`}
+                className="w-full rounded-md border"
+                data-testid="mnemonic-image"
+              />
             ) : null}
           </DialogContent>
         </Dialog>

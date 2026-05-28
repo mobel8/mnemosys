@@ -7,8 +7,10 @@
 
 use super::cache::TTSCache;
 use super::openai::{OpenAIClient, TTSError, Voice};
+use super::piper::{piper_args, synthesize_piper};
+use crate::error::AppError;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
 // Temp directory helper — keeps each test isolated.
@@ -124,6 +126,31 @@ fn cache_key_uses_mp3_extension() {
     assert_eq!(p.extension().and_then(|s| s.to_str()), Some("mp3"));
 }
 
+#[test]
+fn cache_with_ext_uses_wav_for_piper() {
+    let tmp = TempDir::new("wav-ext");
+    let cache = TTSCache::new_with_ext(tmp.path(), "wav").unwrap();
+    let p = cache.path_for("bonjour", "piper:/voices/fr.onnx", 1.0);
+    assert_eq!(p.extension().and_then(|s| s.to_str()), Some("wav"));
+}
+
+#[test]
+fn cache_piper_and_openai_keys_never_collide() {
+    // Same text + speed, but the Piper path uses a `piper:<model>` voice slug,
+    // so its hash must differ from the OpenAI `nova` entry even though the two
+    // share a directory. (Compare on the stem since the extensions differ.)
+    let tmp = TempDir::new("collision");
+    let openai = TTSCache::new(tmp.path()).unwrap();
+    let piper = TTSCache::new_with_ext(tmp.path(), "wav").unwrap();
+    let a = openai.path_for("hello", "nova", 1.0);
+    let b = piper.path_for("hello", "piper:/voices/en.onnx", 1.0);
+    assert_ne!(
+        a.file_stem().unwrap(),
+        b.file_stem().unwrap(),
+        "piper and openai cache keys must not alias"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // TTSCache — round-trip + maintenance
 // ---------------------------------------------------------------------------
@@ -151,14 +178,18 @@ fn cache_read_returns_none_on_miss() {
 }
 
 #[test]
-fn cache_clear_removes_mp3_files_only() {
+fn cache_clear_removes_audio_files_only() {
     let tmp = TempDir::new("clear");
     let cache = TTSCache::new(tmp.path()).unwrap();
 
     cache.write("a", "nova", 1.0, b"a-bytes").unwrap();
     cache.write("b", "nova", 1.0, b"b-bytes").unwrap();
 
-    // Drop a non-mp3 file in there to verify clear() leaves it alone.
+    // Also drop a Piper-style WAV so we prove clear() reaps both formats.
+    let wav = tmp.path().join("deadbeef.wav");
+    fs::write(&wav, b"RIFF....WAVE").unwrap();
+
+    // Drop a non-audio file in there to verify clear() leaves it alone.
     let sentinel = tmp.path().join("README.txt");
     fs::write(&sentinel, b"do not delete").unwrap();
 
@@ -166,7 +197,11 @@ fn cache_clear_removes_mp3_files_only() {
 
     assert!(!cache.exists("a", "nova", 1.0));
     assert!(!cache.exists("b", "nova", 1.0));
-    assert!(sentinel.exists(), "clear() must only remove *.mp3 files");
+    assert!(!wav.exists(), "clear() must also remove *.wav files");
+    assert!(
+        sentinel.exists(),
+        "clear() must only remove *.mp3 / *.wav files"
+    );
 }
 
 #[test]
@@ -176,4 +211,73 @@ fn cache_new_creates_dir_if_missing() {
     assert!(!nested.exists());
     let _cache = TTSCache::new(nested.clone()).unwrap();
     assert!(nested.exists());
+}
+
+// ---------------------------------------------------------------------------
+// Piper (Vague 22) — pure-compute / validation only, never spawns a process.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn piper_command_construction() {
+    // The CLI contract is `piper --model <model> --output_file <out>` with the
+    // text fed on stdin. We assert the exact argv so a refactor can't silently
+    // reorder/rename the flags Piper expects.
+    let out = Path::new("/tmp/mnemosys/out.wav");
+    let args = piper_args("/voices/fr_FR-siwis-medium.onnx", out);
+    assert_eq!(
+        args,
+        vec![
+            "--model".to_string(),
+            "/voices/fr_FR-siwis-medium.onnx".to_string(),
+            "--output_file".to_string(),
+            "/tmp/mnemosys/out.wav".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn piper_errors_clearly_when_model_path_blank() {
+    // No process is spawned: the blank-model guard short-circuits first, so
+    // this is safe and deterministic on any CI box without Piper installed.
+    let tmp = TempDir::new("piper-nomodel");
+    let out = tmp.path().join("x.wav");
+    let err = synthesize_piper("piper", "  ", "bonjour", &out)
+        .expect_err("blank model must fail before spawning");
+    match err {
+        AppError::Other(msg) => assert!(
+            msg.contains("Piper unavailable") && msg.contains("voice model"),
+            "error should name the missing voice model, got: {msg}"
+        ),
+        other => panic!("expected AppError::Other, got {other:?}"),
+    }
+    assert!(!out.exists(), "no output file should be produced on error");
+}
+
+#[test]
+fn piper_errors_clearly_when_model_file_missing() {
+    // A non-blank but non-existent model path also fails before any spawn,
+    // naming the path so the UI can tell the user exactly what to fix.
+    let tmp = TempDir::new("piper-badmodel");
+    let out = tmp.path().join("x.wav");
+    let missing = tmp.path().join("does-not-exist.onnx");
+    let err = synthesize_piper("piper", missing.to_str().unwrap(), "salut", &out)
+        .expect_err("missing model file must fail before spawning");
+    match err {
+        AppError::Other(msg) => assert!(
+            msg.contains("Piper unavailable") && msg.contains("not found"),
+            "error should report the model file as not found, got: {msg}"
+        ),
+        other => panic!("expected AppError::Other, got {other:?}"),
+    }
+}
+
+#[test]
+fn piper_rejects_empty_text() {
+    let tmp = TempDir::new("piper-emptytext");
+    let out = tmp.path().join("x.wav");
+    // Even with a (fake) model path, empty text is a validation error and
+    // short-circuits before any model-file or process work.
+    let err = synthesize_piper("piper", "/voices/x.onnx", "   ", &out)
+        .expect_err("empty text must be rejected");
+    assert!(matches!(err, AppError::Validation(_)));
 }

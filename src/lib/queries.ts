@@ -675,13 +675,25 @@ export function useGenerateMnemonic(
  * Mutation: synthesise (or cache-hit) speech. Result includes the on-disk
  * path; pass through `convertFileSrc()` before assigning to `<audio src>`.
  * Invalidates the cache-size query when the call was a miss.
+ *
+ * Vague 22 — routing: when `piper_enabled` is set in the persisted settings,
+ * the call goes through the **local** Piper backend (offline WAV) instead of
+ * OpenAI; the `voice` argument is ignored in that mode (Piper's voice is the
+ * configured model). Settings are read from the query cache so the hook keeps
+ * its existing signature and callers (e.g. `TtsButton`) need no change.
  */
 export function useSynthesizeAudio(
   opts?: UseMutationOptions<TTSResult, Error, { text: string; voice: TTSVoice; speed?: number }>,
 ) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ text, voice, speed }) => api.tts.synthesize(text, voice, speed),
+    mutationFn: ({ text, voice, speed }) => {
+      const settings = qc.getQueryData<AppSettings>(queryKeys.settings);
+      if (settings?.piper_enabled) {
+        return api.tts.synthesizeLocal(text, speed);
+      }
+      return api.tts.synthesize(text, voice, speed);
+    },
     ...opts,
     onSuccess: (data, variables, onMutateResult, context) => {
       if (!data.cached) {
@@ -689,6 +701,20 @@ export function useSynthesizeAudio(
       }
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
+  });
+}
+
+/**
+ * Vague 22 — generate a DALL·E mnemonic image for one (high-lapse) card.
+ * Stateless like `useGenerateMnemonic`: the resulting PNG path is shown in a
+ * dialog (via `convertFileSrc`), nothing is persisted, so no invalidation.
+ */
+export function useGenerateMnemonicImage(
+  opts?: UseMutationOptions<string, Error, { cardId: number }>,
+) {
+  return useMutation({
+    mutationFn: ({ cardId }) => api.ai.generateMnemonicImage(cardId),
+    ...opts,
   });
 }
 

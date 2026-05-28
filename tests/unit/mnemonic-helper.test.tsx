@@ -48,6 +48,15 @@ vi.mock("@/lib/queries", () => ({
     },
     isPending: mnemonicPending,
   }),
+  // Vague 22 — image mnemonic hook (used by the same menu); a no-op stub is
+  // enough since these tests only exercise the text-mnemonic flow.
+  useGenerateMnemonicImage: (_opts?: {
+    onSuccess?: (path: string) => void;
+    onError?: (err: Error) => void;
+  }) => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
 }));
 
 import { CardList } from "@/components/CardList";

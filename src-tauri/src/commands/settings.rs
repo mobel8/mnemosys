@@ -50,6 +50,21 @@ pub struct AppSettings {
     #[serde(default)]
     pub tts_speed: Option<f32>,
 
+    // --- Vague 22 (local offline TTS via Piper) -----------------------------
+    /// When on, the 🔊 button synthesises speech locally through the Piper CLI
+    /// instead of OpenAI (offline + free + private). Defaults off — the cloud
+    /// path is untouched for current users.
+    #[serde(default)]
+    pub piper_enabled: bool,
+    /// Path to the Piper binary. Empty/absent -> the backend uses the bare
+    /// name `"piper"` and resolves it through `$PATH`.
+    #[serde(default)]
+    pub piper_binary_path: String,
+    /// Path to the `.onnx` Piper voice model. Empty/absent -> local synthesis
+    /// returns an actionable "download a voice model" error.
+    #[serde(default)]
+    pub piper_model_path: String,
+
     // --- Vague A2.1 (AI card generation) -------------------------------------
     /// Anthropic API key. `None` -> AI commands fall back to the
     /// `ANTHROPIC_API_KEY` env var and otherwise return a validation error.
@@ -207,6 +222,10 @@ impl Default for AppSettings {
             openai_api_key: None,
             tts_voice: None,
             tts_speed: None,
+            // Vague 22 — local Piper TTS off; paths blank (PATH lookup / no model).
+            piper_enabled: false,
+            piper_binary_path: String::new(),
+            piper_model_path: String::new(),
             // AI defaults: same — no key persisted until the user sets one.
             anthropic_api_key: None,
             // Sync stays dormant out of the box.

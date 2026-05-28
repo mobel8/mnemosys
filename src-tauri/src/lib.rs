@@ -116,6 +116,8 @@ pub fn run() {
             commands::io::import_json,
             // tts (Vague A2.2)
             commands::tts::synthesize_audio,
+            // local offline TTS via Piper (Vague 22)
+            commands::tts::synthesize_audio_local,
             commands::tts::clear_tts_cache,
             commands::tts::get_tts_cache_size,
             // ai (Vague A2.1)
@@ -127,6 +129,8 @@ pub fn run() {
             // multi-agent pipeline + mnemonic helper (Vague 13)
             commands::ai::critique_generated_cards,
             commands::ai::generate_card_mnemonic,
+            // mnemonic image via DALL-E (Vague 22)
+            commands::ai::generate_card_mnemonic_image,
             // apkg (Vague A2.3)
             commands::apkg::import_apkg,
             // media (image-occlusion template)

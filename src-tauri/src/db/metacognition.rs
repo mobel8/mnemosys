@@ -64,9 +64,29 @@ pub struct CalibrationStats {
     pub bias: f64,
     /// Always 10 buckets; band runs `[0.0, 0.1) … [0.9, 1.0]`.
     pub buckets: Vec<CalibrationBucket>,
-    /// Total number of resolved predictions feeding the stats.
+    /// Total number of resolved predictions feeding the prospective stats.
     pub total_resolved: i64,
+
+    // --- Vague 22 — retrospective calibration (Bang & Fleming 2018) ---------
+    /// Retrospective Goodman-Kruskal γ computed from `reviews.confidence_post`
+    /// (the 1-5 confidence captured *after* the answer is revealed, normalised
+    /// to `[0, 1]`) against whether that same review was graded Good/Easy
+    /// (`rating >= 3`). `None` when fewer than [`RETRO_MIN_SAMPLE`] reviews
+    /// carry a post-confidence value — the signal would be too noisy to show.
+    pub gamma_post: Option<f64>,
+    /// Retrospective bias: mean(confidence_post normalised) - mean(correct).
+    /// Positive = retrospective overconfidence. `None` under the same
+    /// minimum-sample gate as [`Self::gamma_post`].
+    pub bias_post: Option<f64>,
+    /// Number of reviews carrying a `confidence_post` value (the retrospective
+    /// sample size). `0` when the two-step confidence toggle has never fired.
+    pub total_post: i64,
 }
+
+/// Minimum number of post-confidence reviews before the retrospective γ/bias
+/// are reported. Below this the rank correlation is dominated by noise, so we
+/// return `None` and the dashboard hides the second line.
+const RETRO_MIN_SAMPLE: i64 = 10;
 
 pub struct MetacognitionRepo<'a> {
     conn: &'a Connection,
@@ -231,11 +251,32 @@ impl<'a> MetacognitionRepo<'a> {
         // 4) Goodman-Kruskal γ.
         let gamma = goodman_kruskal_gamma(&pairs);
 
+        // 5) Retrospective calibration (Vague 22): confidence_post vs the same
+        //    review's Good/Easy outcome. Independent of the JOL predictions —
+        //    it answers "once you'd seen the answer, did your confidence track
+        //    reality?" rather than "could you predict it in advance?".
+        let retro = self.retrospective_pairs(deck_id)?;
+        let total_post = retro.len() as i64;
+        let (gamma_post, bias_post) = if total_post >= RETRO_MIN_SAMPLE {
+            let mean_p: f64 = retro.iter().map(|(p, _)| *p).sum::<f64>() / total_post as f64;
+            let mean_a: f64 = retro.iter().map(|(_, a)| if *a { 1.0 } else { 0.0 }).sum::<f64>()
+                / total_post as f64;
+            (
+                Some(goodman_kruskal_gamma(&retro)),
+                Some(mean_p - mean_a),
+            )
+        } else {
+            (None, None)
+        };
+
         Ok(CalibrationStats {
             gamma,
             bias,
             buckets,
             total_resolved,
+            gamma_post,
+            bias_post,
+            total_post,
         })
     }
 
@@ -271,6 +312,47 @@ impl<'a> MetacognitionRepo<'a> {
                 let a: i64 = row.get(1)?;
                 Ok((p, a != 0))
             })?;
+            for r in rows {
+                out.push(r?);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Fetch retrospective `(confidence, correct)` pairs from `reviews`
+    /// (Vague 22). `confidence` is `reviews.confidence_post` normalised from
+    /// the 1-5 scale to `[0, 1]` via `(c - 1) / 4`; `correct` is `rating >= 3`
+    /// (Good/Easy), matching the Good/Easy=correct mapping used when resolving
+    /// JOL predictions. Rows without a `confidence_post` are excluded.
+    /// Optionally filtered by deck through the `cards` join.
+    fn retrospective_pairs(&self, deck_id: Option<i64>) -> AppResult<Vec<(f64, bool)>> {
+        let mut out = Vec::new();
+        let map_row = |row: &Row<'_>| -> rusqlite::Result<(f64, bool)> {
+            let c: i64 = row.get(0)?;
+            let rating: i64 = row.get(1)?;
+            // Clamp defensively: a stray out-of-range value can't push the
+            // normalised confidence outside [0, 1].
+            let norm = ((c.clamp(1, 5) - 1) as f64) / 4.0;
+            Ok((norm, rating >= 3))
+        };
+        if let Some(deck_id) = deck_id {
+            let mut stmt = self.conn.prepare(
+                "SELECT r.confidence_post, r.rating
+                 FROM reviews r
+                 INNER JOIN cards c ON c.id = r.card_id
+                 WHERE r.confidence_post IS NOT NULL AND c.deck_id = ?1",
+            )?;
+            let rows = stmt.query_map(params![deck_id], map_row)?;
+            for r in rows {
+                out.push(r?);
+            }
+        } else {
+            let mut stmt = self.conn.prepare(
+                "SELECT confidence_post, rating
+                 FROM reviews
+                 WHERE confidence_post IS NOT NULL",
+            )?;
+            let rows = stmt.query_map([], map_row)?;
             for r in rows {
                 out.push(r?);
             }
@@ -357,6 +439,108 @@ fn row_to_jol(row: &Row<'_>) -> rusqlite::Result<JolPrediction> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::cards::CardState;
+    use crate::db::notes::NoteTemplate;
+    use crate::db::reviews::NewReview;
+    use crate::db::Database;
+    use serde_json::json;
+
+    /// Insert one deck + note + card and return the card id, for review-backed
+    /// retrospective-calibration tests.
+    fn seed_card(db: &Database) -> i64 {
+        let conn = db.lock();
+        let deck = db
+            .decks(&conn)
+            .create("D", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+        let note = db
+            .notes(&conn)
+            .create(
+                deck.id,
+                NoteTemplate::Basic,
+                json!({ "front": "f", "back": "b" }),
+                vec![],
+                None,
+            )
+            .unwrap();
+        conn.query_row(
+            "SELECT id FROM cards WHERE note_id = ?1",
+            params![note.id],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+
+    /// Append a review carrying a retrospective `confidence_post` (1-5) and a
+    /// FSRS `rating` (1-4) to drive the retrospective calibration computation.
+    fn add_review(db: &Database, card_id: i64, rating: i64, confidence_post: i64, at: i64) {
+        let conn = db.lock();
+        db.reviews(&conn)
+            .insert(
+                NewReview {
+                    card_id,
+                    rating,
+                    state_before: CardState::Review,
+                    state_after: CardState::Review,
+                    stability_before: Some(5.0),
+                    stability_after: 5.0,
+                    difficulty_before: Some(5.0),
+                    difficulty_after: 5.0,
+                    elapsed_days: 1,
+                    scheduled_days: 5,
+                    review_time: 1_000,
+                    confidence: None,
+                    confidence_post: Some(confidence_post),
+                },
+                at,
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn calibration_includes_retrospective() {
+        let db = Database::for_test();
+        let card_id = seed_card(&db);
+
+        // No post-confidence reviews yet -> retrospective fields stay None and
+        // the sample count is zero (dashboard hides the second line).
+        {
+            let conn = db.lock();
+            let empty = MetacognitionRepo::new(&conn).calibration_stats(None).unwrap();
+            assert_eq!(empty.total_post, 0);
+            assert!(empty.gamma_post.is_none());
+            assert!(empty.bias_post.is_none());
+        }
+
+        // Add ≥ RETRO_MIN_SAMPLE reviews where HIGH post-confidence lines up
+        // with Good/Easy (rating 3-4) and LOW post-confidence with Again/Hard
+        // (rating 1-2): a strong positive retrospective γ.
+        let mut t = 1_700_000_000;
+        for _ in 0..6 {
+            add_review(&db, card_id, 4, 5, t); // confident + correct
+            t += 100;
+            add_review(&db, card_id, 1, 1, t); // unsure + wrong
+            t += 100;
+        }
+
+        let conn = db.lock();
+        let stats = MetacognitionRepo::new(&conn).calibration_stats(None).unwrap();
+        assert_eq!(stats.total_post, 12, "every review carries confidence_post");
+        let gamma_post = stats.gamma_post.expect("retrospective γ should be present");
+        assert!(
+            gamma_post > 0.9,
+            "expected strong positive retrospective γ, got {gamma_post}"
+        );
+        // Mean confidence (≈ (1.0 + 0.0)/2 = 0.5) ≈ mean correct (6/12 = 0.5),
+        // so the retrospective bias is near zero.
+        let bias_post = stats.bias_post.expect("retrospective bias should be present");
+        assert!(
+            bias_post.abs() < 0.1,
+            "expected near-zero retrospective bias, got {bias_post}"
+        );
+        // The prospective fields are independent and untouched (no JOLs here).
+        assert_eq!(stats.total_resolved, 0);
+    }
 
     #[test]
     fn gamma_returns_one_for_perfect_correlation() {

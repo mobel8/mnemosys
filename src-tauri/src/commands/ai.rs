@@ -18,17 +18,20 @@
 //!    to surface as a "configure your key" hint.
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::ai::{
-    critique_cards, generate_cards_from_pdf, generate_cards_from_text, generate_mnemonic,
-    CardCritique, ClaudeClient, GeneratedCard, OllamaClient,
+    build_image_prompt, critique_cards, generate_cards_from_pdf, generate_cards_from_text,
+    generate_mnemonic, CardCritique, ClaudeClient, GeneratedCard, ImageClient, OllamaClient,
 };
 use crate::ai::cards::{build_card_prompt, parse_cards_response, SYSTEM_PROMPT};
 use crate::ai::ollama::{DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL};
 use crate::app_state::AppState;
 use crate::db::CardRepo;
 use crate::error::{AppError, AppResult};
+
+/// Sub-directory of `app_data_dir` where generated mnemonic images live.
+const MNEMONIC_IMAGE_DIR: &str = "mnemonic-images";
 
 /// Resolve the Anthropic API key. Env var wins; falls back to the persisted
 /// app settings. Returns a validation error with actionable copy if both
@@ -409,6 +412,106 @@ pub async fn generate_card_mnemonic(
         .map_err(|e| AppError::Other(e.to_string()))
 }
 
+// ---------------------------------------------------------------------------
+// Vague 22 — Mnemonic image (DALL·E)
+// ---------------------------------------------------------------------------
+
+/// Resolve the **OpenAI** API key (distinct from [`resolve_api_key`], which
+/// resolves the Anthropic one). Env var wins, then the persisted settings.
+/// Mirrors the resolution used by the TTS commands so a single OpenAI key
+/// powers both speech and image generation.
+fn resolve_openai_key(app: &AppHandle) -> AppResult<String> {
+    if let Ok(key) = std::env::var("OPENAI_API_KEY") {
+        if !key.trim().is_empty() {
+            return Ok(key);
+        }
+    }
+
+    use tauri_plugin_store::StoreExt;
+    let store = app
+        .store("settings.json")
+        .map_err(|e| AppError::Other(format!("open settings store: {e}")))?;
+    if let Some(value) = store.get("app_settings") {
+        if let Some(key) = value
+            .get("openai_api_key")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            return Ok(key.to_string());
+        }
+    }
+
+    Err(AppError::Validation(
+        "OpenAI API key not configured. Set OPENAI_API_KEY env var or configure it in Settings."
+            .to_string(),
+    ))
+}
+
+/// Resolve `<app_data_dir>/mnemonic-images`, creating it on demand.
+fn mnemonic_image_dir(app: &AppHandle) -> AppResult<std::path::PathBuf> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Other(format!("app_data_dir unavailable: {e}")))?
+        .join(MNEMONIC_IMAGE_DIR);
+    if !dir.exists() {
+        std::fs::create_dir_all(&dir)?;
+    }
+    Ok(dir)
+}
+
+/// Hex SHA-256 of the prompt — a stable, collision-free file name so the same
+/// card+prompt reuses one PNG instead of re-billing DALL·E on every click.
+fn image_filename(prompt: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(prompt.as_bytes());
+    format!("{:x}.png", hasher.finalize())
+}
+
+/// Generate (or reuse) a DALL·E mnemonic image for one card the learner keeps
+/// forgetting (Vague 22 — dual-coding companion to the text mnemonic of V13).
+///
+/// Loads the card + parent note, builds an absurd-scene prompt from the
+/// front/back, and writes the PNG under `<app_data_dir>/mnemonic-images/`.
+/// Returns the absolute path; the frontend feeds it through `convertFileSrc()`.
+/// Idempotent: a prompt already on disk skips the API call entirely. Fails
+/// cleanly with an actionable error when no OpenAI key is configured.
+#[tauri::command]
+pub async fn generate_card_mnemonic_image(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    card_id: i64,
+) -> AppResult<String> {
+    // Lock + load synchronously, before the async API call, so the DB mutex is
+    // never held across an `.await` (same discipline as generate_card_mnemonic).
+    let (front, back) = {
+        let conn = state.db.lock();
+        let with_note = CardRepo::new(&conn).get_with_note(card_id)?;
+        front_back_from_fields(&with_note.note.fields)?
+    };
+
+    let prompt = build_image_prompt(&front, &back);
+
+    // Reuse a previously generated image for the identical prompt.
+    let dir = mnemonic_image_dir(&app)?;
+    let target = dir.join(image_filename(&prompt));
+    if target.is_file() {
+        return Ok(target.to_string_lossy().into_owned());
+    }
+
+    let api_key = resolve_openai_key(&app)?;
+    let client = ImageClient::new(api_key);
+    let png = client
+        .generate(&prompt)
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))?;
+
+    std::fs::write(&target, &png)?;
+    Ok(target.to_string_lossy().into_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -455,6 +558,30 @@ mod tests {
     fn front_back_rejects_occlusion() {
         let fields = serde_json::json!({"image_path": "/tmp/x.png", "masks": []});
         assert!(front_back_from_fields(&fields).is_err());
+    }
+
+    #[test]
+    fn mnemonic_image_prompt_from_card() {
+        // The command builds the DALL·E prompt from a card's extracted
+        // front/back; this exercises that wiring without any network call.
+        let fields = serde_json::json!({"front": "Capitale du Japon ?", "back": "Tokyo"});
+        let (front, back) = front_back_from_fields(&fields).expect("basic must parse");
+        let prompt = build_image_prompt(&front, &back);
+        assert!(prompt.contains("Capitale du Japon ?"));
+        assert!(prompt.contains("Tokyo"));
+        assert!(prompt.contains("mnémotechnique"));
+        // No-text guard so DALL·E doesn't render the answer as caption.
+        assert!(prompt.contains("sans aucun texte"));
+    }
+
+    #[test]
+    fn image_filename_is_stable_and_png() {
+        let a = image_filename("prompt A");
+        let b = image_filename("prompt A");
+        let c = image_filename("prompt B");
+        assert_eq!(a, b, "same prompt -> same filename (cache reuse)");
+        assert_ne!(a, c, "different prompt -> different filename");
+        assert!(a.ends_with(".png"));
     }
 
     #[test]
