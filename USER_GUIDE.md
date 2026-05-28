@@ -369,6 +369,276 @@ Architecture livrée mais **désactivée tant que tu ne configures pas un projet
 
 ---
 
+## Schedulers pluggables par deck (Vague 4)
+
+Chaque deck choisit son **algorithme de planification**. Le défaut est FSRS-6, mais tu peux opter pour deux alternatives historiques, deck par deck.
+
+Le choix se fait à la **création** d'un deck (« + Nouveau deck ») ou via **« Modifier le deck »**, dans la section *Algorithme de scheduling*.
+
+| Algorithme | Pour qui / quand | Comportement |
+|------------|------------------|--------------|
+| **FSRS-6** (recommandé) | Cas par défaut, le meilleur compromis rétention/effort. | Stabilité + difficulté, 21 paramètres, cible `desired_retention`. |
+| **SM-2** | Tu viens d'Anki classique et veux le comportement « ease factor » familier. | Facteur de facilité unique, intervalles multipliés. |
+| **Leitner 5-box** | Apprentissage simple, tangible, sans maths cachées. | 5 boîtes : une réussite fait monter d'une boîte, un échec renvoie à la boîte 1. |
+
+Un **badge** sur la carte du deck rappelle l'algorithme actif (`FSRS` / `SM-2` / `Leitner`). Changer d'algorithme n'efface pas l'historique des reviews ; seules les prochaines planifications suivent le nouvel algo.
+
+---
+
+## Review entrelacée (Vague 5)
+
+L'**interleaving** (mélanger des sujets plutôt que les masser par bloc) améliore le transfert et la discrimination (Rohrer & Taylor 2007, gains de 10 à 43 % selon les tâches). Mnemosys propose un mode dédié.
+
+1. Sidebar → **« Review entrelacée »** (icône mélange).
+2. Sélectionne **plusieurs decks** à mélanger.
+3. Lance la session : les cartes dues de tous les decks choisis sont **brassées** dans une seule file, au lieu d'être révisées deck par deck.
+
+Tout le reste (flip, ratings, raccourcis) est identique à une session classique.
+
+---
+
+## Élaboration IA automatique (Vague 5)
+
+Pendant une review, deux aides facultatives peuvent être générées à la volée par Claude pour la carte courante :
+
+- **Why? (Pourquoi ?)** — une phrase d'*interrogation élaborative* qui explique *pourquoi* la réponse est correcte (effet d'élaboration, McDaniel & Donnelly 1996).
+- **Example (Exemple)** — un ou deux exemples concrets pour ancrer le concept.
+
+Ces enrichissements demandent une **clé Anthropic** configurée (Paramètres → Intégrations). Si Claude ne renvoie rien d'exploitable, le bloc reste simplement vide — aucune erreur bloquante.
+
+---
+
+## Sketch-before-flip — dessin avant de retourner (Vague 7)
+
+Dessiner sa réponse **avant** de voir le verso produit un gain de rappel mesuré de **30 à 50 %** (effet de dessin / *drawing effect*, Wammes et al. 2016/2018). C'est l'une des manipulations les plus puissantes de la liste.
+
+### Activer
+
+**Paramètres → Réglages des révisions → Modes cognitifs → « Dessin avant flip (drawing effect) »**.
+
+### Pendant une review
+
+1. La carte s'affiche, recto seul, avec un **canvas de dessin** sous la question.
+2. Esquisse ta réponse à la souris / au trackpad / au stylet (un schéma grossier suffit — l'intérêt est l'effort de génération, pas la qualité du trait).
+3. Retourne la carte (Espace) puis note-toi normalement.
+4. Le croquis est **capturé en PNG et stocké localement** (table `review_sketches`), rattaché à cette review précise. Tu pourras revoir les croquis passés d'une carte.
+
+> Le dessin n'est jamais noté ni envoyé sur le réseau : il sert uniquement à forcer l'encodage actif.
+
+---
+
+## Prédictions de rappel différées (JOL) + Calibration (Vague 7)
+
+Un **Judgment of Learning (JOL)** est ta prédiction de la probabilité de réussir une carte plus tard. Les JOL **différés** (faits ~30 min après l'étude, pas immédiatement) sont le meilleur signal métacognitif connu : la méta-analyse Rhodes & Tauber 2011 (4 554 sujets) mesure une résolution **γ (gamma de Goodman-Kruskal) ≈ 0,93**.
+
+### Activer
+
+**Paramètres → Réglages des révisions → Modes cognitifs → « Prédictions de rappel différées (JOL) »**. Le délai entre la review et la relance est réglable (5 à 120 min, défaut 30).
+
+### Le cycle
+
+1. Tu révises une carte normalement.
+2. ~30 min plus tard, l'app te **redemande** : « quelle chance as-tu de réussir cette carte dans X jours ? » → tu donnes une probabilité.
+3. À la **prochaine review réelle** de la carte, la prédiction est *résolue* (réussie ou non) et alimente le dashboard.
+
+### Lire le Calibration Dashboard
+
+Dans **Stats**, la carte **« Calibration métacognitive »** apparaît dès que tu as **≥ 30 prédictions résolues**. Elle affiche :
+
+- **γ (Gamma)** — qualité de ton *classement* (sais-tu distinguer ce que tu sais de ce que tu ne sais pas ?). Interprétation : `≥ 0,5` excellente · `≥ 0,2` bonne · `≥ 0` modérée · `< 0` inversée (à corriger).
+- **Biais** — écart `moyenne(prédit) − moyenne(réel)`. **Positif = surconfiance**, négatif = sous-confiance, `|biais| < 5 %` = équilibré.
+- **Histogramme 10 bandes** : pour chaque tranche de confiance prédite (0-10 %, … 90-100 %), la barre **prédite** (bleue) face à l'**accuracy réelle** (verte si bien calibrée, rouge si surconfiance), avec l'effectif `n`.
+
+Vise un γ élevé **et** un biais proche de 0 : tu prédis juste *et* sans te surestimer.
+
+---
+
+## Deck Podcast — NotebookLM-style (Vague 8)
+
+Transforme un deck entier en un **dialogue audio à deux voix** (un animateur + une experte), façon Google NotebookLM. Le script est écrit par Claude, l'audio synthétisé par OpenAI TTS.
+
+### Pré-requis
+
+Les **deux clés** sont nécessaires : **Anthropic** (script) et **OpenAI** (voix). Configure-les dans Paramètres → Intégrations.
+
+### Générer
+
+1. Sur la **Home**, ouvre le menu `⋯` d'un deck (le deck doit contenir **au moins 3 cartes**) → **« Podcast »**.
+2. Choisis un **format** :
+
+| Format | Durée | Contenu |
+|--------|-------|---------|
+| **Deep Dive** | ~5 min | Épisode détaillé : l'experte explique chaque carte avec des exemples. |
+| **Brief** | ~2 min | *Highlight reel* : uniquement les cartes phares. |
+| **Critique** | variable | Débat critique : l'animateur challenge chaque affirmation. |
+
+3. Choisis une **voix Host** et une **voix Expert** parmi les 8 voix OpenAI (elles doivent être **différentes**, sinon le bouton reste bloqué).
+4. Clique **« Générer »** (~30-60 s). L'épisode se joue **en ligne** dans le dialogue, et apparaît dans **« Épisodes précédents »**.
+
+### Télécharger / supprimer
+
+- Le MP3 est mis en cache dans `<app_cache_dir>/podcasts/`. Re-générer le même couple (format + voix) est un *cache hit* gratuit.
+- Bouton **« Télécharger »** → file picker natif → copie le MP3 où tu veux.
+- Bouton corbeille → supprime l'épisode du cache.
+
+---
+
+## Whisper Mode — réponse vocale (Vague 8)
+
+Réponds aux cartes **à voix haute** plutôt qu'au clavier. La transcription est faite par **OpenAI Whisper**, puis comparée à la réponse attendue avec le **même scoring fuzzy** (distance de Levenshtein) que le mode Type-the-answer.
+
+### Activer
+
+**Paramètres → Réglages des révisions → Modes cognitifs → « Réponse vocale (Whisper) »**. Nécessite une **clé OpenAI**. Ne s'applique qu'aux cartes **basic** / **basic_reverse**.
+
+### Pendant une review
+
+1. Un bouton **« Enregistrer »** (micro) s'affiche sous la question. Au premier usage, le navigateur demande l'accès micro.
+2. Parle ta réponse, puis clique **« Arrêter »** (l'enregistrement se coupe seul après **10 secondes** max — garde-fou anti-facture).
+3. Whisper transcrit (« Transcription… »), la réponse est comparée et tu vois si ça correspond, exactement comme une réponse tapée.
+
+---
+
+## Memory Palace 3D (Vague 9)
+
+La **méthode des loci** (palais de mémoire) ancre chaque carte à un emplacement dans un bâtiment imaginé que tu parcours mentalement. Krokos et al. 2019 (Virtual Reality 23) mesurent **+8,8 % de rappel** vs une liste plate, en s'appuyant sur les *cellules de lieu* de l'hippocampe (Nobel 2014, O'Keefe & Moser).
+
+### Créer un palace
+
+1. Sidebar → **« Memory Palaces »** → **« Nouveau palace »**.
+2. Donne un **nom** (ex. « Ma maison d'enfance »), une description facultative, et choisis un **template 3D** :
+   - **Maison** — 3 pièces avec cloisons internes.
+   - **Rue** — long couloir avec colonnes régulières.
+   - **Château** — grande salle aux hauts murs.
+
+### Placer des loci (mode builder)
+
+Le palace s'ouvre dans un éditeur 3D en trois colonnes :
+
+1. **Colonne gauche** : choisis un deck, puis **clique une carte** pour la sélectionner.
+2. **Centre (scène 3D)** : **clique sur le sol** à l'endroit voulu → la carte y est épinglée sous forme de **sphère lumineuse numérotée**.
+3. **Colonne droite** : la liste **ordonnée** des loci. Les flèches ↑/↓ réordonnent le **parcours**, la corbeille retire un locus. Une carte déjà placée n'apparaît plus dans la colonne de gauche (pas de doublon dans un même palace).
+
+Contrôles de la caméra en builder : **glisser pour pivoter**, molette pour zoomer.
+
+### Mode review (parcours)
+
+Bouton **« Mode review »** (actif dès qu'il y a ≥ 1 locus). Tu **marches** dans le palais en suivant l'ordre des loci :
+
+| Contrôle | Action |
+|----------|--------|
+| **Z / Q / S / D** (ou **W / A / S / D**, ou les flèches) | Avancer / reculer / pivoter le déplacement |
+| **Clic gauche maintenu + glisser** | Regarder autour (orienter la caméra) |
+
+Le locus courant est **surligné en doré**. Clique-le pour révéler la carte associée, révise, puis avance vers le suivant. La hauteur des yeux reste verrouillée pour une sensation de marche (pas de « vol »).
+
+> Note technique : le rendu utilise React Three Fiber (WebGL). Sur un environnement sans WebGL (rare), un message de repli s'affiche au lieu de la scène.
+
+---
+
+## Mode Langue (Vague 10)
+
+Outils dédiés à l'apprentissage des langues : un template orienté phrases et un suivi de couverture du vocabulaire par fréquence.
+
+### Langue du deck
+
+Dans **« Nouveau deck »** ou **« Modifier le deck »**, choisis une **langue** : Français, English, Español, Deutsch, Italiano, 日本語, 中文 (ou *Aucune*). Activer une langue débloque la **carte de couverture de fréquence** sur la page du deck.
+
+### Template « Phrase » (bidirectionnel)
+
+Dans l'éditeur de carte, l'onglet **« Phrase »** crée une carte de type *bidirectional* (pattern Lampariello) :
+
+- **Phrase (langue cible)** — la phrase en L2.
+- **Traduction** — sa version en L1.
+- **Indice / note** (optionnel).
+- **Bande de fréquence** (optionnel — voir ci-dessous).
+
+→ Génère **2 cartes** : L2→L1 *et* L1→L2.
+
+### Bande de fréquence (couverture du vocabulaire)
+
+Tague une note avec sa **fréquence Zipf** dans la langue : **Top 100**, **Top 1k**, **Top 5k**, **Top 10k**, **Au-delà** (ou *Aucune*). La page du deck affiche alors une **barre de couverture** colorée (du vert pour les mots les plus fréquents à l'orange pour les rares, gris = non taggé), pour voir d'un coup d'œil si ton deck couvre bien le cœur fréquent de la langue.
+
+---
+
+## Import de sous-titres (.srt / .vtt) (Vague 11)
+
+Pratique le *sentence mining* : transforme un fichier de **sous-titres** de film/série en cartes-phrases.
+
+1. **Paramètres → Données → « Sous-titres (sentence mining) »**.
+2. Choisis le **deck cible**.
+3. Choisis un **mode** :
+   - **Phrase basique (recto / verso)** — chaque réplique devient une carte recto/verso.
+   - **Cloze auto (mot le plus long)** — chaque réplique devient une cloze où le mot le plus long est masqué.
+4. Clique **« Importer des sous-titres (.srt/.vtt) »** → file picker filtré sur `.srt` / `.vtt` → toast récap.
+
+---
+
+## Graphe de connaissances (Vague 11)
+
+Visualise les **liens entre tes cartes via leurs tags partagés** (co-occurrence de tags).
+
+1. Sidebar → **« Graphe »**.
+2. Sélecteur **« Portée »** en haut à droite : **Tous les decks** ou un deck précis.
+3. Chaque **nœud** est un tag ; une **arête** relie deux tags qui apparaissent ensemble sur des cartes. **Survole un tag** pour mettre en évidence ses connexions.
+
+Sert à repérer les zones denses (sujets bien maillés) et les tags isolés (concepts orphelins à relier).
+
+---
+
+## Modes cognitifs avancés (Vague 12)
+
+Trois manipulations opt-in supplémentaires, dans **Paramètres → Réglages des révisions → Modes cognitifs**.
+
+### Mode pré-test
+
+**« Mode pré-test »** : sur une carte **neuve**, tu es invité à **deviner** la réponse avant de la révéler — *même si tu te trompes*. L'acte de tenter une réponse avant l'étude améliore l'apprentissage ultérieur (*pretesting effect*, Pan et al. 2023). Ne note rien : l'essai compte, pas l'exactitude.
+
+### Auto-explication
+
+**« Auto-explication »** : sur **~1 carte sur 5**, après le flip, un champ te demande d'**expliquer en une phrase pourquoi c'est la réponse** (Chi et al. 1989, g ≈ 0,55). Texte libre, **non noté** — l'effet vient de la verbalisation.
+
+### Focus Guard (webcam)
+
+**« Focus Guard »** : détecte le **décrochage d'attention** (*mind-wandering*) via la webcam pendant une session (Hutt et al. 2024), pour te relancer quand ton regard décroche.
+
+> **100 % local.** L'analyse tourne dans l'app (WebGazer). **Aucune image n'est enregistrée ni envoyée** sur le réseau. Un **consentement** explicite est demandé au premier lancement ; tu peux refuser et la session continue normalement.
+
+---
+
+## Pipeline multi-agent + Aide mnémotechnique (Vague 13)
+
+### Critic (Générateur → Critique)
+
+Sur la page **Génération IA**, coche l'option **Generator → Critic** *avant* de générer. Après la première passe (le *Generator*), un **second appel Claude** (le *Critic*) **note chaque carte** de 0 à 100 % et propose une **correction en un clic** pour les cartes faibles.
+
+- Un badge **« Qualité X% »** s'affiche sur chaque brouillon.
+- En dessous de **70 %**, la carte est signalée **« à améliorer »** avec une réécriture proposée.
+- Le critic est **purement consultatif** : si l'appel échoue, les brouillons restent utilisables sans score.
+
+### Aide mnémotechnique
+
+Pour les cartes que tu **rates souvent**, Claude peut générer une **astuce mnémotechnique** (image mentale, association, acronyme).
+
+L'option n'apparaît que pour les cartes ayant **au moins 3 lapses** (échecs) : **Détail du deck → ligne de la carte → menu `⋯` → « Aide mnémotechnique »**. Nécessite une clé Anthropic.
+
+---
+
+## Optimiseur FSRS (Session 4)
+
+FSRS-6 utilise par défaut 21 paramètres calibrés sur une **population globale** (~700 M de reviews). Avec assez d'historique **personnel**, tu peux les recalibrer sur **tes** données (Ye et al., SIGKDD 2022).
+
+### Quand calibrer
+
+- **Paramètres → Optimiseur FSRS** affiche une barre de progression *« Reviews accumulées : N / 1000 »*.
+- Sous **1 000 reviews**, pas de bouton : continue à réviser quelques sessions.
+- À **≥ 1 000 reviews**, le bouton **« Calibrer FSRS »** apparaît. Le calcul prend **5 à 30 s**.
+- Un avertissement rappelle que tes **prochaines révisions** utiliseront les nouveaux paramètres et que les intervalles affichés peuvent évoluer. C'est non destructif pour l'historique, mais recalcule la planification future.
+
+Recalibre plutôt **rarement** (tous les quelques milliers de reviews) : au-delà du seuil, les gains marginaux sont faibles.
+
+---
+
 ## FAQ
 
 ### Combien de cartes par jour ?
@@ -390,7 +660,15 @@ Depuis le détail du deck → ligne de la carte → menu `⋯` → **« Réiniti
 - macOS : `~/Library/Application Support/<bundle id>/mnemosys.db`
 - Windows : `%APPDATA%\<bundle id>\mnemosys.db`
 
-Aucune télémétrie, aucune connexion réseau (hors les liens externes que tu cliques toi-même). Session 1 est entièrement offline.
+**Aucune télémétrie**, et le **cœur de l'app est entièrement offline** : CRUD, review, scheduling, stats, gamification, palais de mémoire, graphe — rien ne quitte ta machine.
+
+Les seules sorties réseau sont **opt-in et explicites**, déclenchées par les fonctionnalités que *tu* actives avec *tes* clés API :
+- **Génération IA / élaboration / critic / mnémotechnique / pré-questionnement** → API Anthropic (le texte envoyé est ton contenu de cours / cartes).
+- **TTS, Podcast, Whisper** → API OpenAI (texte à synthétiser, ou audio à transcrire).
+- **Sync cloud** → ton projet Supabase (désactivée par défaut).
+- **Focus Guard** → **100 % local** malgré la webcam : l'analyse tourne dans l'app (WebGazer), aucune image n'est enregistrée ni transmise.
+
+Sans clés configurées et sans sync, Mnemosys reste 100 % local.
 
 ### Sync multi-device ?
 
@@ -407,3 +685,22 @@ Le fichier `.db` est aux chemins ci-dessus. Tu peux le copier comme backup. Si M
 ### Pourquoi mon antivirus chouine au premier lancement ?
 
 Le binaire Tauri n'est pas (encore) signé en Session 1. C'est attendu jusqu'à la Session 4 (release packaging avec signature notarisée macOS + EV cert Windows).
+
+### Comment activer une fonctionnalité d'apprentissage (sketch, JOL, Whisper, pré-test…) ?
+
+La plupart des modes cognitifs sont des **switches opt-in** dans **Paramètres → Réglages des révisions → Modes cognitifs** (Type-the-answer, Évaluation de confiance, Pré-questionnement IA, Dessin avant flip, JOL différés, Réponse vocale Whisper, Mode pré-test, Auto-explication, Focus Guard). Les **modes neuro** (mood/sleep, pauses mouvement, cyclic sighing) ont leur propre section avec un *master switch*. Tout est **désactivé par défaut** : tu composes ton propre protocole.
+
+### C'est quoi les streaks, les succès et la maîtrise des decks ?
+
+C'est la **gamification éthique** (White Hat, Vague 1), visible via **« Succès »** dans la sidebar :
+- **Streak** : nombre de jours consécutifs avec au moins une review. Tu disposes de **2 « freezes » par mois** pour absorber un jour manqué sans casser ta série.
+- **Succès** : 10 badges débloqués par tes accomplissements (première review, paliers de streak, maîtrise…). **Aucune pénalité, aucun classement public** — uniquement du renforcement positif.
+- **Maîtrise d'un deck** : progression en 5 stages façon WaniKani.
+
+### Le podcast / la réponse vocale ne marchent pas ?
+
+Ces deux features dépendent d'**OpenAI** (et le podcast aussi d'**Anthropic** pour le script). Vérifie tes clés dans **Paramètres → Intégrations**. Le podcast n'apparaît que pour les decks d'**au moins 3 cartes** (menu `⋯` du deck sur la Home), et l'enregistrement Whisper se coupe automatiquement après **10 secondes**.
+
+### Quand recalibrer FSRS avec l'Optimiseur ?
+
+Attends d'avoir **au moins 1 000 reviews** dans ta base (la barre de progression dans **Paramètres → Optimiseur FSRS** te le dit). En dessous, les paramètres par défaut globaux sont plus fiables. Au-delà, recalibre rarement — voir la section *Optimiseur FSRS*.

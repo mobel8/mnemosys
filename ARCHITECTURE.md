@@ -9,8 +9,10 @@ Mnemosys est une application desktop **3-tiers locale**, sans serveur. La sépar
 |                  Frontend — WebView (React)                  |
 |                                                              |
 |  Routes (TanStack Router)                                    |
-|     |- index / decks.$deckId / review.$deckId / stats / ...  |
-|  Components (shadcn/ui + Radix + Tailwind 4)                 |
+|     |- index / decks.$deckId / review.$deckId / stats        |
+|     |- review-interleaved / ai-generate / achievements       |
+|     |- palaces(+$id+/review) / graph / settings              |
+|  Components (shadcn/ui + Radix + Tailwind 4 + R3F 3D)        |
 |  State :  TanStack Query (serveur)  +  Zustand (client)      |
 |  Theme provider (light / dark / system)                      |
 +----------------------+---------------------------------------+
@@ -21,8 +23,8 @@ Mnemosys est une application desktop **3-tiers locale**, sans serveur. La sépar
 +--------------------------------------------------------------+
 |              Tauri 2 — bridge IPC + plugins                  |
 |                                                              |
-|  Plugins enregistrés : fs, dialog, store, notification       |
-|  invoke_handler : 25+ #[tauri::command]                      |
+|  Plugins : fs, dialog, store, notification, updater          |
+|  invoke_handler : ~70 #[tauri::command]                      |
 |                                                              |
 |  NOTE : tauri-plugin-sql n'est PAS utilisé (cf. ADR-2).      |
 +----------------------+---------------------------------------+
@@ -31,19 +33,22 @@ Mnemosys est une application desktop **3-tiers locale**, sans serveur. La sépar
 +--------------------------------------------------------------+
 |                Backend Rust — `mnemosys_lib`                 |
 |                                                              |
-|  commands/ : decks, cards, review, stats, demo, io, settings |
+|  commands/ : decks cards review stats demo io settings tts   |
+|              ai apkg media sync fsrs_optimizer gamification   |
+|              cognitive wellness sketches metacognition        |
+|              podcast whisper palaces subtitles               |
 |  app_state : AppState { db: Database, scheduler: Mutex<…> }  |
 |  db/       : rusqlite + connection pool + repositories       |
-|              decks · notes · cards · reviews · params        |
-|              + migrations (PRAGMA user_version)              |
-|  fsrs/     : wrapper FSRS-6 (params, scheduler, DTOs)        |
+|  fsrs/     : wrapper FSRS-6 + optimize (calibration)         |
+|  scheduler/: trait pluggable (fsrs6 / sm2 / leitner)         |
+|  ai/ tts/ apkg/ subtitles/ sync/  (feature modules)         |
 |  error     : AppError / AppResult (serde-friendly)           |
 +----------------------+---------------------------------------+
                        |
                        v
 +--------------------------------------------------------------+
 |           SQLite (bundled, ~/.local/share/.../mnemosys.db)   |
-|           6 tables + 1 virtual FTS5 + 3 triggers de sync     |
+|     schema v11 — 14 tables + 1 virtual FTS5 + 3 triggers     |
 +--------------------------------------------------------------+
 ```
 
@@ -65,11 +70,13 @@ Mnemosys est une application desktop **3-tiers locale**, sans serveur. La sépar
 | react-hotkeys-hook | 5.x | Raccourcis clavier |
 | Recharts | 3.x | Charts du dashboard stats |
 | canvas-confetti | 1.9 | Célébration fin de session |
+| three / @react-three/fiber / drei | 0.184 / 9.6 / 10.7 | Memory Palace 3D (WebGL, V9 — cf. ADR-8) |
+| webgazer | 3.5 | Focus Guard — eye-tracking webcam local (V12 — cf. ADR-7) |
 | Biome | 2.x | Lint + format |
 
 ### Tauri 2
 
-- Plugins : `tauri-plugin-fs`, `tauri-plugin-dialog`, `tauri-plugin-store`, `tauri-plugin-notification`.
+- Plugins : `tauri-plugin-fs`, `tauri-plugin-dialog`, `tauri-plugin-store`, `tauri-plugin-notification`, `tauri-plugin-updater` (Session 4, **dormant** tant que `endpoints`/`pubkey` ne pointent pas vers un serveur de manifeste réel — cf. `docs/SESSION_4_RELEASE.md`).
 - `tauri-plugin-sql` **n'est pas utilisé** (cf. ADR-2).
 - Capabilities : déclarées dans `src-tauri/capabilities/` (file pickers, store).
 
@@ -123,28 +130,28 @@ mnemosys/
 │       ├── app_state.rs       # AppState (DB + scheduler)
 │       ├── error.rs           # AppError / AppResult
 │       ├── db/                # rusqlite (pool, migrations, repos)
-│       │   ├── mod.rs
-│       │   ├── migrations.rs  # PRAGMA user_version, schema.sql embedded
-│       │   ├── schema.sql     # v1 — 6 tables + FTS5 + triggers
-│       │   ├── decks.rs
-│       │   ├── notes.rs
-│       │   ├── cards.rs
-│       │   ├── reviews.rs
-│       │   └── params.rs      # FSRS params storage
+│       │   ├── migrations.rs  # PRAGMA user_version, schema_vN.sql embedded
+│       │   ├── schema.sql     # v1 ; schema_v4..v11.sql pour les migrations
+│       │   ├── decks.rs notes.rs cards.rs reviews.rs params.rs
+│       │   ├── gamification.rs metacognition.rs wellness.rs
+│       │   └── sketches.rs palaces.rs              # repos des nouvelles tables
 │       ├── fsrs/              # Wrapper FSRS-6
-│       │   ├── mod.rs
 │       │   ├── params.rs      # DEFAULT_PARAMS (21 floats)
 │       │   ├── scheduler.rs   # CardScheduler + DTOs sérialisables
+│       │   ├── optimize.rs    # calibration (MIN_REVIEWS_FOR_OPTIM = 1000)
 │       │   └── tests.rs       # 27 golden tests
-│       └── commands/          # #[tauri::command] handlers
-│           ├── mod.rs
-│           ├── decks.rs       # list, get, create, update, delete, stats
-│           ├── cards.rs       # CRUD notes/cards + search FTS
-│           ├── review.rs      # due_cards, preview, submit
-│           ├── stats.rs       # today, reviews_by_day, retention_by_day
-│           ├── demo.rs        # load_demo_decks (idempotent)
-│           ├── io.rs          # export_json / import_json
-│           └── settings.rs    # get / save AppSettings
+│       ├── scheduler/         # trait pluggable (ADR-6)
+│       │   ├── fsrs6_adapter.rs sm2.rs leitner.rs
+│       ├── ai/                # Claude : cards, pdf, critic, mnemonic, podcast
+│       ├── tts/               # OpenAI TTS + cache + podcast + whisper
+│       ├── apkg/              # importeur .apkg (parser + converter)
+│       ├── subtitles/         # parser .srt / .vtt
+│       ├── sync/              # Supabase (client, auth, delta, apply, cycle)
+│       └── commands/          # #[tauri::command] handlers (~70, 1 fichier/feature)
+│           ├── decks.rs cards.rs review.rs stats.rs demo.rs io.rs settings.rs
+│           ├── tts.rs ai.rs apkg.rs media.rs sync.rs fsrs_optimizer.rs
+│           ├── gamification.rs cognitive.rs wellness.rs sketches.rs
+│           └── metacognition.rs podcast.rs whisper.rs palaces.rs subtitles.rs
 ├── tests/
 │   ├── unit/                  # Vitest + jsdom
 │   └── e2e/                   # Playwright
@@ -171,8 +178,20 @@ mnemosys/
 | `reviews` | Journal append-only de chaque review (rating, état avant/après, durée). Source de vérité pour les stats et un futur Optimizer. |
 | `fsrs_params` | Singleton (id=1) avec les 21 paramètres FSRS sérialisés en JSON + métadonnées d'optimisation. |
 | `notes_fts` | Virtual table FTS5 (tokenize=trigram) synchronisée par triggers — alimente la recherche full-text sur `fields` et `tags`. |
+| `sync_state` | Singleton (id=1) — curseur de sync cloud (`last_sync_at`, `user_id`). Session 3. |
+| `user_stats` | Singleton (id=1) — gamification : streak courant/best, inventaire de freezes mensuels, compteurs lifetime. Vague 1. |
+| `achievements` | Badges débloqués (`code` slug unique + `unlocked_at`). Vague 1. |
+| `wellness_logs` | Check-ins pré-session opt-in (humeur, sommeil, stress, hydratation, caféine). Toutes colonnes NULL-ables. Vague 3. |
+| `review_sketches` | Croquis PNG (data URL) capturés avant flip, keyés par `review_id`. Drawing effect. Vague 7. |
+| `jol_predictions` | Prédictions de rappel différées (`predicted_prob`, `actual_correct` résolu à la review suivante). Calibration γ. Vague 7. |
+| `palaces` | Un palais de mémoire (nom + template 3D house/street/castle/custom). Vague 9. |
+| `palace_loci` | Épingle une carte à une position `(x, y, z)` + `ordinal` (ordre du parcours) dans un palais. Vague 9. |
 
-### Schéma DDL (v1, extrait)
+**Colonnes ajoutées par migration** (ALTER TABLE) : `decks.remote_id` (v3), `decks.scheduler_kind` (v7), `decks.language_mode` (v11), `notes.remote_id` (v3), `notes.frequency_band` (v11), `cards.remote_id` (v3), `reviews.confidence` (v5). Le `notes.template` CHECK est étendu en v2 (`occlusion`) puis v11 (`sentence`, `bidirectional`).
+
+### Schéma DDL — base v1 (extrait)
+
+> Ci-dessous le schéma initial v1. Les tables ajoutées par les migrations v3→v11 sont documentées plus bas (*DDL des migrations*).
 
 ```sql
 CREATE TABLE decks (
@@ -253,12 +272,118 @@ CREATE TABLE fsrs_params (
 );
 ```
 
+### DDL des migrations (v3 → v11, extrait)
+
+```sql
+-- v3 (Session 3 — sync) : remote_id sur decks/notes/cards + curseur de sync.
+CREATE TABLE sync_state (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    last_sync_at INTEGER,
+    user_id TEXT
+);
+
+-- v4 (Vague 1 — gamification White Hat).
+CREATE TABLE user_stats (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    streak_current INTEGER NOT NULL DEFAULT 0,
+    streak_best INTEGER NOT NULL DEFAULT 0,
+    last_review_date TEXT,                        -- ISO 'YYYY-MM-DD'
+    freeze_remaining INTEGER NOT NULL DEFAULT 2,  -- freezes ce mois
+    freeze_month TEXT,                            -- ISO 'YYYY-MM' (reset mensuel)
+    total_reviews INTEGER NOT NULL DEFAULT 0,
+    total_correct INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE achievements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL UNIQUE,                     -- 'first_review', 'streak_7'…
+    unlocked_at INTEGER NOT NULL
+);
+
+-- v5 (Vague 2) : confidence-based marking, NULL-able pour rétro-compat.
+ALTER TABLE reviews ADD COLUMN confidence INTEGER;   -- [1..5]
+
+-- v6 (Vague 3 — neuro modes opt-in). Toutes colonnes NULL-ables.
+CREATE TABLE wellness_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,                            -- ISO 'YYYY-MM-DD'
+    mood INTEGER, sleep_hours REAL, stress_level INTEGER,
+    hydrated BOOLEAN NOT NULL DEFAULT 0,
+    caffeine_taken BOOLEAN NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+);
+
+-- v7 (Vague 4 — schedulers pluggables). 12-step recipe pour le CHECK.
+ALTER TABLE decks ADD COLUMN scheduler_kind TEXT NOT NULL DEFAULT 'fsrs6'
+    CHECK(scheduler_kind IN ('fsrs6', 'sm2', 'leitner'));
+
+-- v8 (Vague 7 — drawing effect). Un croquis PNG par review.
+CREATE TABLE review_sketches (
+    review_id INTEGER PRIMARY KEY REFERENCES reviews(id) ON DELETE CASCADE,
+    card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    sketch_data TEXT NOT NULL,                     -- data:image/png;base64,…
+    created_at INTEGER NOT NULL
+);
+
+-- v9 (Vague 7 — delayed JOL). actual_correct résolu à la review suivante.
+CREATE TABLE jol_predictions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    predicted_at INTEGER NOT NULL,
+    predicted_prob REAL NOT NULL,                  -- [0.0, 1.0]
+    prediction_horizon_days INTEGER NOT NULL DEFAULT 7,
+    actual_correct INTEGER,                        -- 1 / 0 / NULL=pending
+    resolved_at INTEGER
+);
+
+-- v10 (Vague 9 — Memory Palace 3D).
+CREATE TABLE palaces (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    template TEXT NOT NULL DEFAULT 'house'
+        CHECK(template IN ('house', 'street', 'castle', 'custom')),
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+CREATE TABLE palace_loci (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    palace_id INTEGER NOT NULL REFERENCES palaces(id) ON DELETE CASCADE,
+    card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    x REAL NOT NULL, y REAL NOT NULL, z REAL NOT NULL,
+    ordinal INTEGER NOT NULL,
+    label TEXT,
+    created_at INTEGER NOT NULL,
+    UNIQUE(palace_id, card_id)
+);
+
+-- v11 (Vague 10 — Mode Langue). 12-step recipe : étend le CHECK template
+-- ('sentence', 'bidirectional') et ajoute frequency_band ; + language_mode sur decks.
+ALTER TABLE decks ADD COLUMN language_mode TEXT;     -- ISO 639-1 ou NULL
+-- notes reconstruite avec :
+--   template CHECK(... 'sentence', 'bidirectional')
+--   frequency_band TEXT CHECK(NULL OR IN ('top_100','top_1k','top_5k','top_10k','beyond'))
+```
+
 ### Migrations
 
-- Versionnage via `PRAGMA user_version`.
-- Schéma embarqué dans le binaire via `include_str!("schema.sql")`.
-- Une migration = une fonction qui bump `user_version` dans une transaction.
-- Refus de downgrade : si `user_version > CURRENT_VERSION`, on n'altère pas la base.
+- Versionnage via `PRAGMA user_version`. **Version courante : v11** (`CURRENT_VERSION` dans `migrations.rs`).
+- Chaque migration est embarquée dans le binaire (`include_str!` d'un `schema_vN.sql`, ou littéral inline pour v2/v7) et appliquée conditionnellement (`if current < N`) dans une transaction (bump du `user_version` + COMMIT, ROLLBACK best-effort en cas d'échec).
+- **Refus de downgrade** : si `user_version > CURRENT_VERSION`, on n'altère pas la base (un build futur a ouvert ce fichier).
+- SQLite n'a pas d'`ALTER … DROP/ADD CONSTRAINT` : modifier un CHECK suit la **« 12-step recipe »** (recréer la table, copier les rows, renommer, reconstruire FTS5 + triggers). Utilisé en v2, v7, v11.
+
+| Version | Vague / Session | Changement |
+|---------|-----------------|------------|
+| v1 | Session 1 | Schéma initial (6 tables + FTS5 + 3 triggers). |
+| v2 | Session 2 | `notes.template` CHECK accepte `occlusion`. |
+| v3 | Session 3 | `remote_id` (decks/notes/cards) + `sync_state`. |
+| v4 | Vague 1 | `user_stats` + `achievements`. |
+| v5 | Vague 2 | `reviews.confidence` (CBM). |
+| v6 | Vague 3 | `wellness_logs`. |
+| v7 | Vague 4 | `decks.scheduler_kind` (fsrs6/sm2/leitner). |
+| v8 | Vague 7 | `review_sketches` (drawing effect). |
+| v9 | Vague 7 | `jol_predictions` (delayed JOL / calibration). |
+| v10 | Vague 9 | `palaces` + `palace_loci` (Memory Palace). |
+| v11 | Vague 10 | templates `sentence`/`bidirectional` + `notes.frequency_band` + `decks.language_mode`. |
 
 ## FSRS-6
 
@@ -273,6 +398,10 @@ Gain mesuré : **20 à 30 % de reviews en moins** qu'avec SM-2 (l'algorithme his
 
 Wrapper Rust : `src-tauri/src/fsrs/scheduler.rs` — expose `CardScheduler::new`, `.next_states(memory, elapsed)`, `.apply_review(memory, elapsed, rating)`. Les types renvoyés (`NextStatesDTO`, `MemoryStateDTO`, `ReviewOutcome`) sont serde-friendly, donc traversent l'IPC sans conversion.
 
+**Optimizer (Session 4)** : `src-tauri/src/fsrs/optimize.rs` recalibre les 21 paramètres par descente de gradient sur l'historique local (`reviews`), au-delà de `MIN_REVIEWS_FOR_OPTIM = 1000` (seuil Ye et al., SIGKDD 2022). Les nouveaux paramètres sont persistés dans `fsrs_params`.
+
+**Schedulers pluggables (Vague 4)** : `src-tauri/src/scheduler/` définit un trait commun et trois implémentations — `fsrs6_adapter` (défaut), `sm2`, `leitner` — choisies par deck via `decks.scheduler_kind`. Voir ADR-6.
+
 Sources :
 - [FSRS Wiki — ABC of FSRS](https://github.com/open-spaced-repetition/fsrs4anki/wiki/ABC-of-FSRS)
 - [open-spaced-repetition/fsrs-rs (crate)](https://github.com/open-spaced-repetition/fsrs-rs)
@@ -282,15 +411,32 @@ Sources :
 
 Tous les handlers vivent dans `src-tauri/src/commands/` et sont enregistrés via `tauri::generate_handler![]` dans `lib.rs::run()`. Le frontend les invoque via les wrappers typés de `src/lib/tauri.ts` (`api.<feature>.<command>`).
 
-| Module | Commands | Description |
-|--------|----------|-------------|
-| `decks` | `list_decks`, `get_deck`, `create_deck`, `update_deck`, `delete_deck`, `get_deck_stats`, `count_decks` | CRUD + agrégats par deck (cards totales, due aujourd'hui, par état). |
-| `cards` | `list_cards_in_deck`, `search_notes`, `create_note`, `update_note`, `delete_note`, `suspend_card` | CRUD notes (materializing cards en cascade) + recherche FTS5 + suspension. |
-| `review` | `get_due_cards`, `preview_next_states`, `submit_review` | Queue des cartes dues, preview des 4 intervalles, enregistrement d'un review. |
-| `stats` | `get_today_stats`, `get_reviews_by_day`, `get_retention_by_day` | KPIs du jour + séries temporelles. |
-| `demo` | `load_demo_decks` | Charge les 4 decks démo (idempotent : skip si nom existant). |
-| `settings` | `get_settings`, `save_settings` | Lit/écrit `AppSettings` (theme, retention, daily limits, show_next_interval). |
-| `io` | `export_json`, `import_json` | Round-trip JSON portable (sans historique de scheduling). |
+L'`invoke_handler` enregistre **~70 commandes**. Regroupées par module / feature :
+
+| Module | Commands | Feature |
+|--------|----------|---------|
+| `decks` | `list_decks`, `get_deck`, `create_deck`, `update_deck`, `delete_deck`, `get_deck_stats`, `count_decks`, `get_deck_mastery` | CRUD + agrégats + maîtrise WaniKani 5-stages (V1). |
+| `cards` | `list_cards_in_deck`, `search_notes`, `create_note`, `update_note`, `delete_note`, `suspend_card`, `reset_card`, `get_frequency_coverage`, `get_tag_graph` | CRUD notes/cards + FTS5 + reset FSRS (S2) + couverture fréquence (V10) + graphe de tags (V11). |
+| `review` | `get_due_cards`, `get_interleaved_due_cards`, `preview_next_states`, `submit_review` | Queue due, file entrelacée multi-decks (V5), preview, submit. |
+| `stats` | `get_today_stats`, `get_reviews_by_day`, `get_retention_by_day` | KPIs + séries temporelles. |
+| `demo` | `load_demo_decks` | Charge les 4 decks démo (idempotent). |
+| `settings` | `get_settings`, `save_settings` | Lit/écrit `AppSettings` (incl. tous les toggles V2/V3/V7/V8/V12). |
+| `io` | `export_json`, `import_json` | Round-trip JSON portable. |
+| `subtitles` | `import_subtitles` | Import `.srt`/`.vtt` → cartes phrase/cloze (V11). |
+| `tts` | `synthesize_audio`, `clear_tts_cache`, `get_tts_cache_size` | TTS OpenAI + cache disque (S2). |
+| `ai` | `generate_cards_text`, `generate_cards_pdf`, `generate_card_elaboration`, `critique_generated_cards`, `generate_card_mnemonic` | Génération Claude texte/PDF (S2), élaboration Why/Example (V5), critic multi-agent + mnémotechnique (V13). |
+| `apkg` | `import_apkg` | Import paquet Anki `.apkg` (S2). |
+| `media` | `copy_image_to_app_data` | Copie image pour template occlusion (S2). |
+| `sync` | `sync_login`, `sync_logout`, `sync_status`, `sync_now` | Sync cloud Supabase (S3, dormante). |
+| `fsrs_optimizer` | `get_total_reviews_count`, `optimize_fsrs_params` | Calibration des 21 params (S4). |
+| `gamification` | `get_user_stats`, `use_streak_freeze`, `list_unlocked_achievements` | Streaks, freezes, badges (V1). |
+| `cognitive` | `generate_pre_questions` | Pré-questionnement IA (V2). |
+| `wellness` | `submit_wellness_log`, `get_today_wellness`, `get_recent_wellness` | Check-ins neuro opt-in (V3). |
+| `sketches` | `save_sketch`, `get_card_sketches` | Croquis drawing effect (V7). |
+| `metacognition` | `record_jol`, `get_pending_jols`, `get_calibration_stats` | JOL différés + calibration γ (V7). |
+| `podcast` | `generate_deck_podcast`, `list_deck_podcasts`, `delete_podcast` | Deck Podcast 2 voix (V8). |
+| `whisper` | `transcribe_voice_answer` | Réponse vocale Whisper (V8). |
+| `palaces` | `list_palaces`, `get_palace`, `create_palace`, `update_palace`, `delete_palace`, `add_palace_locus`, `remove_palace_locus`, `reorder_palace_loci`, `move_palace_locus` | Memory Palace 3D : palais + loci (V9). |
 
 Convention de nommage côté Rust : `snake_case`. Le wrapper TS expose des paramètres `camelCase` que Tauri convertit automatiquement (`desiredRetention` → `desired_retention`).
 
@@ -300,7 +446,25 @@ Convention de nommage côté Rust : `snake_case`. Le wrapper TS expose des param
 
 Pas de file-based codegen (cf. ADR-5). Chaque route exporte un `Route` construit avec `createRoute({ getParentRoute, path, component })` ; `src/routes/routeTree.ts` les compose sous `__root` via `addChildren([...])`.
 
-Routes actuelles : `/`, `/decks/$deckId`, `/decks/$deckId/new-card`, `/review/$deckId`, `/stats`, `/settings`.
+Routes actuelles (13, composées dans `routeTree.ts`) :
+
+| Route | Page | Feature |
+|-------|------|---------|
+| `/` | Home (decks + KPIs) | S1 |
+| `/decks/$deckId` | Détail deck (cartes, stats, podcast via kebab, couverture fréquence si langue) | S1 + V8/V10 |
+| `/decks/$deckId/new-card` | Éditeur de note (Basic / Reverse / Cloze / Occlusion / Phrase) | S1 + S2 + V10 |
+| `/review/$deckId` | Session de review (+ sketch, JOL, Whisper, pré-test, auto-explication, Focus Guard selon toggles) | S1 + V2/V7/V8/V12 |
+| `/review-interleaved` | Review entrelacée multi-decks | V5 |
+| `/ai-generate` | Génération IA de cartes (+ critic opt-in) | S2 + V13 |
+| `/palaces` | Liste des palais de mémoire | V9 |
+| `/palaces/$palaceId` | Builder 3D (placement de loci) | V9 |
+| `/palaces/$palaceId/review` | Parcours 3D (mode review WASD/ZQSD) | V9 |
+| `/stats` | Dashboard (+ Calibration métacognitive) | S1 + V7 |
+| `/graph` | Graphe de connaissances (co-occurrence de tags) | V11 |
+| `/achievements` | Succès, streak, maîtrise des decks | V1 |
+| `/settings` | Paramètres (8 sections, cf. ci-dessous) | S1+ |
+
+La page **Settings** empile : Theme · Review (incl. tous les Modes cognitifs V2/V7/V8/V12) · FSRS Optimizer · Integrations (clés API, voix TTS) · Neuro modes (V3) · Sync (S3) · Import/Export (incl. import sous-titres V11) · About.
 
 ### State : Zustand + TanStack Query
 
@@ -362,4 +526,45 @@ Helpers de test : `Database::for_test()` ouvre une base SQLite en mémoire, exé
 
 ### ADR-5 — Routing imperative TanStack Router plutôt que file-based
 - **Pourquoi** : le file-based router de TanStack Router v1 nécessite un plugin Vite (`@tanstack/router-plugin`) qui ajoute un code-gen avec un cycle dev-server-restart non négligeable et un risque de désynchronisation entre les agents qui itèrent vite. L'imperative API (`createRoute` + `addChildren`) tient en 30 lignes pour 6 routes.
-- **Trade-off** : pas d'auto-complétion des paths basée sur le filesystem. Acceptable à 6 routes ; à reconsidérer si l'arbre dépasse 20 routes (Session 2 ou 3).
+- **Trade-off** : pas d'auto-complétion des paths basée sur le filesystem. Acceptable à 6 routes ; à reconsidérer si l'arbre dépasse 20 routes (Session 2 ou 3). **Mise à jour** : à 13 routes l'arbre reste lisible — décision maintenue, le seuil de 20 n'est pas atteint.
+
+### ADR-6 — Schedulers pluggables via un trait Rust (Vague 4)
+- **Pourquoi** : permettre à chaque deck de choisir son algorithme (FSRS-6 / SM-2 / Leitner) sans dupliquer la logique de review. On définit un **trait** commun dans `src-tauri/src/scheduler/` (next-states + apply-review) ; le dispatcher lit `decks.scheduler_kind` et instancie la bonne implémentation. FSRS-6 reste l'adaptateur par défaut.
+- **Trade-off** : une couche d'indirection en plus, et trois algorithmes à maintenir/tester au lieu d'un. Le CHECK constraint sur `scheduler_kind` (appliqué via la 12-step recipe en v7) garantit qu'aucune valeur hors-bande ne wedge le dispatcher. Bénéfice : extensibilité (un futur SM-18 ou Anki-SM-2 exact s'ajoute sans toucher au reste).
+
+### ADR-7 — Focus Guard local-first (WebGazer) plutôt que cloud (Vague 12)
+- **Pourquoi** : la détection de *mind-wandering* par webcam (Hutt et al. 2024) est une fonctionnalité à très forte sensibilité vie privée. On utilise **WebGazer.js**, qui fait tourner l'eye-tracking **entièrement dans la WebView** : aucune image ni flux vidéo ne quitte la machine, rien n'est persisté. Un consentement explicite est demandé au premier lancement et la feature est **opt-in** (off par défaut).
+- **Trade-off** : précision moindre qu'un modèle serveur entraîné, et coût CPU non négligeable pendant la session. Acceptable : le signal n'a pas besoin d'être parfait pour une simple relance d'attention, et le « zéro réseau » est non négociable pour de la webcam. Cohérent avec le principe local-first de l'app (ADR-1).
+
+### ADR-8 — Memory Palace 3D via React Three Fiber + primitives (Vague 9)
+- **Pourquoi** : rendre un palais de mémoire navigable en 3D dans une WebView. On utilise **React Three Fiber** (réconciliateur React pour three.js) + **drei** pour les helpers (OrbitControls, Sky, Text). Les trois templates (house/street/castle) sont construits avec des **primitives géométriques** (plans, boîtes, cylindres) — **aucun asset GLTF** à charger, donc rien à bundler ni à streamer, et un boot instantané.
+- **Trade-off** : esthétique volontairement minimaliste (pas de meshes détaillés). Le composant détecte l'absence de WebGL (jsdom/CI/headless) et affiche un fallback HTML pour rester montable en test sans mocks lourds. `custom` retombe sur `house` en attendant un support GLTF ultérieur.
+
+### ADR-9 — Pipeline multi-agent Generator → Critic (Vague 13)
+- **Pourquoi** : améliorer la qualité des cartes générées sans intervention manuelle. Après la passe *Generator*, un **second appel Claude** (le *Critic*) note chaque carte `[0, 1]` et propose une correction pour les cartes sous le seuil `QUALITY_THRESHOLD = 0.7`. Le pattern « générer puis critiquer » exploite le fait qu'évaluer est plus facile que produire.
+- **Trade-off** : un appel API supplémentaire (coût + latence) — donc **opt-in** (case à cocher off par défaut) et **purement additif** : si le critic échoue ou est désactivé, les brouillons restent utilisables sans score. Le verdict est consultatif, jamais bloquant. Même philosophie pour l'**Aide mnémotechnique** (générée à la demande, uniquement pour les cartes à `lapses ≥ 3`).
+
+## Évolution : Sessions 1-4 + Vagues 1-13
+
+L'app est partie d'un MVP SRS local (S1) et s'est étendue par **sessions** (gros chantiers transverses) puis par **vagues** (features ciblées, souvent adossées à un résultat scientifique). Résumé :
+
+| Lot | Apport | Impact technique |
+|-----|--------|------------------|
+| **Session 1** | FSRS-6, CRUD decks/notes/cards (basic/reverse/cloze), review, stats, import/export JSON, FTS5, wizard, thème, 4 decks démo. | Schéma v1, ~25 commandes, 6 routes. |
+| **Session 2** | Génération IA (texte+PDF), TTS OpenAI (8 voix, cache), import APKG, image-occlusion, reset_card. | Modules `ai`/`tts`/`apkg`/`media`, v2 (template occlusion). |
+| **Session 3** | Sync cloud Supabase (scaffolding, dormante). | Module `sync`, v3 (`remote_id` + `sync_state`). |
+| **Session 4** | FSRS Optimizer (calibration 21 params), CI GitHub Actions, updater dormant, LICENSE MIT. | `fsrs/optimize.rs`, plugin updater. |
+| **Vague 1** | Gamification éthique : streaks + freezes, 10 succès, maîtrise WaniKani. | v4 (`user_stats`+`achievements`), route `/achievements`. |
+| **Vague 2** | Cognitif : type-the-answer, confidence rating (CBM), pré-questionnement IA. | v5 (`reviews.confidence`), module `cognitive`. |
+| **Vague 3** | Neuro modes opt-in : mood/sleep check-in, pauses mouvement, cyclic sighing. | v6 (`wellness_logs`), module `wellness`. |
+| **Vague 4** | Schedulers pluggables par deck (FSRS-6 / SM-2 / Leitner). | v7 (`scheduler_kind`), module `scheduler/` (ADR-6). |
+| **Vague 5** | Élaboration IA (Why/Example) + Review entrelacée. | `get_interleaved_due_cards`, route `/review-interleaved`. |
+| **Vague 7** | Sketch-before-flip + Delayed-JOL & Calibration γ. | v8 (`review_sketches`), v9 (`jol_predictions`), modules `sketches`/`metacognition`. |
+| **Vague 8** | Deck Podcast (2 voix, 3 formats) + Whisper Mode. | modules `podcast`/`whisper`. |
+| **Vague 9** | Memory Palace 3D Builder (R3F, 3 templates). | v10 (`palaces`+`palace_loci`), module `palaces`, routes `/palaces*` (ADR-8). |
+| **Vague 10** | Mode Langue : template Phrase (bidirectional), frequency band, langue du deck. | v11 (templates + `frequency_band` + `language_mode`). |
+| **Vague 11** | Subtitle Import (.srt/.vtt) + Knowledge Graph (tags). | module `subtitles`, `get_tag_graph`, route `/graph`. |
+| **Vague 12** | Pretest Mode, Self-explanation, Focus Guard (webcam local). | toggles `AppSettings`, WebGazer (ADR-7). |
+| **Vague 13** | Multi-Agent Card Pipeline (Generator→Critic) + Mnemonic Helper. | `critique_generated_cards`, `generate_card_mnemonic` (ADR-9). |
+
+> Les Vagues sont numérotées de façon non strictement séquentielle (pas de Vague 6 publique ; la v7 du **schéma DB** correspond à la **Vague 4**, etc.). La table *Migrations* ci-dessus donne la correspondance exacte version-de-schéma ↔ vague.

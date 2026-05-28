@@ -1,6 +1,8 @@
-# Test Checklist — Mnemosys Session 1
+# Test Checklist — Mnemosys (Sessions 1-4 + Vagues 1-13)
 
 Procédure pas-à-pas pour valider que tout marche sur ta machine. Coche les cases au fur et à mesure. Si quelque chose cloche, descends dans la section **Bugs à reporter** en bas.
+
+> Les sections **0-9** couvrent le cœur Session 1. Les sections **10-12** couvrent les Sessions 2-4. Les sections **13-26** couvrent les Vagues 1-13. Beaucoup de features Vague sont **opt-in** : pense à activer le toggle correspondant dans les Paramètres avant de tester.
 
 > Convention : `[ ]` à cocher, `→` = action attendue, `=>` = ce que tu dois observer.
 
@@ -313,9 +315,180 @@ Pour chaque bug trouvé, copie-colle ce template et remplis :
 
 ---
 
+## 13. Vague 1 — Gamification éthique (streaks, succès, maîtrise)
+
+- [ ] Sidebar → **« Succès »** ouvre la page `/achievements`
+- [ ] Termine une review aujourd'hui → le **streak** affiche au moins `1 jour`
+- [ ] Au moins un **badge** est débloqué (ex. *première review*) après ta première session
+- [ ] La page indique l'inventaire de **freezes** restants ce mois (2 par défaut)
+- [ ] Utiliser un freeze (si l'UI l'expose) décrémente le compteur ; il **ne descend jamais sous 0**
+- [ ] La **maîtrise d'un deck** progresse (5 stages WaniKani) à mesure que ses cartes mûrissent
+- [ ] Aucun classement public, aucun compte à rebours punitif (vérif. White Hat)
+
+---
+
+## 14. Vague 2 — Modes cognitifs (type-the-answer, confidence, pré-questions)
+
+> Toggles dans **Paramètres → Réglages des révisions → Modes cognitifs**. Sauvegarde après chaque changement.
+
+- [ ] Active **Type-the-answer** → en review, un champ de saisie apparaît avant le flip ; taper puis valider compare ta réponse (scoring fuzzy)
+- [ ] Active **Évaluation de confiance** → avant les boutons FSRS, on te demande une confiance 1-5 ; la valeur est stockée (colonne `reviews.confidence`)
+- [ ] Active **Pré-questionnement IA** (clé Anthropic requise) → au début d'un nouveau bloc, des questions d'amorçage s'affichent
+- [ ] Désactive les trois → la review redevient le flux classique (recto → flip → rating)
+
+---
+
+## 15. Vague 3 — Modes neuro (opt-in)
+
+> **Paramètres → Modes neuro (opt-in)** ; master switch `data-testid="neuro-master-switch"`.
+
+- [ ] Master **off** par défaut : les sous-toggles (mood, mouvement, sighing) sont **désactivés** (grisés)
+- [ ] Active le master → les sous-options deviennent réglables
+- [ ] Active **Mood / Sleep check-in** → au début d'une session, un modal 5 questions (humeur, sommeil, stress, hydratation, caféine) s'affiche **une fois par jour**
+- [ ] Skipper le check-in est possible (champs NULL-ables) sans bloquer la session
+- [ ] Règle le **Movement break** à 10 min → un rappel de pause apparaît après ce délai en session
+- [ ] Active **Cyclic sighing** → la séquence respiratoire est proposée quand le stress est flaggé élevé
+
+---
+
+## 16. Vague 4 — Schedulers pluggables par deck
+
+- [ ] **Nouveau deck** → section *Algorithme de scheduling* propose **FSRS-6** (badge recommandé), **SM-2**, **Leitner 5-box**
+- [ ] Crée un deck en **Leitner** → un badge `Leitner` apparaît sur la carte du deck
+- [ ] Révise une carte Leitner : une réussite la fait monter d'une boîte, **Again** la renvoie en boîte 1
+- [ ] Crée un deck en **SM-2** → badge `SM-2`, comportement ease-factor
+- [ ] **Modifier le deck** permet de changer l'algorithme ; l'historique des reviews est **conservé**
+
+---
+
+## 17. Vague 5 — Review entrelacée + Élaboration IA
+
+- [ ] Sidebar → **« Review entrelacée »** (`/review-interleaved`)
+- [ ] Sélectionne **≥ 2 decks** → lance → les cartes dues sont **mélangées** dans une seule file (pas deck par deck)
+- [ ] Pendant une review, demander **Why?** / **Example** (clé Anthropic) affiche une explication / des exemples générés
+- [ ] Si Claude ne renvoie rien d'exploitable, le bloc reste vide **sans erreur bloquante**
+
+---
+
+## 18. Vague 7 — Sketch-before-flip
+
+> Toggle **« Dessin avant flip (drawing effect) »**.
+
+- [ ] Active le toggle → en review, un **canvas de dessin** apparaît sous la question (recto)
+- [ ] Dessine quelque chose à la souris/au stylet → trace visible
+- [ ] Retourne la carte (Espace) puis note → le croquis est **persisté** (table `review_sketches`, keyé par `review_id`)
+- [ ] Rouvre la même carte plus tard → les **croquis passés** sont consultables
+- [ ] Toggle off → plus de canvas, review classique
+
+---
+
+## 19. Vague 7 — Prédictions JOL différées + Calibration Dashboard
+
+> Toggle **« Prédictions de rappel différées (JOL) »** ; délai réglable (5-120 min, défaut 30).
+
+- [ ] Active le toggle → après une review, ~30 min plus tard une **relance JOL** demande une probabilité de réussite
+- [ ] La prédiction donnée est enregistrée (`jol_predictions`, `actual_correct = NULL` au départ)
+- [ ] À la **prochaine review réelle** de la carte, la prédiction est **résolue** (`actual_correct` passe à 1/0)
+- [ ] Dans **Stats**, tant que `< 30` prédictions résolues : message *« N / 30 prédictions résolues »*
+- [ ] À **≥ 30** résolues : la carte **« Calibration métacognitive »** affiche **γ (Gamma)**, **Biais** (+ = surconfiance), **Résolues**
+- [ ] L'**histogramme 10 bandes** montre prédit (bleu) vs réel (vert = calibré / rouge = surconfiance) avec l'effectif `n`
+- [ ] L'interprétation de γ s'affiche (≥0,5 excellente / ≥0,2 bonne / ≥0 modérée / <0 inverse)
+
+---
+
+## 20. Vague 8 — Deck Podcast
+
+> Nécessite clés **Anthropic + OpenAI**. Le deck doit avoir **≥ 3 cartes**.
+
+- [ ] Sur la **Home**, menu `⋯` d'un deck (≥3 cartes) → **« Podcast »** ouvre le dialogue
+- [ ] Sans clés : « Générer » → toast *« Clés API manquantes »* + renvoi vers Settings
+- [ ] Choisis un **format** (Deep Dive / Brief / Critique) et **2 voix différentes** (Host + Expert)
+- [ ] Choisir **deux fois la même voix** → message d'erreur + bouton « Générer » bloqué
+- [ ] « Générer » (~30-60 s) → l'épisode se joue **inline** + apparaît dans **« Épisodes précédents »**
+- [ ] Re-générer le même couple format+voix → toast *« Podcast déjà en cache »* (cache hit)
+- [ ] **« Télécharger »** → file picker → le `.mp3` est copié à l'emplacement choisi
+- [ ] La corbeille supprime l'épisode du cache (`<app_cache_dir>/podcasts/`)
+
+---
+
+## 21. Vague 8 — Whisper Mode (réponse vocale)
+
+> Toggle **« Réponse vocale (Whisper) »** ; clé **OpenAI** requise ; cartes basic/basic_reverse.
+
+- [ ] Active le toggle → en review d'une carte basic, un bouton **« Enregistrer »** (micro) s'affiche
+- [ ] 1er clic → demande d'accès **micro** ; refuser → toast clair, retour à l'état idle
+- [ ] Autoriser + parler → chrono qui défile ; **« Arrêter »** lance la transcription
+- [ ] L'enregistrement se **coupe automatiquement à 10 s**
+- [ ] Sans clé OpenAI → toast *« Clé API manquante »*
+- [ ] La transcription Whisper est **comparée** à la réponse attendue (scoring fuzzy, comme Type-the-answer)
+
+---
+
+## 22. Vague 9 — Memory Palace 3D
+
+- [ ] Sidebar → **« Memory Palaces »** → **« Nouveau palace »** → nom + template (Maison / Rue / Château) → créé
+- [ ] Ouvrir le palace → éditeur 3 colonnes (decks à gauche, scène 3D au centre, loci à droite)
+- [ ] **Cliquer sur le sol sans carte sélectionnée** → toast *« Sélectionne une carte d'abord »*
+- [ ] Sélectionne une carte à gauche → **clique sur le sol** → une **sphère numérotée** apparaît + toast *« Locus placé »*
+- [ ] Une carte déjà épinglée **disparaît** de la liste de gauche (pas de doublon dans ce palace)
+- [ ] Colonne droite : les flèches **↑/↓** réordonnent le parcours, la **corbeille** retire un locus
+- [ ] **« Mode review »** (actif dès ≥1 locus) → scène en mode parcours
+- [ ] **Z/Q/S/D** (ou W/A/S/D, ou flèches) déplacent ; **clic gauche maintenu + glisser** oriente la caméra
+- [ ] Le **locus courant est surligné en doré** ; cliquer dessus révèle la carte
+- [ ] (Environnement sans WebGL) → fallback *« Scene 3D indisponible »* au lieu d'un crash
+
+---
+
+## 23. Vague 10 — Mode Langue
+
+- [ ] **Nouveau/Modifier deck** → sélecteur **Langue** (Français/English/Español/Deutsch/Italiano/日本語/中文/Aucune)
+- [ ] Avec une langue active → la page du deck affiche la **carte de couverture de fréquence**
+- [ ] Éditeur de carte → onglet **« Phrase »** : champs *Phrase (langue cible)*, *Traduction*, *Indice*, *Bande de fréquence*
+- [ ] Valider une carte Phrase → **2 cartes** créées (L2→L1 et L1→L2)
+- [ ] Taguer des notes avec des bandes (Top 100 / Top 1k / … / Au-delà) → la **barre de couverture** se colore (vert→orange, gris = non taggé)
+
+---
+
+## 24. Vague 11 — Subtitle Import + Knowledge Graph
+
+- [ ] **Paramètres → Données → « Sous-titres (sentence mining) »** : sélecteur de deck + sélecteur de mode
+- [ ] Mode **« Phrase basique (recto/verso) »** → import d'un `.srt` → chaque réplique devient une carte recto/verso
+- [ ] Mode **« Cloze auto (mot le plus long) »** → import d'un `.vtt` → chaque réplique devient une cloze (mot le plus long masqué)
+- [ ] Le file picker est **filtré sur `.srt` / `.vtt`** ; toast récap après import
+- [ ] Sidebar → **« Graphe »** (`/graph`) → graphe de co-occurrence de tags s'affiche
+- [ ] Sélecteur **« Portée »** : *Tous les decks* vs un deck précis → le graphe se recharge
+- [ ] **Survoler un tag** met en évidence ses connexions
+
+---
+
+## 25. Vague 12 — Pretest, Self-explanation, Focus Guard
+
+> Toggles dans **Paramètres → Réglages des révisions → Modes cognitifs**.
+
+- [ ] Active **Mode pré-test** → sur une carte **neuve**, on t'invite à deviner la réponse avant de la révéler (même si tu te trompes)
+- [ ] Active **Auto-explication** → sur **~1 carte sur 5**, après le flip, un champ demande *« pourquoi est-ce la réponse ? »* (texte libre, non noté)
+- [ ] Active **Focus Guard** → au premier lancement, **consentement webcam** explicite demandé
+- [ ] Refuser le consentement → la session continue normalement, sans tracking
+- [ ] Accepter → la webcam s'active pendant la session ; vérifier (DevTools réseau) qu'**aucune image n'est envoyée** (100 % local)
+- [ ] Le décrochage d'attention déclenche une relance visuelle
+
+---
+
+## 26. Vague 13 — Multi-Agent Critic + Aide mnémotechnique
+
+- [ ] Page **Génération IA** → coche **Generator → Critic** avant de générer (clé Anthropic requise)
+- [ ] Après génération, chaque brouillon porte un badge **« Qualité X% »**
+- [ ] Une carte sous **70 %** est signalée **« à améliorer »** avec une **correction proposée** (applicable en un clic)
+- [ ] Si le critic échoue → toast non bloquant, *« les cartes restent utilisables sans score »*
+- [ ] Crée une carte et fais-la **rater ≥ 3 fois** (lapses ≥ 3) → son menu `⋯` expose **« Aide mnémotechnique »**
+- [ ] Pour une carte à **moins de 3 lapses**, l'item *Aide mnémotechnique* est **absent**
+- [ ] Cliquer **« Aide mnémotechnique »** → Claude génère une astuce (image/association/acronyme)
+
+---
+
 ## Verdict final
 
-- [ ] Sessions 1–4 validées → tag v0.4.0, packaging release, première itération de production
+- [ ] Sessions 1–4 + Vagues 1–13 validées → tag de release, packaging, itération de production
 - [ ] Bugs mineurs (cosmétiques, edge cases) → tracker, prioriser
 - [ ] Bugs critiques (crash, data loss, FSRS incorrect) → bloquant pour la release
 
