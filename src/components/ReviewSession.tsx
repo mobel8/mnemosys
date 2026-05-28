@@ -592,6 +592,15 @@ function getCardFront(cwn: CardWithNote): string {
     const target = typeof f.target === "string" ? f.target : "";
     return card.card_ord === 1 ? target : source;
   }
+  // Vague 14 — disciplinary templates mirror their ReviewCard recto stems.
+  if (note.template === "illness_script") {
+    const condition = typeof f.condition === "string" ? f.condition : "";
+    return condition ? `Décris le tableau de : ${condition}` : "";
+  }
+  if (note.template === "refutation") {
+    const misconception = typeof f.misconception === "string" ? f.misconception : "";
+    return misconception ? `Vrai ou faux ? ${misconception}` : "";
+  }
   return typeof f.front === "string" ? f.front : "";
 }
 

@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 11;
+pub const CURRENT_VERSION: i32 = 12;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -200,6 +200,17 @@ const SCHEMA_V10: &str = include_str!("schema_v10.sql");
 /// without leaving the FTS index in an inconsistent state.
 const SCHEMA_V11: &str = include_str!("schema_v11.sql");
 
+/// v12 — Vague 14 Modes disciplinaires: two new structured note templates.
+///
+/// Extends the `notes.template` CHECK constraint with `'illness_script'`
+/// (médecine, Charlin 2007 — one card, condition → four clinical sections)
+/// and `'refutation'` (sciences, Tippett 2010 meta — one card confronting a
+/// misconception). Like v2 / v11, we follow the SQLite 12-step recipe (drop
+/// FTS5, rebuild `notes`, recreate FTS5 + triggers, rebuild the index) so the
+/// new CHECK lands without leaving the FTS index inconsistent. Every column —
+/// `remote_id` and `frequency_band` included — is copied across verbatim.
+const SCHEMA_V12: &str = include_str!("schema_v12.sql");
+
 /// v7 — Pluggable schedulers (Vague 4): per-deck algorithm choice.
 ///
 /// Adds a `scheduler_kind` column to `decks` storing one of `'fsrs6'`
@@ -324,6 +335,12 @@ pub fn run(conn: &Connection) -> AppResult<()> {
     // v11 — Vague 10 Mode Langue: extend templates CHECK + add `frequency_band`.
     if current < 11 {
         apply_migration(conn, 11, SCHEMA_V11)?;
+    }
+
+    // v12 — Vague 14 Modes disciplinaires: extend templates CHECK with
+    // `illness_script` + `refutation`.
+    if current < 12 {
+        apply_migration(conn, 12, SCHEMA_V12)?;
     }
 
     Ok(())

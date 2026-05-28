@@ -18,6 +18,18 @@
 //!                        "target_lang": "fr" }` — one card (source→target).
 //! - `bidirectional` → `{ "source": "...", "target": "..." }` — two cards,
 //!                     the Lampariello pattern (0=source→target, 1=target→source).
+//! - `illness_script` → `{ "condition": "...", "epidemiology": "...",
+//!                        "pathophysiology": "...", "clinical": "...",
+//!                        "management": "..." }` (Vague 14, médecine — Charlin
+//!                        2007). One card: recto = condition, verso = the four
+//!                        sections. `condition` is required; at least one of
+//!                        the four sections must be non-empty.
+//! - `refutation`    → `{ "misconception": "...", "correct": "...",
+//!                        "explanation": "..." }` (Vague 14, sciences — Tippett
+//!                        2010 meta). One card confronting a false belief:
+//!                        recto = « Vrai ou faux ? {misconception} », verso =
+//!                        « FAUX. {correct} » + explanation. `misconception`
+//!                        and `correct` are both required.
 //!
 //! Vague 10 also introduces an optional `frequency_band` column on every
 //! note (independent of `template`): one of `top_100`, `top_1k`, `top_5k`,
@@ -45,6 +57,12 @@ pub enum NoteTemplate {
     Sentence,
     /// Vague 10 — two-card bidirectional translation pair (Lampariello).
     Bidirectional,
+    /// Vague 14 — clinical illness script (médecine, Charlin 2007). One card:
+    /// recto = condition, verso = the four structured sections.
+    IllnessScript,
+    /// Vague 14 — refutation card (sciences, Tippett 2010 meta). One card
+    /// confronting a misconception with the correct statement + explanation.
+    Refutation,
 }
 
 impl NoteTemplate {
@@ -56,6 +74,8 @@ impl NoteTemplate {
             NoteTemplate::Occlusion => "occlusion",
             NoteTemplate::Sentence => "sentence",
             NoteTemplate::Bidirectional => "bidirectional",
+            NoteTemplate::IllnessScript => "illness_script",
+            NoteTemplate::Refutation => "refutation",
         }
     }
 }
@@ -71,6 +91,8 @@ impl FromStr for NoteTemplate {
             "occlusion" => Ok(NoteTemplate::Occlusion),
             "sentence" => Ok(NoteTemplate::Sentence),
             "bidirectional" => Ok(NoteTemplate::Bidirectional),
+            "illness_script" => Ok(NoteTemplate::IllnessScript),
+            "refutation" => Ok(NoteTemplate::Refutation),
             other => Err(AppError::Database(format!(
                 "invalid note template '{}'",
                 other
@@ -176,6 +198,8 @@ impl<'a> NoteRepo<'a> {
     ///   Empty or missing `masks` is rejected with a `Validation` error.
     /// - `Sentence`      → 1 card (ord=0 source→target).
     /// - `Bidirectional` → 2 cards (ord=0 source→target, ord=1 target→source).
+    /// - `IllnessScript` → 1 card (ord=0 condition→clinical sections).
+    /// - `Refutation`    → 1 card (ord=0 misconception→correction).
     ///
     /// `frequency_band` is optional (Vague 10). When `Some`, the value must
     /// be one of `top_100`, `top_1k`, `top_5k`, `top_10k`, `beyond` —
@@ -536,6 +560,72 @@ fn validate_fields(template: NoteTemplate, fields: &serde_json::Value) -> AppRes
                 }
             }
         }
+        NoteTemplate::IllnessScript => {
+            // `condition` is the card prompt — required and non-blank.
+            let condition = obj
+                .get("condition")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| {
+                    AppError::Validation("illness script requires a 'condition' string".into())
+                })?;
+            if condition.trim().is_empty() {
+                return Err(AppError::Validation(
+                    "illness script 'condition' must not be empty".into(),
+                ));
+            }
+            // The four clinical sections are individually optional, but the
+            // verso would be empty if none are filled — reject that.
+            let sections = ["epidemiology", "pathophysiology", "clinical", "management"];
+            for key in sections {
+                if let Some(value) = obj.get(key) {
+                    if !value.is_null() && !value.is_string() {
+                        return Err(AppError::Validation(format!(
+                            "field '{}' must be a string when present",
+                            key
+                        )));
+                    }
+                }
+            }
+            let any_section_filled = sections.iter().any(|key| {
+                obj.get(*key)
+                    .and_then(|v| v.as_str())
+                    .map(|s| !s.trim().is_empty())
+                    .unwrap_or(false)
+            });
+            if !any_section_filled {
+                return Err(AppError::Validation(
+                    "illness script must fill at least one section (epidemiology / \
+                     pathophysiology / clinical / management)"
+                        .into(),
+                ));
+            }
+        }
+        NoteTemplate::Refutation => {
+            // Both the misconception and its correction are required — the
+            // whole card hinges on the contrast.
+            for key in ["misconception", "correct"] {
+                let v = obj
+                    .get(key)
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        AppError::Validation(format!("missing string field '{}'", key))
+                    })?;
+                if v.trim().is_empty() {
+                    return Err(AppError::Validation(format!(
+                        "field '{}' must not be empty",
+                        key
+                    )));
+                }
+            }
+            // `explanation` is optional but, if present, must be a string.
+            if let Some(value) = obj.get("explanation") {
+                if !value.is_null() && !value.is_string() {
+                    return Err(AppError::Validation(
+                        "field 'explanation' must be a string when present".into(),
+                    ));
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -578,6 +668,9 @@ fn ords_for_template(
         // Vague 10 — language-learning templates.
         NoteTemplate::Sentence => Ok(vec![0]),
         NoteTemplate::Bidirectional => Ok(vec![0, 1]),
+        // Vague 14 — disciplinary templates, one card each.
+        NoteTemplate::IllnessScript => Ok(vec![0]),
+        NoteTemplate::Refutation => Ok(vec![0]),
     }
 }
 

@@ -8,6 +8,11 @@
  *   - `occlusion`: image + N rectangular masks, generates one card per mask
  *   - `bidirectional` ("Phrase", Vague 10): source + target (+ optional hint
  *     and frequency band), generates two language-learning cards (L2↔L1)
+ *   - `illness_script` ("Médecine", Vague 14): condition + four clinical
+ *     sections, generates one structured clinical card (Charlin 2007)
+ *   - `refutation` ("Sciences", Vague 14): misconception + correction (+
+ *     optional explanation), generates one card confronting a false belief
+ *     (Tippett 2010 meta)
  *
  * Tags are entered as chips (Enter or comma to commit, backspace on empty
  * input removes the last). Keyboard shortcuts:
@@ -18,7 +23,7 @@
  * tag list but clears the fields and refocuses the first input.
  */
 
-import { Languages } from "lucide-react";
+import { FlaskConical, Languages, Stethoscope } from "lucide-react";
 import { useRef, useState } from "react";
 import { ClozePreview, uniqueClozeNumbers } from "@/components/ClozePreview";
 import { OcclusionEditor } from "@/components/OcclusionEditor";
@@ -55,12 +60,24 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
   const [target, setTarget] = useState("");
   const [hint, setHint] = useState("");
   const [frequencyBand, setFrequencyBand] = useState<FrequencyBand | null>(null);
+  // Vague 14 — Médecine ("illness_script") template state.
+  const [condition, setCondition] = useState("");
+  const [epidemiology, setEpidemiology] = useState("");
+  const [pathophysiology, setPathophysiology] = useState("");
+  const [clinical, setClinical] = useState("");
+  const [management, setManagement] = useState("");
+  // Vague 14 — Sciences ("refutation") template state.
+  const [misconception, setMisconception] = useState("");
+  const [correct, setCorrect] = useState("");
+  const [explanation, setExplanation] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
 
   const frontRef = useRef<HTMLTextAreaElement | null>(null);
   const clozeRef = useRef<HTMLTextAreaElement | null>(null);
   const sourceRef = useRef<HTMLInputElement | null>(null);
+  const conditionRef = useRef<HTMLInputElement | null>(null);
+  const misconceptionRef = useRef<HTMLTextAreaElement | null>(null);
 
   const createNote = useCreateNote();
 
@@ -72,6 +89,14 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
     setTarget("");
     setHint("");
     setFrequencyBand(null);
+    setCondition("");
+    setEpidemiology("");
+    setPathophysiology("");
+    setClinical("");
+    setManagement("");
+    setMisconception("");
+    setCorrect("");
+    setExplanation("");
     if (!keepTags) setTags([]);
     setTagInput("");
   }
@@ -157,6 +182,56 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
       const h = hint.trim();
       return { ok: true, fields: h ? { source: s, target: t, hint: h } : { source: s, target: t } };
     }
+    if (template === "illness_script") {
+      const c = condition.trim();
+      if (c.length === 0) {
+        toast({
+          title: "Champs incomplets",
+          description: "La condition (le diagnostic) est obligatoire.",
+          variant: "destructive",
+        });
+        return { ok: false };
+      }
+      const epi = epidemiology.trim();
+      const patho = pathophysiology.trim();
+      const clin = clinical.trim();
+      const mgmt = management.trim();
+      if (epi.length === 0 && patho.length === 0 && clin.length === 0 && mgmt.length === 0) {
+        toast({
+          title: "Fiche incomplète",
+          description:
+            "Remplis au moins une section (épidémiologie, physiopathologie, clinique ou prise en charge).",
+          variant: "destructive",
+        });
+        return { ok: false };
+      }
+      // Only persist the non-empty sections; `condition` is always present.
+      const fields: Record<string, unknown> = { condition: c };
+      if (epi.length > 0) fields.epidemiology = epi;
+      if (patho.length > 0) fields.pathophysiology = patho;
+      if (clin.length > 0) fields.clinical = clin;
+      if (mgmt.length > 0) fields.management = mgmt;
+      return { ok: true, fields };
+    }
+    if (template === "refutation") {
+      const m = misconception.trim();
+      const c = correct.trim();
+      if (m.length === 0 || c.length === 0) {
+        toast({
+          title: "Champs incomplets",
+          description: "L'idée fausse et sa correction sont obligatoires.",
+          variant: "destructive",
+        });
+        return { ok: false };
+      }
+      const expl = explanation.trim();
+      return {
+        ok: true,
+        fields: expl
+          ? { misconception: m, correct: c, explanation: expl }
+          : { misconception: m, correct: c },
+      };
+    }
     // "occlusion" is handled by the dedicated editor (early return above),
     // so this branch should be unreachable.
     return { ok: false };
@@ -191,6 +266,8 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
             requestAnimationFrame(() => {
               if (template === "cloze") clozeRef.current?.focus();
               else if (template === "bidirectional") sourceRef.current?.focus();
+              else if (template === "illness_script") conditionRef.current?.focus();
+              else if (template === "refutation") misconceptionRef.current?.focus();
               else frontRef.current?.focus();
             });
           } else {
@@ -254,6 +331,14 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
           <TabsTrigger value="bidirectional" className="gap-1.5">
             <Languages className="h-3.5 w-3.5" />
             Phrase
+          </TabsTrigger>
+          <TabsTrigger value="illness_script" className="gap-1.5">
+            <Stethoscope className="h-3.5 w-3.5" />
+            Médecine
+          </TabsTrigger>
+          <TabsTrigger value="refutation" className="gap-1.5">
+            <FlaskConical className="h-3.5 w-3.5" />
+            Sciences
           </TabsTrigger>
         </TabsList>
 
@@ -425,6 +510,163 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
                   <div className="mt-2 text-xs font-medium text-muted-foreground">verso</div>
                   <div className="mt-1 text-muted-foreground">{source.trim() || "…"}</div>
                 </div>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="illness_script" className="space-y-4">
+          <p className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
+            Fiche clinique structurée (<em>illness script</em>, Charlin 2007) : une carte qui
+            demande le tableau d'une pathologie à partir de son nom.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="illness-condition">Condition / diagnostic</Label>
+            <Input
+              id="illness-condition"
+              ref={conditionRef}
+              value={condition}
+              onChange={(e) => setCondition(e.target.value)}
+              placeholder="Infarctus du myocarde"
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="illness-epidemiology">Épidémiologie</Label>
+              <Textarea
+                id="illness-epidemiology"
+                value={epidemiology}
+                onChange={(e) => setEpidemiology(e.target.value)}
+                onKeyDown={handleEditorKeyDown}
+                rows={3}
+                placeholder="Terrain, facteurs de risque, prévalence…"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="illness-pathophysiology">Physiopathologie</Label>
+              <Textarea
+                id="illness-pathophysiology"
+                value={pathophysiology}
+                onChange={(e) => setPathophysiology(e.target.value)}
+                onKeyDown={handleEditorKeyDown}
+                rows={3}
+                placeholder="Mécanisme sous-jacent…"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="illness-clinical">Clinique</Label>
+              <Textarea
+                id="illness-clinical"
+                value={clinical}
+                onChange={(e) => setClinical(e.target.value)}
+                onKeyDown={handleEditorKeyDown}
+                rows={3}
+                placeholder="Signes, symptômes, présentation typique…"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="illness-management">Prise en charge</Label>
+              <Textarea
+                id="illness-management"
+                value={management}
+                onChange={(e) => setManagement(e.target.value)}
+                onKeyDown={handleEditorKeyDown}
+                rows={3}
+                placeholder="Examens, traitement, suivi…"
+              />
+            </div>
+          </div>
+          {condition.trim() && (
+            <div className="space-y-2">
+              <Label>Aperçu de la carte</Label>
+              <div className="rounded-md border p-3 text-sm">
+                <div className="text-xs font-medium text-muted-foreground">Recto</div>
+                <div className="mt-1">Décris le tableau de : {condition.trim()}</div>
+                <div className="mt-2 text-xs font-medium text-muted-foreground">Verso</div>
+                <ul className="mt-1 space-y-1 text-muted-foreground">
+                  {epidemiology.trim() && (
+                    <li>
+                      <span className="font-medium text-foreground">Épidémiologie :</span>{" "}
+                      {epidemiology.trim()}
+                    </li>
+                  )}
+                  {pathophysiology.trim() && (
+                    <li>
+                      <span className="font-medium text-foreground">Physiopathologie :</span>{" "}
+                      {pathophysiology.trim()}
+                    </li>
+                  )}
+                  {clinical.trim() && (
+                    <li>
+                      <span className="font-medium text-foreground">Clinique :</span>{" "}
+                      {clinical.trim()}
+                    </li>
+                  )}
+                  {management.trim() && (
+                    <li>
+                      <span className="font-medium text-foreground">Prise en charge :</span>{" "}
+                      {management.trim()}
+                    </li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="refutation" className="space-y-4">
+          <p className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
+            Carte de réfutation (<em>refutation text</em>, Tippett 2010) : confronte une idée fausse
+            à la réalité pour déloger une conception erronée.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="refutation-misconception">Idée fausse (la conception erronée)</Label>
+            <Textarea
+              id="refutation-misconception"
+              ref={misconceptionRef}
+              value={misconception}
+              onChange={(e) => setMisconception(e.target.value)}
+              onKeyDown={handleEditorKeyDown}
+              rows={3}
+              placeholder="Les saisons sont dues à la distance Terre-Soleil."
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="refutation-correct">Correction (l'énoncé correct)</Label>
+            <Textarea
+              id="refutation-correct"
+              value={correct}
+              onChange={(e) => setCorrect(e.target.value)}
+              onKeyDown={handleEditorKeyDown}
+              rows={3}
+              placeholder="Les saisons sont dues à l'inclinaison de l'axe terrestre."
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="refutation-explanation">Explication (optionnel)</Label>
+            <Textarea
+              id="refutation-explanation"
+              value={explanation}
+              onChange={(e) => setExplanation(e.target.value)}
+              onKeyDown={handleEditorKeyDown}
+              rows={3}
+              placeholder="L'orbite est quasi circulaire ; c'est l'angle d'incidence des rayons qui varie."
+            />
+          </div>
+          {(misconception.trim() || correct.trim()) && (
+            <div className="space-y-2">
+              <Label>Aperçu de la carte</Label>
+              <div className="rounded-md border p-3 text-sm">
+                <div className="text-xs font-medium text-muted-foreground">Recto</div>
+                <div className="mt-1">Vrai ou faux ? {misconception.trim() || "…"}</div>
+                <div className="mt-2 text-xs font-medium text-muted-foreground">Verso</div>
+                <div className="mt-1">
+                  <span className="font-semibold text-destructive">FAUX.</span>{" "}
+                  {correct.trim() || "…"}
+                </div>
+                {explanation.trim() && (
+                  <p className="mt-1 text-muted-foreground">{explanation.trim()}</p>
+                )}
               </div>
             </div>
           )}

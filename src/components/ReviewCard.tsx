@@ -13,6 +13,12 @@
  *                        `<OcclusionReviewView>`; we *skip* the flip animation
  *                        for this template because the visual diff between
  *                        question and answer is the mask overlay itself.
+ *   - "illness_script" → clinical fiche (Vague 14). Recto = condition, verso =
+ *                        the four structured sections (epidemiology /
+ *                        pathophysiology / clinical / management).
+ *   - "refutation"     → misconception confrontation (Vague 14). Recto =
+ *                        « Vrai ou faux ? {misconception} », verso = « FAUX.
+ *                        {correct} » + optional explanation.
  *
  * Animation: a horizontal flip via framer-motion. The whole front+back
  * payload is wrapped in a `motion.div` whose `rotateY` toggles between
@@ -194,6 +200,32 @@ function getClozeText(note: Note): string {
   return typeof note.fields.text === "string" ? note.fields.text : "";
 }
 
+/** Vague 14 — pull a trimmed string field, defaulting to "". */
+function strField(note: Note, key: string): string {
+  const v = note.fields[key];
+  return typeof v === "string" ? v.trim() : "";
+}
+
+interface IllnessSection {
+  label: string;
+  value: string;
+}
+
+/**
+ * Vague 14 — gather the non-empty clinical sections of an illness-script
+ * note, in clinical-reasoning order. The recto is always the condition.
+ */
+function getIllnessSections(note: Note): IllnessSection[] {
+  return (
+    [
+      { label: "Épidémiologie", value: strField(note, "epidemiology") },
+      { label: "Physiopathologie", value: strField(note, "pathophysiology") },
+      { label: "Clinique", value: strField(note, "clinical") },
+      { label: "Prise en charge", value: strField(note, "management") },
+    ] as IllnessSection[]
+  ).filter((s) => s.value.length > 0);
+}
+
 export function ReviewCard({
   note,
   phase,
@@ -206,6 +238,11 @@ export function ReviewCard({
   const isAnswer = phase === "answer" || phase === "submitting";
   const isCloze = note.template === "cloze";
   const isOcclusion = note.template === "occlusion";
+  // Vague 14 — disciplinary templates render a bespoke recto/verso inside the
+  // standard flip card (no front/back string pair).
+  const isIllness = note.template === "illness_script";
+  const isRefutation = note.template === "refutation";
+  const isDisciplinary = isIllness || isRefutation;
   const elaboration = getElaboration(note);
   // Vague 5 — interleaved mode taps into a synthetic `__deck_name` field
   // (injected by `<InterleavedSession />`) when an explicit prop is absent.
@@ -254,7 +291,23 @@ export function ReviewCard({
   }
 
   const cloze = isCloze ? renderCloze(getClozeText(note)) : null;
-  const basic = !isCloze ? getBasicFields(note, cardOrd) : null;
+  const basic = !isCloze && !isDisciplinary ? getBasicFields(note, cardOrd) : null;
+
+  // Vague 14 — disciplinary recto text + verso JSX. Computed up front so the
+  // flip card and the TTS button below can share the same strings.
+  const illnessSections = isIllness ? getIllnessSections(note) : [];
+  const refutationCorrect = isRefutation ? strField(note, "correct") : "";
+  const refutationExplanation = isRefutation ? strField(note, "explanation") : "";
+  const disciplinaryFront = isIllness
+    ? `Décris le tableau de : ${strField(note, "condition")}`
+    : isRefutation
+      ? `Vrai ou faux ? ${strField(note, "misconception")}`
+      : "";
+  const disciplinaryBackSpoken = isIllness
+    ? illnessSections.map((s) => `${s.label}. ${s.value}`).join(" ")
+    : isRefutation
+      ? `Faux. ${refutationCorrect}${refutationExplanation ? `. ${refutationExplanation}` : ""}`
+      : "";
 
   return (
     <AnimatePresence mode="wait">
@@ -294,7 +347,11 @@ export function ReviewCard({
               <div className="absolute right-3 top-3 z-10">
                 <TtsButton
                   text={
-                    cloze ? clozeToSpoken(getClozeText(note), "question") : (basic?.front ?? "")
+                    cloze
+                      ? clozeToSpoken(getClozeText(note), "question")
+                      : isDisciplinary
+                        ? disciplinaryFront
+                        : (basic?.front ?? "")
                   }
                 />
               </div>
@@ -307,7 +364,7 @@ export function ReviewCard({
                   />
                 ) : (
                   <div className="w-full whitespace-pre-wrap text-center text-2xl font-medium leading-relaxed">
-                    {basic?.front || (
+                    {(isDisciplinary ? disciplinaryFront : basic?.front) || (
                       <span className="text-muted-foreground italic">(verso vide)</span>
                     )}
                   </div>
@@ -327,7 +384,13 @@ export function ReviewCard({
             >
               <div className="absolute right-3 top-3 z-10">
                 <TtsButton
-                  text={cloze ? clozeToSpoken(getClozeText(note), "answer") : (basic?.back ?? "")}
+                  text={
+                    cloze
+                      ? clozeToSpoken(getClozeText(note), "answer")
+                      : isDisciplinary
+                        ? disciplinaryBackSpoken
+                        : (basic?.back ?? "")
+                  }
                 />
               </div>
               <CardContent className="flex min-h-[280px] flex-col items-stretch gap-4 p-10">
@@ -337,6 +400,43 @@ export function ReviewCard({
                     // biome-ignore lint/security/noDangerouslySetInnerHtml: same as above — escaped + curated tags only.
                     dangerouslySetInnerHTML={{ __html: cloze.answerHtml }}
                   />
+                ) : isIllness ? (
+                  <>
+                    <div className="text-center text-sm font-medium text-muted-foreground">
+                      {strField(note, "condition")}
+                    </div>
+                    <hr className="border-border" />
+                    <dl className="space-y-3 text-left">
+                      {illnessSections.map((section) => (
+                        <div key={section.label}>
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-primary">
+                            {section.label}
+                          </dt>
+                          <dd className="mt-0.5 whitespace-pre-wrap text-base leading-relaxed">
+                            {section.value}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </>
+                ) : isRefutation ? (
+                  <>
+                    <div className="whitespace-pre-wrap text-center text-base text-muted-foreground">
+                      {strField(note, "misconception")}
+                    </div>
+                    <hr className="border-border" />
+                    <div className="whitespace-pre-wrap text-center text-2xl font-medium leading-relaxed">
+                      <span className="font-bold text-destructive">FAUX.</span>{" "}
+                      {refutationCorrect || (
+                        <span className="text-muted-foreground italic">(verso vide)</span>
+                      )}
+                    </div>
+                    {refutationExplanation && (
+                      <p className="whitespace-pre-wrap text-center text-sm italic text-muted-foreground">
+                        {refutationExplanation}
+                      </p>
+                    )}
+                  </>
                 ) : (
                   <>
                     <div className="whitespace-pre-wrap text-center text-lg text-muted-foreground">

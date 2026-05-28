@@ -26,7 +26,9 @@ export type NoteTemplate =
   | "cloze"
   | "occlusion"
   | "sentence"
-  | "bidirectional";
+  | "bidirectional"
+  | "illness_script"
+  | "refutation";
 
 /**
  * Vague 10 — Zipf-bucket label for language-learning notes (Pareto 80/20
@@ -62,6 +64,30 @@ export interface OcclusionFields {
   natural_width: number;
   natural_height: number;
   masks: OcclusionMask[];
+}
+
+/**
+ * Vague 14 — `fields` payload for `template === "illness_script"` notes
+ * (médecine, Charlin 2007). `condition` is the card prompt; the four clinical
+ * sections are individually optional but at least one must be filled.
+ */
+export interface IllnessScriptFields {
+  condition: string;
+  epidemiology?: string;
+  pathophysiology?: string;
+  clinical?: string;
+  management?: string;
+}
+
+/**
+ * Vague 14 — `fields` payload for `template === "refutation"` notes (sciences,
+ * Tippett 2010 meta). `misconception` and `correct` are both required;
+ * `explanation` is an optional deeper rationale shown under the correction.
+ */
+export interface RefutationFields {
+  misconception: string;
+  correct: string;
+  explanation?: string;
 }
 /** Rating sent to `submit_review`: 1 = Again, 2 = Hard, 3 = Good, 4 = Easy. */
 export type Rating = 1 | 2 | 3 | 4;

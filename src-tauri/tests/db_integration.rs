@@ -1660,3 +1660,205 @@ fn frequency_coverage_counts_by_tag() {
     let total = cov.top_100 + cov.top_1k + cov.top_5k + cov.top_10k + cov.beyond + cov.untagged;
     assert_eq!(total, db.notes(&conn).count_in_deck(deck_id).unwrap());
 }
+
+// ---- Vague 14: Modes disciplinaires ----------------------------------------
+
+/// An `IllnessScript` note materialises a single card (condition → sections).
+#[test]
+fn create_illness_script_creates_1_card() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let conn = db.lock();
+    let note = db
+        .notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::IllnessScript,
+            json!({
+                "condition": "Infarctus du myocarde",
+                "epidemiology": "Homme > 50 ans, tabac, HTA",
+                "pathophysiology": "Rupture de plaque d'athérome",
+                "clinical": "Douleur thoracique constrictive irradiant au bras gauche",
+                "management": "Reperfusion en urgence (angioplastie)"
+            }),
+            vec![],
+            None,
+        )
+        .expect("create illness script note");
+    assert_eq!(note.template, NoteTemplate::IllnessScript);
+
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM cards WHERE note_id = ?1",
+            rusqlite::params![note.id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 1, "illness script → 1 card");
+
+    // A condition with a single section filled is also valid.
+    let minimal = db
+        .notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::IllnessScript,
+            json!({ "condition": "Migraine", "clinical": "Céphalée pulsatile unilatérale" }),
+            vec![],
+            None,
+        )
+        .expect("create minimal illness script");
+    let minimal_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM cards WHERE note_id = ?1",
+            rusqlite::params![minimal.id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(minimal_count, 1);
+}
+
+/// The illness script rejects a missing/blank `condition`, and a `condition`
+/// with no clinical section filled.
+#[test]
+fn illness_script_requires_condition() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let conn = db.lock();
+
+    // Missing `condition` entirely.
+    let err = db
+        .notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::IllnessScript,
+            json!({ "clinical": "Fièvre" }),
+            vec![],
+            None,
+        )
+        .unwrap_err();
+    assert!(matches!(err, mnemosys_lib::error::AppError::Validation(_)));
+
+    // Blank `condition` (whitespace only).
+    let err = db
+        .notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::IllnessScript,
+            json!({ "condition": "   ", "clinical": "Fièvre" }),
+            vec![],
+            None,
+        )
+        .unwrap_err();
+    assert!(matches!(err, mnemosys_lib::error::AppError::Validation(_)));
+
+    // Condition present but every section empty → no verso content.
+    let err = db
+        .notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::IllnessScript,
+            json!({ "condition": "Asthme" }),
+            vec![],
+            None,
+        )
+        .unwrap_err();
+    assert!(matches!(err, mnemosys_lib::error::AppError::Validation(_)));
+}
+
+/// A `Refutation` note materialises a single card (misconception → correction).
+#[test]
+fn create_refutation_creates_1_card() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let conn = db.lock();
+    let note = db
+        .notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::Refutation,
+            json!({
+                "misconception": "Les saisons sont dues à la distance Terre-Soleil.",
+                "correct": "Les saisons sont dues à l'inclinaison de l'axe terrestre.",
+                "explanation": "L'orbite est quasi circulaire ; c'est l'angle d'incidence des rayons qui varie."
+            }),
+            vec![],
+            None,
+        )
+        .expect("create refutation note");
+    assert_eq!(note.template, NoteTemplate::Refutation);
+
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM cards WHERE note_id = ?1",
+            rusqlite::params![note.id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 1, "refutation → 1 card");
+
+    // `explanation` is optional.
+    let no_expl = db
+        .notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::Refutation,
+            json!({
+                "misconception": "Le verre est un solide qui coule lentement.",
+                "correct": "Le verre est un solide amorphe stable."
+            }),
+            vec![],
+            None,
+        )
+        .expect("create refutation without explanation");
+    let no_expl_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM cards WHERE note_id = ?1",
+            rusqlite::params![no_expl.id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(no_expl_count, 1);
+}
+
+/// The refutation card requires both `misconception` and `correct`.
+#[test]
+fn refutation_requires_misconception_and_correct() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let conn = db.lock();
+
+    // Missing `correct`.
+    let err = db
+        .notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::Refutation,
+            json!({ "misconception": "La foudre ne frappe jamais deux fois au même endroit." }),
+            vec![],
+            None,
+        )
+        .unwrap_err();
+    assert!(matches!(err, mnemosys_lib::error::AppError::Validation(_)));
+
+    // Missing `misconception`.
+    let err = db
+        .notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::Refutation,
+            json!({ "correct": "La foudre peut frapper plusieurs fois le même point." }),
+            vec![],
+            None,
+        )
+        .unwrap_err();
+    assert!(matches!(err, mnemosys_lib::error::AppError::Validation(_)));
+
+    // Blank `correct` (whitespace only).
+    let err = db
+        .notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::Refutation,
+            json!({ "misconception": "Idée fausse", "correct": "   " }),
+            vec![],
+            None,
+        )
+        .unwrap_err();
+    assert!(matches!(err, mnemosys_lib::error::AppError::Validation(_)));
+}

@@ -83,6 +83,10 @@ function templateLabel(template: NoteTemplate) {
       return "Phrase";
     case "bidirectional":
       return "Phrase";
+    case "illness_script":
+      return "Médecine";
+    case "refutation":
+      return "Sciences";
   }
 }
 
@@ -122,6 +126,14 @@ function noteFrontPreview(note: Note): string {
   if (note.template === "sentence" || note.template === "bidirectional") {
     const src = typeof fields.source === "string" ? fields.source : "";
     return src || "(vide)";
+  }
+  if (note.template === "illness_script") {
+    const condition = typeof fields.condition === "string" ? fields.condition : "";
+    return condition || "(vide)";
+  }
+  if (note.template === "refutation") {
+    const misconception = typeof fields.misconception === "string" ? fields.misconception : "";
+    return misconception || "(vide)";
   }
   const front = typeof fields.front === "string" ? fields.front : "";
   return front || "(vide)";
