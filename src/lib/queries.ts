@@ -49,6 +49,7 @@ import {
   type PalaceTemplate,
   type PalaceWithLoci,
   type PendingJol,
+  type PlanTriggerType,
   type PodcastFile,
   type PodcastFormat,
   type PodcastResult,
@@ -56,6 +57,7 @@ import {
   type ReviewResult,
   type SchedulerKind,
   type Sketch,
+  type StudyPlan,
   type SubtitleImportResult,
   type SubtitleMode,
   type SyncLoginOutput,
@@ -113,6 +115,8 @@ export const queryKeys = {
   // Vague 17 — Reading Import (word status lookup, keyed by sorted words)
   wordStatuses: (words: string[], language: string) =>
     ["word-statuses", language, [...words].sort()] as const,
+  // Vague 21 — Implementation Intentions (study planner)
+  studyPlans: ["study-plans"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -1343,6 +1347,73 @@ export function useCreateCardsFromWords(
     onSuccess: (data, variables, onMutateResult, context) => {
       qc.invalidateQueries({ queryKey: queryKeys.deckStats(variables.deckId) });
       qc.invalidateQueries({ queryKey: ["cards-in-deck", variables.deckId] });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Vague 21 — Implementation Intentions (study planner)
+// ---------------------------------------------------------------------------
+
+/** Every study plan, newest first. */
+export function usePlans(opts?: Partial<UseQueryOptions<StudyPlan[]>>) {
+  return useQuery<StudyPlan[]>({
+    queryKey: queryKeys.studyPlans,
+    queryFn: () => api.plans.list(),
+    ...opts,
+  });
+}
+
+/** Create a « si X alors Y » plan, then refresh the plan list. */
+export function useCreatePlan(
+  opts?: UseMutationOptions<
+    StudyPlan,
+    Error,
+    {
+      triggerType: PlanTriggerType;
+      triggerValue: string;
+      action: string;
+      deckId?: number | null;
+      days?: string;
+      enabled?: boolean;
+    }
+  >,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data) => api.plans.create(data),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.studyPlans });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/** Flip a plan's enabled flag, then refresh the plan list. */
+export function useTogglePlan(
+  opts?: UseMutationOptions<StudyPlan, Error, { id: number; enabled: boolean }>,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, enabled }) => api.plans.toggle(id, enabled),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.studyPlans });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/** Delete a plan, then refresh the plan list. */
+export function useDeletePlan(opts?: UseMutationOptions<void, Error, number>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => api.plans.delete(id),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.studyPlans });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

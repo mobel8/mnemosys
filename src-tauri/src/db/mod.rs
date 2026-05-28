@@ -41,6 +41,7 @@ pub mod migrations;
 pub mod notes;
 pub mod palaces;
 pub mod params;
+pub mod plans;
 pub mod reading;
 pub mod reviews;
 pub mod sketches;
@@ -53,6 +54,7 @@ pub use metacognition::{CalibrationBucket, CalibrationStats, JolPrediction, Meta
 pub use notes::{FrequencyCoverage, Note, NoteRepo, NoteTemplate};
 pub use palaces::{Palace, PalaceLocus, PalaceRepo, PalaceWithLoci};
 pub use params::ParamsRepo;
+pub use plans::{PlanRepo, StudyPlan};
 pub use reading::{ReadingRepo, WordStatus};
 pub use reviews::{DayCount, DayRetention, NewReview, Review, ReviewRepo};
 pub use sketches::{Sketch, SketchRepo};
@@ -166,6 +168,10 @@ impl Database {
 
     pub fn reading<'a>(&self, conn: &'a Connection) -> ReadingRepo<'a> {
         ReadingRepo::new(conn)
+    }
+
+    pub fn plans<'a>(&self, conn: &'a Connection) -> PlanRepo<'a> {
+        PlanRepo::new(conn)
     }
 }
 

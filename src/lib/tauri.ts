@@ -734,6 +734,35 @@ export interface WordStatus {
   updated_at: number;
 }
 
+// --- Vague 21: Implementation Intentions (study planner) ------------------
+
+/**
+ * Kind of cue an implementation intention fires on (Gollwitzer 1999).
+ * - `time`        — a `HH:MM` clock cue (drives local notifications).
+ * - `place`       — a location label (« bureau », « bibliothèque »).
+ * - `after_habit` — piggy-backs on an existing routine (« après le café »).
+ */
+export type PlanTriggerType = "time" | "place" | "after_habit";
+
+/**
+ * One « si [trigger] alors [action] » study plan. Mirrors the Rust
+ * `StudyPlan` struct. `days` is a JSON-encoded array of ISO weekday ints
+ * (`"[1,3,5]"`, `1`=Mon … `7`=Sun); `"[]"` means every day. `deck_id` is a
+ * soft reference (no FK), so it may point at a since-deleted deck.
+ */
+export interface StudyPlan {
+  id: number;
+  trigger_type: PlanTriggerType;
+  trigger_value: string;
+  action: string;
+  deck_id: number | null;
+  /** JSON array string of ISO weekdays; `"[]"` = every day. */
+  days: string;
+  enabled: boolean;
+  /** unix seconds. */
+  created_at: number;
+}
+
 // ---------------------------------------------------------------------------
 // API surface
 // ---------------------------------------------------------------------------
@@ -1148,6 +1177,55 @@ export const api = {
      */
     createCardsFromWords: (deckId: number, words: string[]) =>
       invoke<number>("create_cards_from_words", { deckId, words }),
+  },
+  plans: {
+    /** Every study plan, newest first. */
+    list: () => invoke<StudyPlan[]>("list_study_plans"),
+    /**
+     * Create a « si [trigger] alors [action] » plan. `days` is a JSON array
+     * string (`"[1,3,5]"`, `"[]"` = every day); `enabled` defaults to `true`
+     * server-side when omitted.
+     */
+    create: (data: {
+      triggerType: PlanTriggerType;
+      triggerValue: string;
+      action: string;
+      deckId?: number | null;
+      days?: string;
+      enabled?: boolean;
+    }) =>
+      invoke<StudyPlan>("create_study_plan", {
+        triggerType: data.triggerType,
+        triggerValue: data.triggerValue,
+        action: data.action,
+        deckId: data.deckId ?? null,
+        days: data.days ?? "[]",
+        enabled: data.enabled ?? null,
+      }),
+    /** Overwrite the mutable fields of an existing plan. */
+    update: (data: {
+      id: number;
+      triggerType: PlanTriggerType;
+      triggerValue: string;
+      action: string;
+      deckId?: number | null;
+      days?: string;
+      enabled: boolean;
+    }) =>
+      invoke<StudyPlan>("update_study_plan", {
+        id: data.id,
+        triggerType: data.triggerType,
+        triggerValue: data.triggerValue,
+        action: data.action,
+        deckId: data.deckId ?? null,
+        days: data.days ?? "[]",
+        enabled: data.enabled,
+      }),
+    /** Flip a plan's `enabled` flag. */
+    toggle: (id: number, enabled: boolean) =>
+      invoke<StudyPlan>("toggle_study_plan", { id, enabled }),
+    /** Delete a plan by id. */
+    delete: (id: number) => invoke<void>("delete_study_plan", { id }),
   },
   fsrsOptimizer: {
     /**

@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 15;
+pub const CURRENT_VERSION: i32 = 16;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -331,6 +331,34 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_decks_remote_id
     ON decks(remote_id) WHERE remote_id IS NOT NULL;
 "#;
 
+/// v16 — Vague 21 Implementation Intentions (Gollwitzer 1999, d≈0.65).
+///
+/// Adds a single `study_plans` table storing « si [trigger] alors [action] »
+/// study-cue plans. `trigger_type` is one of `time` (a `HH:MM` clock cue),
+/// `place` (a location label) or `after_habit` (an existing routine). The
+/// CHECK pins the accepted values so a misbehaving UI can't wedge the
+/// notification scheduler, which only fires for `time` plans.
+///
+/// `days` is a JSON array of ISO weekday ints (`1`=Mon … `7`=Sun); an empty
+/// array `[]` means « every day ». `deck_id` is an optional soft reference to
+/// the deck the plan reviews — it is intentionally NOT a foreign key so
+/// deleting a deck never silently drops the learner's plan (the UI degrades
+/// to a plain action label). Pure additive `CREATE TABLE IF NOT EXISTS` — no
+/// table rebuild, no data migration.
+const SCHEMA_V16: &str = r#"
+CREATE TABLE IF NOT EXISTS study_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    trigger_type TEXT NOT NULL
+        CHECK(trigger_type IN ('time', 'place', 'after_habit')),
+    trigger_value TEXT NOT NULL,
+    action TEXT NOT NULL,
+    deck_id INTEGER,
+    days TEXT NOT NULL DEFAULT '[]',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL
+);
+"#;
+
 /// Apply all pending migrations to `conn`.
 ///
 /// Reads `PRAGMA user_version` and applies migrations in order. Each migration
@@ -429,6 +457,11 @@ pub fn run(conn: &Connection) -> AppResult<()> {
     // to accept `'hlr'` + `'memorize'`.
     if current < 15 {
         apply_migration(conn, 15, SCHEMA_V15)?;
+    }
+
+    // v16 — Vague 21 Implementation Intentions: `study_plans` table.
+    if current < 16 {
+        apply_migration(conn, 16, SCHEMA_V16)?;
     }
 
     Ok(())

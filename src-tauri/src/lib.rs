@@ -176,6 +176,12 @@ pub fn run() {
             commands::reading::get_word_statuses,
             commands::reading::set_word_status,
             commands::reading::create_cards_from_words,
+            // study plans (Vague 21 — Implementation Intentions, Gollwitzer 1999)
+            commands::plans::list_study_plans,
+            commands::plans::create_study_plan,
+            commands::plans::update_study_plan,
+            commands::plans::toggle_study_plan,
+            commands::plans::delete_study_plan,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

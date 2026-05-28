@@ -10,7 +10,9 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   AudioLines,
   BarChart3,
+  Binary,
   BookOpen,
+  CalendarClock,
   Compass,
   Github,
   Home,
@@ -41,6 +43,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/palaces", label: "Memory Palaces", icon: Compass },
   { to: "/shadowing", label: "Shadowing", icon: AudioLines },
   { to: "/reading", label: "Lecture", icon: BookOpen },
+  { to: "/planner", label: "Planning", icon: CalendarClock },
+  { to: "/mnemonics", label: "Mnémotechnique", icon: Binary },
   { to: "/stats", label: "Stats", icon: BarChart3 },
   { to: "/graph", label: "Graphe", icon: Network },
   { to: "/achievements", label: "Succès", icon: Trophy },

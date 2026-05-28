@@ -22,10 +22,12 @@ import { Route as decksDeckIdNewCardRoute } from "./decks.$deckId.new-card";
 import { Route as gestureRoute } from "./gesture";
 import { Route as graphRoute } from "./graph";
 import { Route as indexRoute } from "./index";
+import { Route as mnemonicsRoute } from "./mnemonics";
 import { Route as musicRoute } from "./music";
 import { Route as palacesRoute } from "./palaces";
 import { Route as palacesPalaceIdRoute } from "./palaces.$palaceId";
 import { Route as palacesPalaceIdReviewRoute } from "./palaces.$palaceId.review";
+import { Route as plannerRoute } from "./planner";
 import { Route as readingRoute } from "./reading";
 import { Route as reviewDeckIdRoute } from "./review.$deckId";
 import { Route as reviewInterleavedRoute } from "./review-interleaved";
@@ -50,5 +52,7 @@ export const routeTree = rootRoute.addChildren([
   gestureRoute,
   shadowingRoute,
   readingRoute,
+  plannerRoute,
+  mnemonicsRoute,
   settingsRoute,
 ]);

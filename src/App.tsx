@@ -28,7 +28,8 @@ import { MovementBreakReminder } from "@/components/MovementBreakReminder";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 import { Toaster } from "@/components/ui/toaster";
-import { useSettingsQuery } from "@/lib/queries";
+import { scheduleNotifications } from "@/lib/notifications";
+import { usePlans, useSettingsQuery } from "@/lib/queries";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routes/routeTree";
 
@@ -152,6 +153,7 @@ export default function App() {
             <RouterProvider router={router} />
             <ShortcutsHelpDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
             <NeuroModesShell />
+            <PlannerNotificationsShell />
             <DelayedJolPrompt />
             <Toaster />
             <ToastViewport />
@@ -172,4 +174,19 @@ function NeuroModesShell() {
   const enabled = settings.data?.neuro_modes_enabled ?? false;
   const minutes = settings.data?.movement_break_minutes ?? 25;
   return <MovementBreakReminder enabled={enabled} intervalMinutes={minutes} />;
+}
+
+/**
+ * Re-arms local reminders for time-based study plans (Vague 21) whenever the
+ * plan list changes. `scheduleNotifications` is a no-op outside Tauri, so this
+ * is inert under jsdom/tests and renders nothing.
+ */
+function PlannerNotificationsShell() {
+  const plans = usePlans();
+  const data = plans.data;
+  useEffect(() => {
+    if (!data) return;
+    void scheduleNotifications(data);
+  }, [data]);
+  return null;
 }
