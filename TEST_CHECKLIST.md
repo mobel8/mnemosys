@@ -1,8 +1,8 @@
-# Test Checklist — Mnemosys (Sessions 1-4 + Vagues 1-13)
+# Test Checklist — Mnemosys (Sessions 1-4 + Vagues 1-23)
 
 Procédure pas-à-pas pour valider que tout marche sur ta machine. Coche les cases au fur et à mesure. Si quelque chose cloche, descends dans la section **Bugs à reporter** en bas.
 
-> Les sections **0-9** couvrent le cœur Session 1. Les sections **10-12** couvrent les Sessions 2-4. Les sections **13-26** couvrent les Vagues 1-13. Beaucoup de features Vague sont **opt-in** : pense à activer le toggle correspondant dans les Paramètres avant de tester.
+> Les sections **0-9** couvrent le cœur Session 1. Les sections **10-12** couvrent les Sessions 2-4. Les sections **13-26** couvrent les Vagues 1-13, et les sections **27-36** les Vagues 14-23. Beaucoup de features Vague sont **opt-in** : pense à activer le toggle correspondant dans les Paramètres avant de tester. Certaines features ont une **page dédiée** dans la sidebar (Musique, Gesture, Shadowing, Reading, Planning, Mnémotechnique) plutôt qu'un toggle.
 
 > Convention : `[ ]` à cocher, `→` = action attendue, `=>` = ce que tu dois observer.
 
@@ -486,9 +486,175 @@ Pour chaque bug trouvé, copie-colle ce template et remplis :
 
 ---
 
+## 27. Vague 14 — Modes disciplinaires (Médecine, Sciences)
+
+- [ ] Éditeur de carte → l'onglet **« Médecine »** est présent
+- [ ] Remplis **Condition**, **Conditions prédisposantes**, **Insulte physiopathologique**, **Conséquences cliniques** → valide → **1 carte** `illness_script` créée
+- [ ] En review de cette carte : le recto montre la condition, le verso les 4 sections du script
+- [ ] Éditeur de carte → onglet **« Sciences »** présent
+- [ ] Remplis **Concept**, **Idée reçue**, **Explication correcte** → valide → **1 carte** `refutation` créée
+- [ ] En review : l'idée reçue est confrontée à l'explication correcte (le recto pose la question)
+- [ ] (DB) Le template est bien accepté (pas d'erreur de contrainte CHECK à l'insert)
+
+---
+
+## 28. Vague 15 — Mode Maths + Mastery Gating + confiance rétrospective
+
+### 28.1 Faded Worked Example
+
+- [ ] Éditeur de carte → onglet **« Maths »** présent
+- [ ] Saisis un **énoncé**, plusieurs **étapes** (une par ligne) et la **réponse finale** → valide → **1 carte** `worked_example`
+- [ ] En review : l'énoncé s'affiche seul ; **« Étape suivante »** révèle les étapes **une à une**, puis la réponse
+
+### 28.2 Mastery Gating
+
+- [ ] **Modifier le deck** → sélecteur **« Prérequis (mastery gating) »** listant les autres decks
+- [ ] Choisis un deck B comme prérequis de A et sauvegarde
+- [ ] Tant que B n'est pas maîtrisé (< 90 % rétention / 30 j / ≥20 reviews) → le deck A affiche un **cadenas** et *Étudier* est **désactivé**
+- [ ] Vide le prérequis → le cadenas disparaît, *Étudier* redevient actif
+
+### 28.3 Confiance rétrospective
+
+- [ ] Avec l'évaluation de confiance active → après le flip, une **2e** demande de confiance (« à quel point étais-tu sûr ? ») apparaît
+- [ ] La valeur est stockée (colonne `reviews.confidence_post`)
+
+---
+
+## 29. Vague 16 — Modes créatifs (Musique, Gesture)
+
+- [ ] Sidebar → **« Musique »** (`/music`) s'ouvre, **sans clé API requise**
+- [ ] **Métronome** : règle le BPM → le clic audio se déclenche au bon tempo (Web Audio, pas de fichier)
+- [ ] **Ear training** : l'app joue un intervalle/accord → tu peux l'identifier
+- [ ] Sidebar → **« Gesture »** (`/gesture`) s'ouvre
+- [ ] Lance un **timer** (30 s / 1 min / …) → le minuteur défile et signale le changement de pose
+- [ ] Aucune requête réseau émise pendant ces deux modes (vérif. DevTools → Network)
+
+---
+
+## 30. Vague 17 — Shadowing + Reading Import
+
+### 30.1 Shadowing
+
+- [ ] Sidebar → **« Shadowing »** (`/shadowing`) s'ouvre
+- [ ] Une phrase modèle est synthétisée (TTS OpenAI **ou** Piper local)
+- [ ] Autorise le micro → **enregistre ta voix** par-dessus
+- [ ] Les **deux formes d'onde** (modèle vs ta voix) s'affichent côte à côte
+
+### 30.2 Reading Import
+
+- [ ] Sidebar → **« Reading »** (`/reading`) s'ouvre
+- [ ] Colle/importe un texte → chaque mot est colorié par statut (**new** / **learning** / **known**)
+- [ ] **Clique un mot** → son statut évolue ; le changement est persisté (`word_status`, clé `(mot, langue)`)
+- [ ] Sélectionne des mots new/learning → **« Créer des cartes »** → cartes créées dans le deck choisi
+- [ ] (Citations PDF) Génération IA depuis un PDF → option pour **taguer la source** sur les cartes créées
+
+---
+
+## 31. Vague 18 — Tuteur IA local (Ollama) + Chronotype + Son d'ambiance
+
+### 31.1 Ollama (génération locale)
+
+- [ ] **Paramètres → Intégrations** : champs **URL Ollama** + **modèle** présents
+- [ ] Ollama lancé (`ollama serve`, modèle pull) → page **Génération IA** → choisir le moteur **local (Ollama)** → « Générer » renvoie des cartes **sans clé cloud**
+- [ ] Vérif. (DevTools → Network) : aucun appel vers api.anthropic.com / api.openai.com (tout reste sur `localhost:11434`)
+- [ ] Ollama **non lancé** → message d'erreur clair (pas de crash)
+
+### 31.2 Chronotype (rMEQ)
+
+- [ ] **Paramètres → Modes neuro** → questionnaire **rMEQ** → répondre → un **chronotype** (matin / intermédiaire / soir) est affiché
+- [ ] Une suggestion de **fenêtre horaire** de performance s'affiche
+
+### 31.3 Son d'ambiance
+
+- [ ] Active un **fond sonore** (blanc / rose / brun / pluie) → le son joue (généré localement, Web Audio)
+- [ ] Le **volume** est réglable ; couper le son l'arrête immédiatement
+
+---
+
+## 32. Vague 20 — Schedulers HLR & MEMORIZE + Maîtrise concepts (BKT)
+
+- [ ] **Nouveau/Modifier deck** → section *Algorithme de scheduling* propose désormais **5** choix : FSRS-6, SM-2, Leitner, **HLR**, **MEMORIZE**
+- [ ] Crée un deck en **HLR** → badge `HLR` sur la carte du deck → réviser produit des intervalles cohérents
+- [ ] Crée un deck en **MEMORIZE** → badge `MEMORIZE` → réviser fonctionne sans erreur
+- [ ] Changer d'algorithme sur un deck existant **conserve l'historique** des reviews
+- [ ] **Stats → « Maîtrise des concepts »** affiche un **% de maîtrise par tag** (BKT)
+- [ ] Réussir/rater des cartes d'un tag fait **évoluer** son pourcentage
+
+---
+
+## 33. Vague 21 — Planning (Implementation Intentions) + Major System/PAO
+
+### 33.1 Planning
+
+- [ ] Sidebar → **« Planning »** (`/planner`) s'ouvre
+- [ ] Crée un plan **Heure** (`08:00`) + action (deck) + jours → il apparaît dans la liste
+- [ ] Crée un plan **Lieu** et un plan **Après une habitude** → les 3 types fonctionnent
+- [ ] **Désactiver** un plan via son interrupteur le met en pause (`enabled = 0`)
+- [ ] Un plan de type **Heure** déclenche une **notification** locale à l'heure dite
+- [ ] **Supprimer le deck** associé à un plan ne supprime **pas** le plan (il retombe sur un libellé d'action)
+
+### 33.2 Major System / PAO
+
+- [ ] Sidebar → **« Mnémotechnique »** (`/mnemonics`) s'ouvre
+- [ ] **Major System** : saisir une suite de chiffres → l'app propose un encodage en consonnes/mots
+- [ ] **PAO** : un nombre se décompose en trio Personne-Action-Objet
+- [ ] 100 % local (aucune requête réseau)
+
+---
+
+## 34. Vague 22 — Piper TTS local + Image mnémotechnique + Calibration rétrospective
+
+### 34.1 Piper TTS local
+
+- [ ] **Paramètres → Intégrations → Synthèse vocale** : moteur **Piper (local)** sélectionnable + chemin binaire/voix
+- [ ] Piper configuré → un bouton 🔊 (carte / NoteEditor / Shadowing) synthétise **sans clé OpenAI ni réseau**
+- [ ] Le **cache disque** fonctionne (re-clic instantané)
+- [ ] Piper mal configuré → message d'erreur clair (pas de crash)
+
+### 34.2 Image mnémotechnique (DALL-E)
+
+- [ ] Liste des cartes d'un deck → menu d'une carte → **« Image mnémotechnique »** (clé OpenAI requise)
+- [ ] Génération → une **image** illustrant l'astuce s'affiche/s'attache
+- [ ] Sans clé OpenAI → toast *« Clé API manquante »*
+
+### 34.3 Calibration rétrospective (γ_post)
+
+- [ ] Avec la confiance rétrospective active et ≥ 30 prédictions → **Stats → Calibration** affiche une vue **γ_post** (post-réponse) en plus du γ prospectif
+- [ ] L'écart prospectif/rétrospectif est lisible
+
+---
+
+## 35. Vague 23 — Temporal Mastery Graph + Mode mains-libres
+
+### 35.1 Temporal Mastery Graph
+
+- [ ] **Stats → « Maîtrise dans le temps »** trace la **rétention par tag au fil des semaines**
+- [ ] Sélectionner plusieurs tags les superpose sur la même courbe
+- [ ] La tendance (montée/descente) est visible sur la période choisie
+
+### 35.2 Mode mains-libres
+
+- [ ] En review, active le **mode mains-libres**
+- [ ] L'app **lit la question** à voix haute (TTS OpenAI ou Piper), marque une pause, puis **lit la réponse**
+- [ ] Réponds **à la voix** → Whisper transcrit et compare
+- [ ] Annonce un **rating vocal** (« good », « again »…) → le rating est appliqué sans toucher l'écran
+- [ ] Clés/back-ends requis présents (TTS + Whisper, ou Piper local pour la sortie) ; sinon message clair
+
+---
+
+## 36. Cohérence transverse V14-V23
+
+- [ ] La sidebar liste bien les nouvelles entrées (Musique, Gesture, Shadowing, Reading, Planning, Mnémotechnique) sans doublon ni lien mort
+- [ ] L'éditeur de carte affiche les **9 onglets/templates** (Basic, Reverse, Cloze, Occlusion, Phrase, Médecine, Sciences, Maths, + cloze/occlusion selon contexte)
+- [ ] `cd src-tauri && cargo test` : migrations v1→**v16** appliquées, tests verts (`user_version == 16`)
+- [ ] Au boot, une base vierge migre directement en **v16** sans erreur (supprimer `mnemosys.db` puis relancer)
+- [ ] Aucune feature locale (Musique, Gesture, Mnémotechnique, son d'ambiance, Reading) n'émet de requête réseau
+
+---
+
 ## Verdict final
 
-- [ ] Sessions 1–4 + Vagues 1–13 validées → tag de release, packaging, itération de production
+- [ ] Sessions 1–4 + Vagues 1–23 validées → tag de release, packaging, itération de production
 - [ ] Bugs mineurs (cosmétiques, edge cases) → tracker, prioriser
 - [ ] Bugs critiques (crash, data loss, FSRS incorrect) → bloquant pour la release
 

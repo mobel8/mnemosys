@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.8.0] — Vagues 20-23 (2026-05-27)
+
+Dernière salve : algorithmes SRS supplémentaires, planification
+comportementale, IA offline/image, et analytics temporels. Tout opt-in.
+
+### V20 — Algorithmes SRS avancés
+- **HLR scheduler** (Settles & Meeder ACL 2016) : half-life regression
+- **MEMORIZE scheduler** (Tabibian PNAS 2019) : optimal control
+- → 5 algos pluggables par deck (FSRS-6 / SM-2 / Leitner / HLR / MEMORIZE)
+- **BKT Concept Mastery** (Corbett & Anderson) : % maîtrise par tag dans /stats
+- Migration v15 (CHECK scheduler_kind étendu)
+
+### V21 — Planification + mnémotechnique
+- **Implementation Intentions** (Gollwitzer 1999, d=0.65) : route /planner,
+  « quand je X alors j'étudie Y » + rappels locaux. Migration v16 (study_plans)
+- **Major System / PAO** : route /mnemonics, conversion chiffres → mots
+
+### V22 — IA/audio complète
+- **Piper TTS local** : synthèse vocale offline (alternative à OpenAI)
+- **Mnemonic image** (DALL-E) : illustration mnémotechnique des cartes refractaires
+- **Calibration rétrospective** (Bang & Fleming 2018) : γ_post dans le dashboard
+
+### V23 — Analytics temporels + accessibilité
+- **Temporal Mastery Graph** : évolution de la rétention par tag dans le temps
+- **Hands-free Review Mode** : révision 100% audio + voix (TTS + Whisper)
+
+### Validation v0.8.0
+- cargo : 237 lib + 55 integration (0 failed, 1 ignored documenté)
+- vitest : 182/182 (43 fichiers, parallèle, 0 flakiness)
+- tsc + biome (repo entier) + clippy : 0 erreur
+- vite build : chunk eager 95 kB (gzip 30 kB)
+- DB migrations v1→v16, ~95 commandes Tauri, 22 routes, 9 templates, 5 schedulers
+
+---
+
 ## [0.7.0] — Vagues 10-19 (2026-05-27)
 
 Suite de l'effort de recherche appliquée : modes disciplinaires, langue,

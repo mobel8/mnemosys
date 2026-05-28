@@ -39,6 +39,14 @@ Une *note* contient le **contenu** ; une *carte* en est l'**instance scheduable*
 | **basic** | Front → Back | 1 |
 | **basic_reverse** | Front → Back **et** Back → Front | 2 |
 | **cloze** | Texte avec `{{cN::truc}}` masqués un à un | 1 par numéro `cN` distinct |
+| **occlusion** | Image avec rectangles masqués (cf. *Image-occlusion*) | 1 par masque |
+| **sentence** | Phrase recto/verso pour le sentence mining (cf. *Import de sous-titres*) | 1 |
+| **bidirectional** | Phrase langue cible ↔ traduction (onglet *Phrase*, cf. *Mode Langue*) | 2 |
+| **illness_script** | Script de maladie médical (onglet *Médecine*, cf. *Modes disciplinaires*) | 1 |
+| **refutation** | Carte de réfutation d'une idée reçue (onglet *Sciences*) | 1 |
+| **worked_example** | Exemple résolu à étapes révélées (Mode Maths) | 1 |
+
+> Les 6 derniers templates ont chacun leur onglet/contexte dédié dans l'éditeur de carte ou un mode complet — voir les sections correspondantes plus bas. Les 9 valeurs sont validées côté base (contrainte `CHECK` sur `notes.template`).
 
 Exemple cloze :
 ```
@@ -624,6 +632,228 @@ L'option n'apparaît que pour les cartes ayant **au moins 3 lapses** (échecs) :
 
 ---
 
+## Modes disciplinaires : Médecine & Sciences (Vague 14)
+
+Deux templates de notes adaptés à des disciplines précises, accessibles via des onglets dédiés de l'éditeur de carte.
+
+### Onglet « Médecine » — Illness Script
+
+Un *illness script* est la structure mentale d'un clinicien expert : il range chaque maladie en quatre cases (Charlin et al. 2007). L'onglet **« Médecine »** crée une carte `illness_script` à partir de :
+
+- **Condition** — le nom de la pathologie (le recto).
+- **Conditions prédisposantes** — terrain, facteurs de risque.
+- **Insulte physiopathologique** — le mécanisme lésionnel.
+- **Conséquences cliniques** — signes, symptômes, complications.
+
+→ 1 carte : tu vois la condition, tu dois restituer les trois sections. Mémoriser par *scripts* plutôt que par listes plates accélère le raisonnement diagnostique.
+
+### Onglet « Sciences » — Refutation Card
+
+Une *refutation text card* confronte explicitement une **idée reçue** à l'explication correcte. La méta-analyse Tippett 2010 montre que nommer la conception erronée *avant* de la corriger déloge mieux les fausses croyances qu'un simple exposé. L'onglet **« Sciences »** crée une carte `refutation` :
+
+- **Concept / question** (le recto).
+- **Idée reçue** — la croyance courante mais fausse.
+- **Pourquoi c'est faux + explication correcte** (le verso).
+
+→ 1 carte. Idéal en physique, biologie, chimie où les intuitions trompeuses sont tenaces.
+
+---
+
+## Mode Maths : Faded Worked Example (Vague 15)
+
+L'onglet **« Maths »** de l'éditeur crée une carte `worked_example` : un **exemple résolu** dont les étapes se révèlent **progressivement**. L'effet d'exemple résolu (Sweller, Renkl & Atkinson 2003) réduit la charge cognitive en début d'apprentissage ; révéler une étape à la fois (*faded guidance*) force la génération active sans surcharge.
+
+1. Saisis l'**énoncé** puis les **étapes de résolution** (une par ligne) et la **réponse finale**.
+2. En review, l'énoncé s'affiche seul ; tu cliques **« Étape suivante »** pour dévoiler chaque étape une à une, puis la réponse.
+3. Note-toi normalement (Again/Hard/Good/Easy) selon ta capacité à anticiper les étapes.
+
+---
+
+## Mastery Gating — déblocage par prérequis (Vague 15)
+
+Inspiré du *mastery learning* de Bloom : un deck avancé reste **verrouillé** tant que son deck **prérequis** n'est pas maîtrisé.
+
+### Définir un prérequis
+
+Dans **« Modifier le deck »**, choisis un **deck prérequis** dans la liste *Prérequis (mastery gating)*. Laisse vide pour aucun verrou.
+
+### Comportement
+
+- Tant que le prérequis n'atteint pas le seuil de maîtrise (**≥ 90 % de rétention sur 30 jours avec au moins 20 reviews**, seuil Bloom), le deck verrouillé affiche un **cadenas** et le bouton *Étudier* est désactivé.
+- Une fois le prérequis maîtrisé, le cadenas saute automatiquement.
+
+> Ça évite de se disperser sur de l'avancé avant d'avoir solidifié les bases — utile pour des chaînes de cours (Algèbre → Calcul → Analyse).
+
+### Confiance rétrospective en deux temps
+
+Si l'évaluation de confiance est activée, Mnemosys peut te demander une **deuxième** estimation **après** avoir vu la réponse (« à quel point étais-tu sûr ? », Bang & Fleming 2018). Cette confiance *post* (colonne `reviews.confidence_post`) complète la confiance *prospective* (avant flip) et alimente la calibration rétrospective (cf. *Calibration rétrospective*).
+
+---
+
+## Modes créatifs : Musique & Arts (Vague 16)
+
+Deux entraîneurs autonomes, **100 % offline** (Web Audio + Canvas), sans clé API ni réseau.
+
+### Musique (`/music`)
+
+Sidebar → **« Musique »**. Deux outils :
+
+- **Métronome** : règle le tempo (BPM) et la signature ; le clic est synthétisé en Web Audio (timing précis, pas de fichier audio).
+- **Ear training** : l'app joue un **intervalle** (ou un accord) que tu dois identifier. Idéal pour la dictée musicale en répétition espacée.
+
+### Arts — Gesture drawing (`/gesture`)
+
+Sidebar → **« Gesture »**. Un **timer de gesture drawing** : des sessions chronométrées (30 s, 1 min, 2 min, 5 min…) pour t'entraîner au croquis rapide. Le minuteur change de pose à intervalle régulier ; à toi de dessiner avant le buzzer. Tout est local (Canvas + minuteur).
+
+---
+
+## Shadowing — répétition vocale guidée (Vague 17)
+
+Sidebar → **« Shadowing »** (`/shadowing`). La technique du *shadowing* (répéter une phrase immédiatement après l'avoir entendue) est un classique de l'apprentissage des langues et de la diction.
+
+1. L'app génère l'audio **modèle** d'une phrase via TTS (OpenAI ou Piper local).
+2. Tu **répètes** par-dessus ; l'app capture ta voix.
+3. Les **deux formes d'onde** (modèle vs ta voix) s'affichent côte à côte pour comparer rythme et durée visuellement.
+
+Nécessite l'accès micro. Utile pour caler son intonation sur un modèle.
+
+---
+
+## Reading Import — lecture assistée façon LingQ (Vague 17)
+
+Sidebar → **« Reading »** (`/reading`). Importe un texte et marque chaque mot par **statut de connaissance**, façon LingQ.
+
+1. Colle ou importe un **texte** dans la langue cible.
+2. Chaque mot est colorié selon son statut : **new** (jamais vu), **learning** (en cours), **known** (acquis). Le statut est mémorisé par couple `(mot, langue)` dans la table `word_status`.
+3. **Clique un mot** pour faire évoluer son statut.
+4. Sélectionne les mots *new*/*learning* et clique **« Créer des cartes »** : Mnemosys génère des cartes pour ces mots dans le deck choisi.
+
+### Citations PDF (tag source)
+
+Lors de la génération IA depuis un **PDF**, les cartes créées peuvent être taguées avec leur **source** (le document d'origine), pour retrouver d'où vient une information.
+
+---
+
+## Tuteur IA local — Ollama (Vague 18)
+
+En plus de Claude (cloud), Mnemosys peut générer des cartes **entièrement hors-ligne** via **Ollama**, un runtime de LLM local.
+
+### Configuration
+
+1. Installe Ollama (<https://ollama.com/>) et télécharge un modèle (ex. `ollama pull llama3.1`).
+2. Lance le serveur Ollama (il écoute sur `http://localhost:11434` par défaut).
+3. **Paramètres → Intégrations** : renseigne l'URL Ollama et le nom du modèle.
+
+### Workflow
+
+Sur la page **Génération IA**, choisis le **moteur local (Ollama)** au lieu de Claude. La génération tourne sur ta machine : **aucune donnée ne sort**, aucun coût d'API. Parfait pour du contenu sensible ou un usage 100 % offline (la qualité dépend du modèle local choisi).
+
+---
+
+## Chronotype — calibration rMEQ (Vague 18)
+
+Dans **Paramètres → Modes neuro**, le **questionnaire rMEQ** (*reduced Morningness-Eveningness Questionnaire*) détermine ton **chronotype** (du matin / intermédiaire / du soir). Mnemosys s'en sert pour te suggérer tes **fenêtres horaires de performance cognitive** optimales, afin de planifier tes sessions exigeantes au bon moment de la journée.
+
+---
+
+## Son d'ambiance (Context Ambient) (Vague 18)
+
+Toujours dans les réglages, active un **fond sonore continu** pendant tes sessions : **bruit blanc**, **bruit rose**, **bruit brun**, ou **pluie**. Le son est **généré localement** (Web Audio, pas de fichier ni de réseau). Le bruit de fond masque les distractions et stabilise l'attention pour certains profils. Réglable en volume, coupable à tout moment.
+
+---
+
+## Schedulers HLR & MEMORIZE (Vague 20)
+
+En plus de FSRS-6 / SM-2 / Leitner, deux algorithmes de planification supplémentaires sont disponibles par deck, portant le total à **5 algorithmes au choix** (section *Algorithme de scheduling* de la création/édition d'un deck).
+
+| Algorithme | Pour qui / quand | Comportement |
+|------------|------------------|--------------|
+| **HLR** (Half-Life Regression) | Tu veux un modèle léger inspiré de Duolingo. | Estime la **demi-vie** de la mémoire par régression (Settles & Meeder 2016, ACL). |
+| **MEMORIZE** | Tu veux un espacement « théoriquement optimal ». | Planification par **contrôle optimal stochastique** (Tabibian et al. 2019, PNAS). |
+
+Comme pour les autres, un **badge** rappelle l'algo actif sur la carte du deck, et changer d'algorithme **n'efface pas l'historique** des reviews.
+
+---
+
+## Maîtrise des concepts (BKT) (Vague 20)
+
+Dans **Stats**, la section **« Maîtrise des concepts »** affiche, **par tag**, un **pourcentage de maîtrise** estimé par **Bayesian Knowledge Tracing** (BKT, Corbett & Anderson 1994). À chaque review, le modèle met à jour la probabilité que tu « connaisses » réellement le concept derrière le tag, en tenant compte des chances de réussite par chance (*guess*) et d'erreur d'inattention (*slip*).
+
+→ Tu vois d'un coup d'œil quels sujets sont solides et lesquels demandent encore du travail, indépendamment du nombre de cartes.
+
+---
+
+## Planning — Implementation Intentions (Vague 21)
+
+Sidebar → **« Planning »** (`/planner`). Une *implementation intention* est un plan « **quand je [situation], alors j'étudie [action]** » (Gollwitzer 1999, effet moyen **d ≈ 0,65** sur le passage à l'acte). Formuler le déclencheur à l'avance double les chances de tenir une habitude.
+
+1. Crée un plan en choisissant un **type de déclencheur** :
+   - **Heure** (`time`) — ex. *« à 08:00 »* (un rappel système peut être envoyé).
+   - **Lieu** (`place`) — ex. *« dans le métro »*.
+   - **Après une habitude** (`after_habit`) — ex. *« après le café du matin »*.
+2. Renseigne l'**action** (le deck à réviser, optionnel) et les **jours** concernés (ou tous les jours).
+3. Active/désactive chaque plan via son interrupteur.
+
+> Les plans de type **Heure** déclenchent une **notification** locale. Supprimer un deck ne détruit pas le plan associé (il retombe sur un libellé d'action simple).
+
+---
+
+## Major System & PAO (Vague 21)
+
+Sidebar → **« Mnémotechnique »** (`/mnemonics`). Deux systèmes classiques pour mémoriser des **nombres** :
+
+- **Major System** : convertit chaque chiffre en consonne (0=s/z, 1=t/d, 2=n…) pour former des mots faciles à imager. L'app t'aide à encoder/décoder une suite de chiffres.
+- **PAO (Personne-Action-Objet)** : associe chaque nombre à deux chiffres à un trio Personne + Action + Objet, pour encoder de longues séquences (cartes, dates, codes) en images vivantes.
+
+Outil d'entraînement autonome, 100 % local.
+
+---
+
+## Piper TTS — synthèse vocale locale (Vague 22)
+
+En plus d'OpenAI TTS (cloud), Mnemosys peut synthétiser la voix **entièrement hors-ligne** via **Piper**, un moteur TTS neuronal local.
+
+### Configuration
+
+1. Installe Piper et un modèle de voix (`.onnx`).
+2. **Paramètres → Intégrations → Synthèse vocale** : choisis le moteur **Piper (local)** et indique le chemin du binaire / de la voix.
+
+### Usage
+
+Une fois Piper sélectionné, tous les boutons 🔊 (cartes, NoteEditor, Shadowing) passent par Piper : **aucun coût, aucun réseau**, et ça marche en avion. Le cache disque fonctionne comme pour OpenAI. La qualité dépend du modèle de voix Piper installé.
+
+---
+
+## Image mnémotechnique (DALL-E) (Vague 22)
+
+Pour une carte difficile, Claude/OpenAI peut générer une **image mnémotechnique** illustrant l'astuce de mémorisation. Depuis la **liste des cartes** d'un deck, le menu d'une carte propose **« Image mnémotechnique »** : l'app génère une image (via DALL-E) ancrant visuellement le concept. Nécessite une clé OpenAI. Purement optionnel et additif.
+
+---
+
+## Calibration rétrospective (Vague 22)
+
+Si la **confiance rétrospective en deux temps** est active (cf. *Mastery Gating*), le **Calibration Dashboard** (Stats) ajoute une vue **γ_post** : la qualité de ta calibration basée sur la confiance donnée **après** avoir vu la réponse, à comparer avec la calibration *prospective*. Un écart entre les deux révèle si tu juges mieux ton savoir avant ou après l'effort de rappel.
+
+---
+
+## Temporal Mastery Graph (Vague 23)
+
+Dans **Stats**, la section **« Maîtrise dans le temps »** trace l'évolution de ta **rétention par tag au fil des semaines**. Contrairement au pourcentage instantané du BKT, ce graphe temporel montre les **tendances** : un sujet qui progresse, un autre qui décroche, l'effet d'un changement de rythme. Sélectionne les tags à suivre pour comparer plusieurs concepts sur la même courbe.
+
+---
+
+## Mode mains-libres (Hands-free) (Vague 23)
+
+Un **mode de review entièrement vocal**, pour réviser en marchant, en cuisinant, sans toucher l'écran.
+
+1. Active le **mode mains-libres** depuis l'écran de review.
+2. L'app **lit la question à voix haute** (TTS), marque une pause, puis lit la réponse.
+3. Tu réponds **à la voix** ; **Whisper** transcrit et compare, et tu notes ton rating **vocalement** (« again », « good »…).
+
+Combine TTS (OpenAI ou Piper local) et reconnaissance vocale Whisper. Nécessite les clés correspondantes (ou Piper local pour la sortie). Idéal pour transformer du temps mort en révision.
+
+---
+
 ## Optimiseur FSRS (Session 4)
 
 FSRS-6 utilise par défaut 21 paramètres calibrés sur une **population globale** (~700 M de reviews). Avec assez d'historique **personnel**, tu peux les recalibrer sur **tes** données (Ye et al., SIGKDD 2022).
@@ -664,9 +894,11 @@ Depuis le détail du deck → ligne de la carte → menu `⋯` → **« Réiniti
 
 Les seules sorties réseau sont **opt-in et explicites**, déclenchées par les fonctionnalités que *tu* actives avec *tes* clés API :
 - **Génération IA / élaboration / critic / mnémotechnique / pré-questionnement** → API Anthropic (le texte envoyé est ton contenu de cours / cartes).
-- **TTS, Podcast, Whisper** → API OpenAI (texte à synthétiser, ou audio à transcrire).
+- **TTS, Podcast, Whisper, image mnémotechnique** → API OpenAI (texte à synthétiser, audio à transcrire, ou prompt d'image).
 - **Sync cloud** → ton projet Supabase (désactivée par défaut).
 - **Focus Guard** → **100 % local** malgré la webcam : l'analyse tourne dans l'app (WebGazer), aucune image n'est enregistrée ni transmise.
+
+**Alternatives 100 % locales** : tu peux remplacer les sorties cloud par des moteurs offline — **Ollama** (génération de cartes) et **Piper** (TTS) tournent sur ta machine, sans réseau ni coût. Les modes créatifs (Musique, Gesture), Major System/PAO, le son d'ambiance et le Reading Import sont eux aussi entièrement locaux.
 
 Sans clés configurées et sans sync, Mnemosys reste 100 % local.
 
@@ -688,7 +920,9 @@ Le binaire Tauri n'est pas (encore) signé en Session 1. C'est attendu jusqu'à 
 
 ### Comment activer une fonctionnalité d'apprentissage (sketch, JOL, Whisper, pré-test…) ?
 
-La plupart des modes cognitifs sont des **switches opt-in** dans **Paramètres → Réglages des révisions → Modes cognitifs** (Type-the-answer, Évaluation de confiance, Pré-questionnement IA, Dessin avant flip, JOL différés, Réponse vocale Whisper, Mode pré-test, Auto-explication, Focus Guard). Les **modes neuro** (mood/sleep, pauses mouvement, cyclic sighing) ont leur propre section avec un *master switch*. Tout est **désactivé par défaut** : tu composes ton propre protocole.
+La plupart des modes cognitifs sont des **switches opt-in** dans **Paramètres → Réglages des révisions → Modes cognitifs** (Type-the-answer, Évaluation de confiance, Pré-questionnement IA, Dessin avant flip, JOL différés, Réponse vocale Whisper, Mode pré-test, Auto-explication, Focus Guard). Les **modes neuro** (mood/sleep, pauses mouvement, cyclic sighing, chronotype rMEQ, son d'ambiance) ont leur propre section avec un *master switch*. Tout est **désactivé par défaut** : tu composes ton propre protocole.
+
+Certaines features sont des **pages dédiées** dans la sidebar plutôt que des toggles : Musique (`/music`), Gesture (`/gesture`), Shadowing (`/shadowing`), Reading (`/reading`), Planning (`/planner`), Mnémotechnique (`/mnemonics`), Graphe (`/graph`), Memory Palaces (`/palaces`), Review entrelacée (`/review-interleaved`), Génération IA (`/ai-generate`), Succès (`/achievements`). Les onglets disciplinaires (Médecine, Sciences, Maths, Phrase, Image-occlusion) vivent dans l'éditeur de carte.
 
 ### C'est quoi les streaks, les succès et la maîtrise des decks ?
 

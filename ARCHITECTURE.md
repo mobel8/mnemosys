@@ -8,10 +8,12 @@ Mnemosys est une application desktop **3-tiers locale**, sans serveur. La sépar
 +--------------------------------------------------------------+
 |                  Frontend — WebView (React)                  |
 |                                                              |
-|  Routes (TanStack Router)                                    |
-|     |- index / decks.$deckId / review.$deckId / stats        |
+|  Routes (TanStack Router) — 22                               |
+|     |- index / decks.$deckId(+/new-card) / review.$deckId    |
 |     |- review-interleaved / ai-generate / achievements       |
-|     |- palaces(+$id+/review) / graph / settings              |
+|     |- palaces(+$id+/review) / graph / stats / settings      |
+|     |- music / gesture / shadowing / reading                 |
+|     |- planner / mnemonics                                    |
 |  Components (shadcn/ui + Radix + Tailwind 4 + R3F 3D)        |
 |  State :  TanStack Query (serveur)  +  Zustand (client)      |
 |  Theme provider (light / dark / system)                      |
@@ -24,7 +26,7 @@ Mnemosys est une application desktop **3-tiers locale**, sans serveur. La sépar
 |              Tauri 2 — bridge IPC + plugins                  |
 |                                                              |
 |  Plugins : fs, dialog, store, notification, updater          |
-|  invoke_handler : ~70 #[tauri::command]                      |
+|  invoke_handler : ~95 #[tauri::command]                      |
 |                                                              |
 |  NOTE : tauri-plugin-sql n'est PAS utilisé (cf. ADR-2).      |
 +----------------------+---------------------------------------+
@@ -37,10 +39,11 @@ Mnemosys est une application desktop **3-tiers locale**, sans serveur. La sépar
 |              ai apkg media sync fsrs_optimizer gamification   |
 |              cognitive wellness sketches metacognition        |
 |              podcast whisper palaces subtitles               |
+|              mastery plans reading                            |
 |  app_state : AppState { db: Database, scheduler: Mutex<…> }  |
 |  db/       : rusqlite + connection pool + repositories       |
 |  fsrs/     : wrapper FSRS-6 + optimize (calibration)         |
-|  scheduler/: trait pluggable (fsrs6 / sm2 / leitner)         |
+|  scheduler/: trait pluggable (fsrs6 sm2 leitner hlr memorize) |
 |  ai/ tts/ apkg/ subtitles/ sync/  (feature modules)         |
 |  error     : AppError / AppResult (serde-friendly)           |
 +----------------------+---------------------------------------+
@@ -48,7 +51,7 @@ Mnemosys est une application desktop **3-tiers locale**, sans serveur. La sépar
                        v
 +--------------------------------------------------------------+
 |           SQLite (bundled, ~/.local/share/.../mnemosys.db)   |
-|     schema v11 — 14 tables + 1 virtual FTS5 + 3 triggers     |
+|     schema v16 — 17 tables + 1 virtual FTS5 + 3 triggers     |
 +--------------------------------------------------------------+
 ```
 
@@ -134,24 +137,26 @@ mnemosys/
 │       │   ├── schema.sql     # v1 ; schema_v4..v11.sql pour les migrations
 │       │   ├── decks.rs notes.rs cards.rs reviews.rs params.rs
 │       │   ├── gamification.rs metacognition.rs wellness.rs
-│       │   └── sketches.rs palaces.rs              # repos des nouvelles tables
+│       │   ├── sketches.rs palaces.rs              # repos Vagues 7/9
+│       │   └── reading.rs plans.rs                 # repos word_status (v14) / study_plans (v16)
 │       ├── fsrs/              # Wrapper FSRS-6
 │       │   ├── params.rs      # DEFAULT_PARAMS (21 floats)
 │       │   ├── scheduler.rs   # CardScheduler + DTOs sérialisables
 │       │   ├── optimize.rs    # calibration (MIN_REVIEWS_FOR_OPTIM = 1000)
 │       │   └── tests.rs       # 27 golden tests
-│       ├── scheduler/         # trait pluggable (ADR-6)
-│       │   ├── fsrs6_adapter.rs sm2.rs leitner.rs
-│       ├── ai/                # Claude : cards, pdf, critic, mnemonic, podcast
-│       ├── tts/               # OpenAI TTS + cache + podcast + whisper
+│       ├── scheduler/         # trait pluggable (ADR-6, ADR-10)
+│       │   ├── fsrs6_adapter.rs sm2.rs leitner.rs hlr.rs memorize.rs
+│       ├── ai/                # Claude/Ollama : cards, pdf, critic, mnemonic, podcast, image
+│       ├── tts/               # OpenAI + Piper local TTS + cache + podcast + whisper
 │       ├── apkg/              # importeur .apkg (parser + converter)
 │       ├── subtitles/         # parser .srt / .vtt
 │       ├── sync/              # Supabase (client, auth, delta, apply, cycle)
-│       └── commands/          # #[tauri::command] handlers (~70, 1 fichier/feature)
+│       └── commands/          # #[tauri::command] handlers (~95, 1 fichier/feature)
 │           ├── decks.rs cards.rs review.rs stats.rs demo.rs io.rs settings.rs
 │           ├── tts.rs ai.rs apkg.rs media.rs sync.rs fsrs_optimizer.rs
 │           ├── gamification.rs cognitive.rs wellness.rs sketches.rs
-│           └── metacognition.rs podcast.rs whisper.rs palaces.rs subtitles.rs
+│           ├── metacognition.rs podcast.rs whisper.rs palaces.rs subtitles.rs
+│           └── mastery.rs plans.rs reading.rs   # BKT/timeline (V20/23), plans (V21), reading (V17)
 ├── tests/
 │   ├── unit/                  # Vitest + jsdom
 │   └── e2e/                   # Playwright
@@ -186,8 +191,10 @@ mnemosys/
 | `jol_predictions` | Prédictions de rappel différées (`predicted_prob`, `actual_correct` résolu à la review suivante). Calibration γ. Vague 7. |
 | `palaces` | Un palais de mémoire (nom + template 3D house/street/castle/custom). Vague 9. |
 | `palace_loci` | Épingle une carte à une position `(x, y, z)` + `ordinal` (ordre du parcours) dans un palais. Vague 9. |
+| `word_status` | Statut de connaissance par mot (`new`/`learning`/`known`), clé composite `(word, language)`. Reading Import LingQ-style. Vague 17. |
+| `study_plans` | Implementation intentions « si [trigger] alors [action] » (`time`/`place`/`after_habit` + jours + deck optionnel). Vague 21. |
 
-**Colonnes ajoutées par migration** (ALTER TABLE) : `decks.remote_id` (v3), `decks.scheduler_kind` (v7), `decks.language_mode` (v11), `notes.remote_id` (v3), `notes.frequency_band` (v11), `cards.remote_id` (v3), `reviews.confidence` (v5). Le `notes.template` CHECK est étendu en v2 (`occlusion`) puis v11 (`sentence`, `bidirectional`).
+**Colonnes ajoutées par migration** (ALTER TABLE) : `decks.remote_id` (v3), `decks.scheduler_kind` (v7), `decks.language_mode` (v11), `decks.prerequisite_deck_id` (v13, mastery gating), `notes.remote_id` (v3), `notes.frequency_band` (v11), `cards.remote_id` (v3), `reviews.confidence` (v5), `reviews.confidence_post` (v13, confiance rétrospective). Le `notes.template` CHECK est étendu progressivement : v2 (`occlusion`), v11 (`sentence`, `bidirectional`), v12 (`illness_script`, `refutation`), v13 (`worked_example`) — **9 valeurs au total**. Le `decks.scheduler_kind` CHECK est étendu en v15 (`hlr`, `memorize`).
 
 ### Schéma DDL — base v1 (extrait)
 
@@ -362,14 +369,55 @@ ALTER TABLE decks ADD COLUMN language_mode TEXT;     -- ISO 639-1 ou NULL
 -- notes reconstruite avec :
 --   template CHECK(... 'sentence', 'bidirectional')
 --   frequency_band TEXT CHECK(NULL OR IN ('top_100','top_1k','top_5k','top_10k','beyond'))
+
+-- v12 (Vague 14 — modes disciplinaires). 12-step recipe : étend le CHECK
+-- template avec 'illness_script' (médecine, Charlin 2007) et 'refutation'
+-- (sciences, Tippett 2010). Rebuild notes + FTS5 + triggers.
+
+-- v13 (Vague 15) : trois changements couplés.
+-- 1. 12-step recipe : étend le CHECK template avec 'worked_example' (maths,
+--    Sweller/Renkl/Atkinson 2003). Le CHECK final liste les 9 valeurs :
+--    'basic','basic_reverse','cloze','occlusion','sentence','bidirectional',
+--    'illness_script','refutation','worked_example'.
+-- 2. mastery gating (Bloom) :
+ALTER TABLE decks ADD COLUMN prerequisite_deck_id INTEGER REFERENCES decks(id);
+-- 3. confiance rétrospective (Bang & Fleming 2018) :
+ALTER TABLE reviews ADD COLUMN confidence_post INTEGER;   -- [1..5], NULL-able
+
+-- v14 (Vague 17 — Reading Import). Additif pur, pas de rebuild.
+CREATE TABLE word_status (
+    word TEXT NOT NULL,                            -- lower-cased, trimmé par le repo
+    language TEXT NOT NULL,                        -- ISO 639-1 ('en', 'ja', …) ou ''
+    status TEXT NOT NULL CHECK(status IN ('new', 'learning', 'known')),
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (word, language)
+);
+CREATE INDEX idx_word_status_lang ON word_status(language);
+
+-- v15 (Vague 20 — schedulers avancés). 12-step recipe : élargit le CHECK de
+-- decks.scheduler_kind à ('fsrs6','sm2','leitner','hlr','memorize').
+-- language_mode (v11) et prerequisite_deck_id (v13) sont recopiés verbatim.
+
+-- v16 (Vague 21 — Implementation Intentions). Additif pur.
+CREATE TABLE study_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    trigger_type TEXT NOT NULL
+        CHECK(trigger_type IN ('time', 'place', 'after_habit')),
+    trigger_value TEXT NOT NULL,
+    action TEXT NOT NULL,
+    deck_id INTEGER,                               -- soft ref (PAS de FK : un deck supprimé ne drop pas le plan)
+    days TEXT NOT NULL DEFAULT '[]',               -- JSON array d'ISO weekday ints (1=lun … 7=dim) ; [] = tous les jours
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL
+);
 ```
 
 ### Migrations
 
-- Versionnage via `PRAGMA user_version`. **Version courante : v11** (`CURRENT_VERSION` dans `migrations.rs`).
-- Chaque migration est embarquée dans le binaire (`include_str!` d'un `schema_vN.sql`, ou littéral inline pour v2/v7) et appliquée conditionnellement (`if current < N`) dans une transaction (bump du `user_version` + COMMIT, ROLLBACK best-effort en cas d'échec).
+- Versionnage via `PRAGMA user_version`. **Version courante : v16** (`CURRENT_VERSION` dans `migrations.rs`).
+- Chaque migration est embarquée dans le binaire (`include_str!` d'un `schema_vN.sql`, ou littéral inline pour v2/v7/v15/v16) et appliquée conditionnellement (`if current < N`) dans une transaction (bump du `user_version` + COMMIT, ROLLBACK best-effort en cas d'échec).
 - **Refus de downgrade** : si `user_version > CURRENT_VERSION`, on n'altère pas la base (un build futur a ouvert ce fichier).
-- SQLite n'a pas d'`ALTER … DROP/ADD CONSTRAINT` : modifier un CHECK suit la **« 12-step recipe »** (recréer la table, copier les rows, renommer, reconstruire FTS5 + triggers). Utilisé en v2, v7, v11.
+- SQLite n'a pas d'`ALTER … DROP/ADD CONSTRAINT` : modifier un CHECK suit la **« 12-step recipe »** (recréer la table, copier les rows, renommer, reconstruire FTS5 + triggers). Utilisé en v2, v7, v11, v12, v13 (template CHECK) et v15 (scheduler_kind CHECK).
 
 | Version | Vague / Session | Changement |
 |---------|-----------------|------------|
@@ -384,6 +432,11 @@ ALTER TABLE decks ADD COLUMN language_mode TEXT;     -- ISO 639-1 ou NULL
 | v9 | Vague 7 | `jol_predictions` (delayed JOL / calibration). |
 | v10 | Vague 9 | `palaces` + `palace_loci` (Memory Palace). |
 | v11 | Vague 10 | templates `sentence`/`bidirectional` + `notes.frequency_band` + `decks.language_mode`. |
+| v12 | Vague 14 | templates `illness_script`/`refutation` (modes disciplinaires). |
+| v13 | Vague 15 | template `worked_example` + `decks.prerequisite_deck_id` (mastery gating) + `reviews.confidence_post`. |
+| v14 | Vague 17 | `word_status` (Reading Import LingQ-style). |
+| v15 | Vague 20 | `decks.scheduler_kind` élargi à `hlr`/`memorize`. |
+| v16 | Vague 21 | `study_plans` (implementation intentions). |
 
 ## FSRS-6
 
@@ -400,7 +453,7 @@ Wrapper Rust : `src-tauri/src/fsrs/scheduler.rs` — expose `CardScheduler::new`
 
 **Optimizer (Session 4)** : `src-tauri/src/fsrs/optimize.rs` recalibre les 21 paramètres par descente de gradient sur l'historique local (`reviews`), au-delà de `MIN_REVIEWS_FOR_OPTIM = 1000` (seuil Ye et al., SIGKDD 2022). Les nouveaux paramètres sont persistés dans `fsrs_params`.
 
-**Schedulers pluggables (Vague 4)** : `src-tauri/src/scheduler/` définit un trait commun et trois implémentations — `fsrs6_adapter` (défaut), `sm2`, `leitner` — choisies par deck via `decks.scheduler_kind`. Voir ADR-6.
+**Schedulers pluggables (Vagues 4 & 20)** : `src-tauri/src/scheduler/` définit un trait commun et **cinq** implémentations — `fsrs6_adapter` (défaut), `sm2`, `leitner` (V4), `hlr` (Half-Life Regression, Settles & Meeder 2016) et `memorize` (contrôle optimal, Tabibian et al. 2019) (V20) — choisies par deck via `decks.scheduler_kind`. Voir ADR-6 et ADR-10.
 
 Sources :
 - [FSRS Wiki — ABC of FSRS](https://github.com/open-spaced-repetition/fsrs4anki/wiki/ABC-of-FSRS)
@@ -411,7 +464,7 @@ Sources :
 
 Tous les handlers vivent dans `src-tauri/src/commands/` et sont enregistrés via `tauri::generate_handler![]` dans `lib.rs::run()`. Le frontend les invoque via les wrappers typés de `src/lib/tauri.ts` (`api.<feature>.<command>`).
 
-L'`invoke_handler` enregistre **~70 commandes**. Regroupées par module / feature :
+L'`invoke_handler` enregistre **~95 commandes**. Regroupées par module / feature :
 
 | Module | Commands | Feature |
 |--------|----------|---------|
@@ -423,8 +476,8 @@ L'`invoke_handler` enregistre **~70 commandes**. Regroupées par module / featur
 | `settings` | `get_settings`, `save_settings` | Lit/écrit `AppSettings` (incl. tous les toggles V2/V3/V7/V8/V12). |
 | `io` | `export_json`, `import_json` | Round-trip JSON portable. |
 | `subtitles` | `import_subtitles` | Import `.srt`/`.vtt` → cartes phrase/cloze (V11). |
-| `tts` | `synthesize_audio`, `clear_tts_cache`, `get_tts_cache_size` | TTS OpenAI + cache disque (S2). |
-| `ai` | `generate_cards_text`, `generate_cards_pdf`, `generate_card_elaboration`, `critique_generated_cards`, `generate_card_mnemonic` | Génération Claude texte/PDF (S2), élaboration Why/Example (V5), critic multi-agent + mnémotechnique (V13). |
+| `tts` | `synthesize_audio`, `synthesize_audio_local`, `clear_tts_cache`, `get_tts_cache_size` | TTS OpenAI + cache disque (S2) ; moteur **Piper local** (V22). |
+| `ai` | `generate_cards_text`, `generate_cards_local`, `generate_cards_pdf`, `generate_card_elaboration`, `critique_generated_cards`, `generate_card_mnemonic`, `generate_card_mnemonic_image` | Génération Claude texte/PDF (S2), génération **Ollama locale** (V18), élaboration Why/Example (V5), critic multi-agent + mnémotechnique (V13), **image mnémotechnique DALL-E** (V22). |
 | `apkg` | `import_apkg` | Import paquet Anki `.apkg` (S2). |
 | `media` | `copy_image_to_app_data` | Copie image pour template occlusion (S2). |
 | `sync` | `sync_login`, `sync_logout`, `sync_status`, `sync_now` | Sync cloud Supabase (S3, dormante). |
@@ -437,6 +490,11 @@ L'`invoke_handler` enregistre **~70 commandes**. Regroupées par module / featur
 | `podcast` | `generate_deck_podcast`, `list_deck_podcasts`, `delete_podcast` | Deck Podcast 2 voix (V8). |
 | `whisper` | `transcribe_voice_answer` | Réponse vocale Whisper (V8). |
 | `palaces` | `list_palaces`, `get_palace`, `create_palace`, `update_palace`, `delete_palace`, `add_palace_locus`, `remove_palace_locus`, `reorder_palace_loci`, `move_palace_locus` | Memory Palace 3D : palais + loci (V9). |
+| `mastery` | `get_concept_mastery`, `get_mastery_timeline` | Maîtrise par tag : BKT instantané (V20) + Temporal Mastery Graph (V23). |
+| `plans` | `list_study_plans`, `create_study_plan`, `update_study_plan`, `toggle_study_plan`, `delete_study_plan` | Implementation intentions / planificateur (V21). |
+| `reading` | `get_word_statuses`, `set_word_status`, `create_cards_from_words` | Reading Import LingQ-style : statut par mot + génération de cartes (V17). |
+
+> Le `mastery gating` (V15) ne crée pas de commande dédiée : le déblocage est calculé côté `decks` (rétention du deck prérequis) et exposé via `get_deck`/`get_deck_stats`.
 
 Convention de nommage côté Rust : `snake_case`. Le wrapper TS expose des paramètres `camelCase` que Tauri convertit automatiquement (`desiredRetention` → `desired_retention`).
 
@@ -446,25 +504,31 @@ Convention de nommage côté Rust : `snake_case`. Le wrapper TS expose des param
 
 Pas de file-based codegen (cf. ADR-5). Chaque route exporte un `Route` construit avec `createRoute({ getParentRoute, path, component })` ; `src/routes/routeTree.ts` les compose sous `__root` via `addChildren([...])`.
 
-Routes actuelles (13, composées dans `routeTree.ts`) :
+Routes actuelles (22, composées dans `routeTree.ts`) :
 
 | Route | Page | Feature |
 |-------|------|---------|
 | `/` | Home (decks + KPIs) | S1 |
-| `/decks/$deckId` | Détail deck (cartes, stats, podcast via kebab, couverture fréquence si langue) | S1 + V8/V10 |
-| `/decks/$deckId/new-card` | Éditeur de note (Basic / Reverse / Cloze / Occlusion / Phrase) | S1 + S2 + V10 |
-| `/review/$deckId` | Session de review (+ sketch, JOL, Whisper, pré-test, auto-explication, Focus Guard selon toggles) | S1 + V2/V7/V8/V12 |
+| `/decks/$deckId` | Détail deck (cartes, stats, podcast via kebab, couverture fréquence si langue, image mnémotechnique via kebab carte) | S1 + V8/V10/V22 |
+| `/decks/$deckId/new-card` | Éditeur de note (Basic / Reverse / Cloze / Occlusion / Phrase / Médecine / Sciences / Maths) | S1 + S2 + V10 + V14/V15 |
+| `/review/$deckId` | Session de review (+ sketch, JOL, Whisper, pré-test, auto-explication, Focus Guard, confiance post, mains-libres selon toggles) | S1 + V2/V7/V8/V12/V15/V23 |
 | `/review-interleaved` | Review entrelacée multi-decks | V5 |
-| `/ai-generate` | Génération IA de cartes (+ critic opt-in) | S2 + V13 |
+| `/ai-generate` | Génération IA de cartes (Claude ou Ollama local, + critic opt-in) | S2 + V13/V18 |
 | `/palaces` | Liste des palais de mémoire | V9 |
 | `/palaces/$palaceId` | Builder 3D (placement de loci) | V9 |
 | `/palaces/$palaceId/review` | Parcours 3D (mode review WASD/ZQSD) | V9 |
-| `/stats` | Dashboard (+ Calibration métacognitive) | S1 + V7 |
+| `/stats` | Dashboard (+ Calibration métacognitive + γ_post + maîtrise concepts BKT + Temporal Mastery Graph) | S1 + V7/V20/V22/V23 |
 | `/graph` | Graphe de connaissances (co-occurrence de tags) | V11 |
 | `/achievements` | Succès, streak, maîtrise des decks | V1 |
-| `/settings` | Paramètres (8 sections, cf. ci-dessous) | S1+ |
+| `/music` | Mode Musique (métronome + ear training, Web Audio) | V16 |
+| `/gesture` | Gesture drawing timer (Canvas) | V16 |
+| `/shadowing` | Shadowing (waveforms TTS vs voix) | V17 |
+| `/reading` | Reading Import LingQ-style (statut par mot) | V17 |
+| `/planner` | Planning — implementation intentions | V21 |
+| `/mnemonics` | Major System / PAO | V21 |
+| `/settings` | Paramètres (sections, cf. ci-dessous) | S1+ |
 
-La page **Settings** empile : Theme · Review (incl. tous les Modes cognitifs V2/V7/V8/V12) · FSRS Optimizer · Integrations (clés API, voix TTS) · Neuro modes (V3) · Sync (S3) · Import/Export (incl. import sous-titres V11) · About.
+La page **Settings** empile : Theme · Review (incl. tous les Modes cognitifs V2/V7/V8/V12, confiance post V15) · FSRS Optimizer · Integrations (clés API, voix TTS OpenAI **et Piper local**, URL/modèle **Ollama**) · Neuro modes (V3 + chronotype rMEQ et son d'ambiance V18) · Sync (S3) · Import/Export (incl. import sous-titres V11) · About.
 
 ### State : Zustand + TanStack Query
 
@@ -526,7 +590,7 @@ Helpers de test : `Database::for_test()` ouvre une base SQLite en mémoire, exé
 
 ### ADR-5 — Routing imperative TanStack Router plutôt que file-based
 - **Pourquoi** : le file-based router de TanStack Router v1 nécessite un plugin Vite (`@tanstack/router-plugin`) qui ajoute un code-gen avec un cycle dev-server-restart non négligeable et un risque de désynchronisation entre les agents qui itèrent vite. L'imperative API (`createRoute` + `addChildren`) tient en 30 lignes pour 6 routes.
-- **Trade-off** : pas d'auto-complétion des paths basée sur le filesystem. Acceptable à 6 routes ; à reconsidérer si l'arbre dépasse 20 routes (Session 2 ou 3). **Mise à jour** : à 13 routes l'arbre reste lisible — décision maintenue, le seuil de 20 n'est pas atteint.
+- **Trade-off** : pas d'auto-complétion des paths basée sur le filesystem. Acceptable à 6 routes ; à reconsidérer si l'arbre dépasse 20 routes (Session 2 ou 3). **Mise à jour** : à **22 routes** le seuil annoncé est franchi, mais `routeTree.ts` reste un simple `addChildren([...])` à plat (pas de hiérarchie profonde hormis `palaces/$id/review`), donc lisible et sans codegen. Décision **maintenue** pour l'instant ; le file-based router redevient une option si une imbrication réelle (layouts multiples) apparaît.
 
 ### ADR-6 — Schedulers pluggables via un trait Rust (Vague 4)
 - **Pourquoi** : permettre à chaque deck de choisir son algorithme (FSRS-6 / SM-2 / Leitner) sans dupliquer la logique de review. On définit un **trait** commun dans `src-tauri/src/scheduler/` (next-states + apply-review) ; le dispatcher lit `decks.scheduler_kind` et instancie la bonne implémentation. FSRS-6 reste l'adaptateur par défaut.
@@ -544,7 +608,23 @@ Helpers de test : `Database::for_test()` ouvre une base SQLite en mémoire, exé
 - **Pourquoi** : améliorer la qualité des cartes générées sans intervention manuelle. Après la passe *Generator*, un **second appel Claude** (le *Critic*) note chaque carte `[0, 1]` et propose une correction pour les cartes sous le seuil `QUALITY_THRESHOLD = 0.7`. Le pattern « générer puis critiquer » exploite le fait qu'évaluer est plus facile que produire.
 - **Trade-off** : un appel API supplémentaire (coût + latence) — donc **opt-in** (case à cocher off par défaut) et **purement additif** : si le critic échoue ou est désactivé, les brouillons restent utilisables sans score. Le verdict est consultatif, jamais bloquant. Même philosophie pour l'**Aide mnémotechnique** (générée à la demande, uniquement pour les cartes à `lapses ≥ 3`).
 
-## Évolution : Sessions 1-4 + Vagues 1-13
+### ADR-10 — Schedulers HLR & MEMORIZE ajoutés au trait pluggable (Vague 20)
+- **Pourquoi** : le trait `Scheduler` posé en V4 (ADR-6) était conçu pour être extensible ; on l'a vérifié en ajoutant deux algorithmes de la littérature sans toucher au dispatcher ni au flux de review. **HLR** (Half-Life Regression, Settles & Meeder 2016, le modèle derrière Duolingo) estime la demi-vie de la mémoire par régression ; **MEMORIZE** (Tabibian et al. 2019, PNAS) dérive un espacement par contrôle optimal stochastique. Chacun est une simple `impl Scheduler` dans `src-tauri/src/scheduler/` (`hlr.rs`, `memorize.rs`).
+- **Trade-off** : deux algos de plus à maintenir/tester, et le CHECK `scheduler_kind` a dû être élargi (migration v15, 12-step recipe). Bénéfice : la promesse d'extensibilité d'ADR-6 est tenue — 5 algorithmes coexistent, choisis par deck, sans code conditionnel dans la boucle de review. Validation a posteriori du choix « trait + dispatcher » plutôt qu'un `match` hard-codé.
+
+### ADR-11 — BKT plutôt que DKT pour la maîtrise des concepts (Vague 20)
+- **Pourquoi** : estimer la maîtrise par tag demande un modèle de *knowledge tracing*. On a choisi **Bayesian Knowledge Tracing** (BKT, Corbett & Anderson 1994) — un HMM à 4 paramètres (prior, learn, guess, slip) — plutôt que **Deep Knowledge Tracing** (DKT, réseau récurrent). BKT est **interprétable** (un % de maîtrise par concept directement lisible), **léger** (calculable en Rust sans dépendance ML, pas de tenseurs ni de GPU), **local** (cohérent avec ADR-1), et **honnête à faible volume** : il donne une estimation utile dès quelques reviews, là où un RNN exige des milliers d'exemples pour ne pas sur-apprendre.
+- **Trade-off** : BKT suppose l'indépendance des concepts (pas de prérequis modélisés entre tags) et une maîtrise binaire par skill — moins fin qu'un DKT bien entraîné qui capte les corrélations inter-concepts. Acceptable : pour un outil personnel mono-utilisateur, l'interprétabilité et le coût nul priment sur le dernier point d'AUC. Le *mastery gating* (V15) couvre séparément les prérequis explicites entre decks.
+
+### ADR-12 — Moteurs IA locaux (Ollama, Piper) en alternative au cloud (Vagues 18 & 22)
+- **Pourquoi** : la génération de cartes (Claude) et la synthèse vocale (OpenAI) étaient les seules dépendances réseau du parcours d'apprentissage. Pour rester fidèle au principe local-first (ADR-1) et offrir un mode **zéro-coût / zéro-réseau / hors-ligne**, on a ajouté des back-ends locaux interchangeables : **Ollama** (`generate_cards_local`) pour les LLM, **Piper** (`synthesize_audio_local`) pour le TTS. Le choix du moteur est un réglage ; le reste de l'app (cache disque, UI) est identique quel que soit le back-end.
+- **Trade-off** : l'utilisateur doit installer et faire tourner Ollama/Piper lui-même (dépendances externes non bundlées, pour ne pas alourdir l'installateur ni embarquer des poids de modèles de plusieurs Go), et la qualité dépend du modèle local choisi (souvent en deçà de Claude/OpenAI). Bénéfice : confidentialité totale (contenu sensible qui ne sort jamais), aucun coût d'API, fonctionne en avion. Les moteurs cloud restent disponibles pour qui privilégie la qualité.
+
+### ADR-13 — Mode mains-libres : composition de briques existantes (Vague 23)
+- **Pourquoi** : permettre une review **sans écran ni clavier** (en marchant, en cuisinant). Plutôt qu'un nouveau pipeline, le mode mains-libres **orchestre des briques déjà présentes** : TTS (OpenAI ou Piper) pour lire question puis réponse, et Whisper pour transcrire à la fois la réponse *et* le rating dits à voix haute. Aucune nouvelle table ni commande : c'est une couche d'orchestration côté frontend au-dessus de `synthesize_audio*` et `transcribe_voice_answer`.
+- **Trade-off** : latence cumulée (synthèse → écoute → transcription) plus élevée qu'un clic, et dépendance aux mêmes clés/back-ends que TTS+Whisper (ou Piper local pour la sortie). Le rating vocal tolère un vocabulaire fermé (« again/hard/good/easy » + synonymes) pour limiter les erreurs de transcription. Bénéfice : réutilisation maximale, surface de code minimale, et transformation de temps morts en révision.
+
+## Évolution : Sessions 1-4 + Vagues 1-23
 
 L'app est partie d'un MVP SRS local (S1) et s'est étendue par **sessions** (gros chantiers transverses) puis par **vagues** (features ciblées, souvent adossées à un résultat scientifique). Résumé :
 
@@ -566,5 +646,14 @@ L'app est partie d'un MVP SRS local (S1) et s'est étendue par **sessions** (gro
 | **Vague 11** | Subtitle Import (.srt/.vtt) + Knowledge Graph (tags). | module `subtitles`, `get_tag_graph`, route `/graph`. |
 | **Vague 12** | Pretest Mode, Self-explanation, Focus Guard (webcam local). | toggles `AppSettings`, WebGazer (ADR-7). |
 | **Vague 13** | Multi-Agent Card Pipeline (Generator→Critic) + Mnemonic Helper. | `critique_generated_cards`, `generate_card_mnemonic` (ADR-9). |
+| **Vague 14** | Templates disciplinaires : Illness Script (médecine) + Refutation Card (sciences). | v12 (templates `illness_script`/`refutation`), onglets Médecine/Sciences. |
+| **Vague 15** | Mode Maths (Faded Worked Example) + Mastery Gating (Bloom) + confiance rétrospective. | v13 (template `worked_example` + `prerequisite_deck_id` + `confidence_post`). |
+| **Vague 16** | Modes créatifs : Musique (métronome + ear training) + Arts (gesture timer). | routes `/music`, `/gesture` (100 % Web Audio + Canvas, pas de backend). |
+| **Vague 17** | Shadowing + Reading Import LingQ-style + citations PDF (tag source). | v14 (`word_status`), module `reading`, routes `/shadowing`, `/reading`. |
+| **Vague 18** | Tuteur IA local (Ollama) + Chronotype (rMEQ) + son d'ambiance. | `generate_cards_local` (ADR-12), réglages Neuro modes. |
+| **Vague 20** | Schedulers HLR + MEMORIZE + maîtrise concepts BKT. | v15 (`scheduler_kind` élargi), `hlr`/`memorize` (ADR-10), module `mastery` (ADR-11). |
+| **Vague 21** | Implementation Intentions (planificateur) + Major System/PAO. | v16 (`study_plans`), module `plans`, routes `/planner`, `/mnemonics`. |
+| **Vague 22** | Piper TTS local + image mnémotechnique (DALL-E) + calibration rétrospective (γ_post). | `synthesize_audio_local` (ADR-12), `generate_card_mnemonic_image`. |
+| **Vague 23** | Temporal Mastery Graph + mode review mains-libres. | `get_mastery_timeline`, orchestration TTS+Whisper (ADR-13). |
 
-> Les Vagues sont numérotées de façon non strictement séquentielle (pas de Vague 6 publique ; la v7 du **schéma DB** correspond à la **Vague 4**, etc.). La table *Migrations* ci-dessus donne la correspondance exacte version-de-schéma ↔ vague.
+> Les Vagues sont numérotées de façon non strictement séquentielle (pas de Vague 6 ni 19 publiques ; la v7 du **schéma DB** correspond à la **Vague 4**, etc.). La table *Migrations* ci-dessus donne la correspondance exacte version-de-schéma ↔ vague.
