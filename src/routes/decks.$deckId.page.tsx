@@ -18,10 +18,12 @@ import { Pencil, Play, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CardList } from "@/components/CardList";
 import { EditDeckDialog } from "@/components/EditDeckDialog";
+import { FrequencyCoverageCard } from "@/components/FrequencyCoverageCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { languageLabel } from "@/lib/languages";
 import { useDeck, useDeckStats } from "@/lib/queries";
 
 const routeApi = getRouteApi("/decks/$deckId");
@@ -76,6 +78,7 @@ export default function DeckDetailPage() {
             )}
             <p className="mt-1 text-xs text-muted-foreground">
               Rétention cible : {Math.round(d.desired_retention * 100)}%
+              {d.language_mode && <> · Langue : {languageLabel(d.language_mode)}</>}
             </p>
           </div>
         </div>
@@ -108,6 +111,8 @@ export default function DeckDetailPage() {
           value={stats.data ? String(stats.data.learning_cards) : "—"}
         />
       </div>
+
+      {d.language_mode && <FrequencyCoverageCard deckId={deckId} />}
 
       <Tabs defaultValue="cards" className="space-y-4">
         <TabsList>

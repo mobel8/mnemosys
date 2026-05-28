@@ -7,7 +7,7 @@
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::db::{Card, CardWithNote, Note, NoteTemplate};
+use crate::db::{Card, CardWithNote, FrequencyCoverage, Note, NoteTemplate};
 use crate::error::AppResult;
 
 #[tauri::command]
@@ -31,6 +31,10 @@ pub fn search_notes(
     state.db.notes(&conn).search(&query, limit)
 }
 
+/// Create a note (and its derived cards).
+///
+/// `frequency_band` is the optional Vague 10 Zipf-bucket label
+/// (`top_100` … `beyond`); `None`/omitted leaves the note un-tagged.
 #[tauri::command]
 pub fn create_note(
     state: State<'_, AppState>,
@@ -38,9 +42,13 @@ pub fn create_note(
     template: NoteTemplate,
     fields: serde_json::Value,
     tags: Vec<String>,
+    frequency_band: Option<String>,
 ) -> AppResult<Note> {
     let conn = state.db.lock();
-    state.db.notes(&conn).create(deck_id, template, fields, tags)
+    state
+        .db
+        .notes(&conn)
+        .create(deck_id, template, fields, tags, frequency_band)
 }
 
 #[tauri::command]
@@ -77,4 +85,15 @@ pub fn suspend_card(
 pub fn reset_card(state: State<'_, AppState>, id: i64) -> AppResult<Card> {
     let conn = state.db.lock();
     state.db.cards(&conn).reset(id)
+}
+
+/// Vague 10 — count a deck's notes by frequency band for the coverage card.
+/// Thin wrapper over [`NoteRepo::frequency_coverage`](crate::db::NoteRepo).
+#[tauri::command]
+pub fn get_frequency_coverage(
+    state: State<'_, AppState>,
+    deck_id: i64,
+) -> AppResult<FrequencyCoverage> {
+    let conn = state.db.lock();
+    state.db.notes(&conn).frequency_coverage(deck_id)
 }

@@ -32,13 +32,18 @@ pub fn create_deck(
     color: String,
     desired_retention: Option<f64>,
     scheduler_kind: Option<SchedulerKind>,
+    language_mode: Option<String>,
 ) -> AppResult<Deck> {
     let retention = desired_retention.unwrap_or(DEFAULT_DESIRED_RETENTION as f64);
     let conn = state.db.lock();
-    state
-        .db
-        .decks(&conn)
-        .create(&name, description.as_deref(), &color, retention, scheduler_kind)
+    state.db.decks(&conn).create(
+        &name,
+        description.as_deref(),
+        &color,
+        retention,
+        scheduler_kind,
+        language_mode.as_deref(),
+    )
 }
 
 #[tauri::command]

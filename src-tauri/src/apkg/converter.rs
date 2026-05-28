@@ -94,6 +94,7 @@ pub fn convert_to_mnemosys(db: &Database, anki: AnkiCollection) -> AppResult<Con
             color,
             0.9,
             None,
+            None,
         )?;
         deck_id_map.insert(anki_deck.id, new_deck.id);
     }
@@ -145,7 +146,9 @@ pub fn convert_to_mnemosys(db: &Database, anki: AnkiCollection) -> AppResult<Con
         // aborting the whole import.
         match db
             .notes(&conn)
-            .create(target_deck_id, template, fields, note.tags.clone())
+            // Anki packages don't carry a frequency_band, so import as None.
+            // The learner can tag notes manually post-import.
+            .create(target_deck_id, template, fields, note.tags.clone(), None)
         {
             Ok(_) => stats.notes_imported += 1,
             Err(AppError::Validation(_)) => stats.notes_skipped += 1,

@@ -166,9 +166,25 @@ function renderCloze(text: string): ClozeRender {
 interface BasicFields {
   front: string;
   back: string;
+  /** Vague 10 — optional language-note hint, shown under the answer. */
+  hint?: string;
 }
 
-function getBasicFields(note: Note): BasicFields {
+function getBasicFields(note: Note, cardOrd = 0): BasicFields {
+  // Vague 10 — sentence / bidirectional notes store `source` + `target`
+  // instead of `front` / `back`. Card ord 0 quizzes source→target; ord 1
+  // (bidirectional only) flips to target→source.
+  if (note.template === "sentence" || note.template === "bidirectional") {
+    const source = typeof note.fields.source === "string" ? note.fields.source : "";
+    const target = typeof note.fields.target === "string" ? note.fields.target : "";
+    const hint = typeof note.fields.hint === "string" ? note.fields.hint : "";
+    const reversed = cardOrd === 1;
+    return {
+      front: reversed ? target : source,
+      back: reversed ? source : target,
+      hint: hint || undefined,
+    };
+  }
   const front = typeof note.fields.front === "string" ? note.fields.front : "";
   const back = typeof note.fields.back === "string" ? note.fields.back : "";
   return { front, back };
@@ -238,7 +254,7 @@ export function ReviewCard({
   }
 
   const cloze = isCloze ? renderCloze(getClozeText(note)) : null;
-  const basic = !isCloze ? getBasicFields(note) : null;
+  const basic = !isCloze ? getBasicFields(note, cardOrd) : null;
 
   return (
     <AnimatePresence mode="wait">
@@ -332,6 +348,11 @@ export function ReviewCard({
                         <span className="text-muted-foreground italic">(verso vide)</span>
                       )}
                     </div>
+                    {basic?.hint && (
+                      <p className="text-center text-sm italic text-muted-foreground">
+                        {basic.hint}
+                      </p>
+                    )}
                   </>
                 )}
               </CardContent>

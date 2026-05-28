@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
+import { LANGUAGE_OPTIONS } from "@/lib/languages";
 import { useCreateDeck } from "@/lib/queries";
 import type { SchedulerKind } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,7 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
   const [color, setColor] = useState<string>(DECK_COLORS[0]);
   const [retention, setRetention] = useState(0.9);
   const [schedulerKind, setSchedulerKind] = useState<SchedulerKind>("fsrs6");
+  const [languageMode, setLanguageMode] = useState<string | null>(null);
 
   const createDeck = useCreateDeck({
     onSuccess: (deck) => {
@@ -69,6 +71,7 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
     setColor(DECK_COLORS[0]);
     setRetention(0.9);
     setSchedulerKind("fsrs6");
+    setLanguageMode(null);
   }
 
   function handleSubmit(event: React.FormEvent) {
@@ -104,6 +107,7 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
       color,
       desiredRetention: retention,
       schedulerKind,
+      languageMode,
     });
   }
 
@@ -192,6 +196,26 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
           </div>
 
           <SchedulerPicker value={schedulerKind} onChange={setSchedulerKind} />
+
+          <div className="space-y-2">
+            <Label htmlFor="deck-language">Langue du deck</Label>
+            <select
+              id="deck-language"
+              value={languageMode ?? ""}
+              onChange={(e) => setLanguageMode(e.target.value || null)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <option key={opt.code ?? "none"} value={opt.code ?? ""}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Active le mode langue : carte « Phrase » bidirectionnelle et suivi de couverture
+              lexicale.
+            </p>
+          </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

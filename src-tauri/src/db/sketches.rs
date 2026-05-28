@@ -108,7 +108,7 @@ mod tests {
         let conn = db.lock();
         let deck = db
             .decks(&conn)
-            .create("Default", None, "#3b82f6", 0.9, None)
+            .create("Default", None, "#3b82f6", 0.9, None, None)
             .unwrap();
         db.notes(&conn)
             .create(
@@ -116,6 +116,7 @@ mod tests {
                 NoteTemplate::Basic,
                 json!({ "front": "Q", "back": "A" }),
                 vec![],
+                None,
             )
             .unwrap();
         let card_id = db

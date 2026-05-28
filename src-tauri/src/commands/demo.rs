@@ -89,14 +89,16 @@ pub fn load_demo_decks_inner(db: &Database) -> AppResult<usize> {
             &deck_data.color,
             deck_data.desired_retention,
             None,
+            None,
         )?;
 
         // NoteRepo::create wraps each insertion in its own transaction and
         // materialises the matching card rows. Fail-fast on the first error —
         // partially-loaded decks would be visible to the user and confusing.
         for note in deck_data.notes {
+            // Demo decks predate Vague 10 — no frequency tagging needed.
             db.notes(&conn)
-                .create(deck.id, note.template, note.fields, note.tags)?;
+                .create(deck.id, note.template, note.fields, note.tags, None)?;
         }
 
         decks_loaded += 1;

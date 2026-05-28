@@ -67,7 +67,7 @@ fn extract_notes_carries_parent_deck_remote_id() {
 
     let deck = db
         .decks(&conn)
-        .create("Anatomy", None, "#fff", 0.9, None)
+        .create("Anatomy", None, "#fff", 0.9, None, None)
         .expect("deck");
     conn.execute(
         "UPDATE decks SET remote_id = 'deck-uuid' WHERE id = ?1",
@@ -81,6 +81,7 @@ fn extract_notes_carries_parent_deck_remote_id() {
             crate::db::notes::NoteTemplate::Basic,
             json!({ "front": "Q", "back": "A" }),
             vec![],
+            None,
         )
         .expect("note");
 
@@ -94,7 +95,7 @@ fn extract_reviews_skips_unsynced_parent_cards() {
     let db = Database::for_test();
     let conn = db.lock();
 
-    let deck = db.decks(&conn).create("D", None, "#fff", 0.9, None).unwrap();
+    let deck = db.decks(&conn).create("D", None, "#fff", 0.9, None, None).unwrap();
     let note = db
         .notes(&conn)
         .create(
@@ -102,6 +103,7 @@ fn extract_reviews_skips_unsynced_parent_cards() {
             crate::db::notes::NoteTemplate::Basic,
             json!({ "front": "Q", "back": "A" }),
             vec![],
+            None,
         )
         .unwrap();
     // Force the card to lack a remote_id (default state for a fresh row).
@@ -288,7 +290,7 @@ fn apply_reviews_unions_by_card_and_reviewed_at() {
     let db = Database::for_test();
     let conn = db.lock();
 
-    let deck = db.decks(&conn).create("D", None, "#fff", 0.9, None).unwrap();
+    let deck = db.decks(&conn).create("D", None, "#fff", 0.9, None, None).unwrap();
     conn.execute(
         "UPDATE decks SET remote_id = 'd-uuid' WHERE id = ?1",
         params![deck.id],
@@ -301,6 +303,7 @@ fn apply_reviews_unions_by_card_and_reviewed_at() {
             crate::db::notes::NoteTemplate::Basic,
             json!({ "front": "Q", "back": "A" }),
             vec![],
+            None,
         )
         .unwrap();
     conn.execute(
@@ -374,7 +377,7 @@ fn apply_cards_inserts_when_parents_exist() {
     let db = Database::for_test();
     let conn = db.lock();
     // Seed parent deck + note.
-    let deck = db.decks(&conn).create("D", None, "#fff", 0.9, None).unwrap();
+    let deck = db.decks(&conn).create("D", None, "#fff", 0.9, None, None).unwrap();
     conn.execute(
         "UPDATE decks SET remote_id = 'd2' WHERE id = ?1",
         params![deck.id],
@@ -387,6 +390,7 @@ fn apply_cards_inserts_when_parents_exist() {
             crate::db::notes::NoteTemplate::Basic,
             json!({ "front": "Q", "back": "A" }),
             vec![],
+            None,
         )
         .unwrap();
     conn.execute(

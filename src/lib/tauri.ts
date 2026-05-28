@@ -20,7 +20,19 @@ import { invoke } from "@tauri-apps/api/core";
 // ---------------------------------------------------------------------------
 
 export type CardState = "new" | "learning" | "review" | "relearning";
-export type NoteTemplate = "basic" | "basic_reverse" | "cloze" | "occlusion";
+export type NoteTemplate =
+  | "basic"
+  | "basic_reverse"
+  | "cloze"
+  | "occlusion"
+  | "sentence"
+  | "bidirectional";
+
+/**
+ * Vague 10 — Zipf-bucket label for language-learning notes (Pareto 80/20
+ * vocabulary coverage). `null`/omitted means the note is un-tagged.
+ */
+export type FrequencyBand = "top_100" | "top_1k" | "top_5k" | "top_10k" | "beyond";
 
 /**
  * Scheduling algorithm a deck uses (Vague 4). Stored on the deck row so
@@ -62,6 +74,12 @@ export interface Deck {
   desired_retention: number;
   /** Scheduling algorithm used by this deck — see {@link SchedulerKind}. */
   scheduler_kind: SchedulerKind;
+  /**
+   * Vague 10 — ISO 639-1 language code (`"en"`, `"ja"`, …) flagging this as
+   * a language-learning deck, or `null` for an ordinary deck. When set, the
+   * deck detail page surfaces the frequency-coverage card.
+   */
+  language_mode: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -75,6 +93,21 @@ export interface DeckPatch {
   desired_retention?: number;
   /** Switch the scheduling algorithm. Existing cards are not reset. */
   scheduler_kind?: SchedulerKind;
+  /** Set the deck language (`null` clears it, `undefined` leaves it). */
+  language_mode?: string | null;
+}
+
+/**
+ * Vague 10 — vocabulary-coverage breakdown for a language deck. The six
+ * fields sum to the deck's total note count; render as a stacked bar.
+ */
+export interface FrequencyCoverage {
+  top_100: number;
+  top_1k: number;
+  top_5k: number;
+  top_10k: number;
+  beyond: number;
+  untagged: number;
 }
 
 export interface DeckStats {
@@ -546,6 +579,8 @@ export const api = {
       desiredRetention?: number;
       /** Scheduling algorithm — defaults server-side to FSRS-6 when omitted. */
       schedulerKind?: SchedulerKind;
+      /** Vague 10 — ISO 639-1 code flagging a language deck; omit for none. */
+      languageMode?: string | null;
     }) =>
       invoke<Deck>("create_deck", {
         name: data.name,
@@ -553,6 +588,7 @@ export const api = {
         color: data.color,
         desiredRetention: data.desiredRetention ?? null,
         schedulerKind: data.schedulerKind ?? null,
+        languageMode: data.languageMode ?? null,
       }),
     update: (id: number, patch: DeckPatch) => invoke<Deck>("update_deck", { id, patch }),
     delete: (id: number) => invoke<void>("delete_deck", { id }),
@@ -574,13 +610,19 @@ export const api = {
       template: NoteTemplate;
       fields: Record<string, unknown>;
       tags?: string[];
+      /** Vague 10 — optional Zipf frequency bucket; omit to leave un-tagged. */
+      frequencyBand?: FrequencyBand | null;
     }) =>
       invoke<Note>("create_note", {
         deckId: data.deckId,
         template: data.template,
         fields: data.fields,
         tags: data.tags ?? [],
+        frequencyBand: data.frequencyBand ?? null,
       }),
+    /** Vague 10 — vocabulary-coverage breakdown for a language deck. */
+    frequencyCoverage: (deckId: number) =>
+      invoke<FrequencyCoverage>("get_frequency_coverage", { deckId }),
     updateNote: (id: number, fields: Record<string, unknown>) =>
       invoke<Note>("update_note", { id, fields }),
     deleteNote: (id: number) => invoke<void>("delete_note", { id }),

@@ -49,7 +49,7 @@ pub use cards::{Card, CardRepo, CardState, CardWithNote};
 pub use decks::{Deck, DeckMastery, DeckPatch, DeckRepo, DeckStats};
 pub use gamification::{Achievement, GamificationRepo, UserStats};
 pub use metacognition::{CalibrationBucket, CalibrationStats, JolPrediction, MetacognitionRepo};
-pub use notes::{Note, NoteRepo, NoteTemplate};
+pub use notes::{FrequencyCoverage, Note, NoteRepo, NoteTemplate};
 pub use palaces::{Palace, PalaceLocus, PalaceRepo, PalaceWithLoci};
 pub use params::ParamsRepo;
 pub use reviews::{DayCount, DayRetention, NewReview, Review, ReviewRepo};

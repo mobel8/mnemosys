@@ -32,6 +32,8 @@ import {
   type DeckMastery,
   type DeckPatch,
   type DeckStats,
+  type FrequencyBand,
+  type FrequencyCoverage,
   type GeneratedCard,
   type ImportResult,
   type JolPrediction,
@@ -68,6 +70,7 @@ export const queryKeys = {
   deckMastery: (id: number) => ["deck-mastery", id] as const,
   cardsInDeck: (deckId: number, limit: number, offset: number) =>
     ["cards-in-deck", deckId, limit, offset] as const,
+  frequencyCoverage: (deckId: number) => ["frequency-coverage", deckId] as const,
   dueCards: (deckId: number | null, limit: number) => ["due-cards", deckId, limit] as const,
   interleavedDueCards: (deckIds: number[], limit: number) =>
     ["interleaved-due-cards", [...deckIds].sort((a, b) => a - b), limit] as const,
@@ -132,6 +135,19 @@ export function useDeckMastery(id: number, opts?: Partial<UseQueryOptions<DeckMa
     queryKey: queryKeys.deckMastery(id),
     queryFn: () => api.decks.mastery(id),
     enabled: Number.isFinite(id),
+    ...opts,
+  });
+}
+
+/** Vague 10 — vocabulary-coverage breakdown for a language deck. */
+export function useFrequencyCoverage(
+  deckId: number,
+  opts?: Partial<UseQueryOptions<FrequencyCoverage>>,
+) {
+  return useQuery<FrequencyCoverage>({
+    queryKey: queryKeys.frequencyCoverage(deckId),
+    queryFn: () => api.cards.frequencyCoverage(deckId),
+    enabled: Number.isFinite(deckId),
     ...opts,
   });
 }
@@ -251,6 +267,8 @@ export function useCreateDeck(
       color: string;
       desiredRetention?: number;
       schedulerKind?: SchedulerKind;
+      /** Vague 10 — optional ISO 639-1 code flagging a language deck. */
+      languageMode?: string | null;
     }
   >,
 ) {
@@ -302,6 +320,8 @@ export function useCreateNote(
       template: NoteTemplate;
       fields: Record<string, unknown>;
       tags?: string[];
+      /** Vague 10 — optional Zipf frequency bucket for language notes. */
+      frequencyBand?: FrequencyBand | null;
     }
   >,
 ) {
@@ -312,6 +332,7 @@ export function useCreateNote(
     onSuccess: (data, variables, onMutateResult, context) => {
       qc.invalidateQueries({ queryKey: queryKeys.deckStats(variables.deckId) });
       qc.invalidateQueries({ queryKey: ["cards-in-deck", variables.deckId] });
+      qc.invalidateQueries({ queryKey: queryKeys.frequencyCoverage(variables.deckId) });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

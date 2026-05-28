@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 10;
+pub const CURRENT_VERSION: i32 = 11;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -183,6 +183,23 @@ const SCHEMA_V9: &str = include_str!("schema_v9.sql");
 /// (Nobel 2014, O'Keefe & Moser).
 const SCHEMA_V10: &str = include_str!("schema_v10.sql");
 
+/// v11 — Vague 10 Mode Langue: sentence + bidirectional templates and
+/// optional `frequency_band` tagging.
+///
+/// Two coupled changes:
+///   1. Extend the `notes.template` CHECK constraint with `'sentence'`
+///      (one card, source→target) and `'bidirectional'` (two cards, the
+///      Lampariello pattern: source→target and target→source).
+///   2. Add a nullable `frequency_band TEXT` column to `notes`. Bucket
+///      values come from the Zipf-flavoured corpus tiers `top_100`,
+///      `top_1k`, `top_5k`, `top_10k`, `beyond`. NULL = un-tagged.
+///
+/// Like v2, we follow the SQLite 12-step recipe (drop FTS5, rebuild
+/// `notes`, recreate FTS5 + triggers, rebuild the index) so the new
+/// CHECK constraint and the new column land in a single migration
+/// without leaving the FTS index in an inconsistent state.
+const SCHEMA_V11: &str = include_str!("schema_v11.sql");
+
 /// v7 — Pluggable schedulers (Vague 4): per-deck algorithm choice.
 ///
 /// Adds a `scheduler_kind` column to `decks` storing one of `'fsrs6'`
@@ -302,6 +319,11 @@ pub fn run(conn: &Connection) -> AppResult<()> {
     // v10 — Vague 9 Memory Palace: `palaces` + `palace_loci` tables.
     if current < 10 {
         apply_migration(conn, 10, SCHEMA_V10)?;
+    }
+
+    // v11 — Vague 10 Mode Langue: extend templates CHECK + add `frequency_band`.
+    if current < 11 {
+        apply_migration(conn, 11, SCHEMA_V11)?;
     }
 
     Ok(())

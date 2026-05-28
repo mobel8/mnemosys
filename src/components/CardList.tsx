@@ -60,6 +60,10 @@ function templateLabel(template: NoteTemplate) {
       return "Cloze";
     case "occlusion":
       return "Image-occlusion";
+    case "sentence":
+      return "Phrase";
+    case "bidirectional":
+      return "Phrase";
   }
 }
 
@@ -95,6 +99,10 @@ function noteFrontPreview(note: Note): string {
     if (labels.length > 0)
       return `Image-occlusion : ${labels.slice(0, 3).join(", ")}${labels.length > 3 ? "…" : ""}`;
     return `Image-occlusion (${masks.length} masque${masks.length > 1 ? "s" : ""})`;
+  }
+  if (note.template === "sentence" || note.template === "bidirectional") {
+    const src = typeof fields.source === "string" ? fields.source : "";
+    return src || "(vide)";
   }
   const front = typeof fields.front === "string" ? fields.front : "";
   return front || "(vide)";

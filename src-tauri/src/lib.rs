@@ -87,6 +87,7 @@ pub fn run() {
             commands::cards::delete_note,
             commands::cards::suspend_card,
             commands::cards::reset_card,
+            commands::cards::get_frequency_coverage,
             // review
             commands::review::get_due_cards,
             commands::review::get_interleaved_due_cards,

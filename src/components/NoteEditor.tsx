@@ -1,11 +1,13 @@
 /**
  * Multi-template note editor used by the "Add card" page.
  *
- * Four tabs map to the four note templates supported by the Rust backend:
+ * Five tabs map to note templates supported by the Rust backend:
  *   - `basic`: front + back
  *   - `basic_reverse`: front + back, generates two cards
  *   - `cloze`: single text field with `{{c1::...}}` syntax + live preview
  *   - `occlusion`: image + N rectangular masks, generates one card per mask
+ *   - `bidirectional` ("Phrase", Vague 10): source + target (+ optional hint
+ *     and frequency band), generates two language-learning cards (L2↔L1)
  *
  * Tags are entered as chips (Enter or comma to commit, backspace on empty
  * input removes the last). Keyboard shortcuts:
@@ -16,18 +18,21 @@
  * tag list but clears the fields and refocuses the first input.
  */
 
+import { Languages } from "lucide-react";
 import { useRef, useState } from "react";
 import { ClozePreview, uniqueClozeNumbers } from "@/components/ClozePreview";
 import { OcclusionEditor } from "@/components/OcclusionEditor";
 import { TtsButton } from "@/components/TtsButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
+import { FREQUENCY_BAND_OPTIONS } from "@/lib/languages";
 import { useCreateNote } from "@/lib/queries";
-import type { NoteTemplate } from "@/lib/tauri";
+import type { FrequencyBand, NoteTemplate } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
 const MAX_TAGS = 10;
@@ -45,11 +50,17 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
   const [clozeText, setClozeText] = useState("");
+  // Vague 10 — sentence ("Phrase") template state.
+  const [source, setSource] = useState("");
+  const [target, setTarget] = useState("");
+  const [hint, setHint] = useState("");
+  const [frequencyBand, setFrequencyBand] = useState<FrequencyBand | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
 
   const frontRef = useRef<HTMLTextAreaElement | null>(null);
   const clozeRef = useRef<HTMLTextAreaElement | null>(null);
+  const sourceRef = useRef<HTMLInputElement | null>(null);
 
   const createNote = useCreateNote();
 
@@ -57,6 +68,10 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
     setFront("");
     setBack("");
     setClozeText("");
+    setSource("");
+    setTarget("");
+    setHint("");
+    setFrequencyBand(null);
     if (!keepTags) setTags([]);
     setTagInput("");
   }
@@ -128,6 +143,20 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
       }
       return { ok: true, fields: { text } };
     }
+    if (template === "bidirectional") {
+      const s = source.trim();
+      const t = target.trim();
+      if (s.length === 0 || t.length === 0) {
+        toast({
+          title: "Champs incomplets",
+          description: "La phrase et sa traduction sont obligatoires.",
+          variant: "destructive",
+        });
+        return { ok: false };
+      }
+      const h = hint.trim();
+      return { ok: true, fields: h ? { source: s, target: t, hint: h } : { source: s, target: t } };
+    }
     // "occlusion" is handled by the dedicated editor (early return above),
     // so this branch should be unreachable.
     return { ok: false };
@@ -144,13 +173,14 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
         template,
         fields: validation.fields,
         tags,
+        frequencyBand: template === "bidirectional" ? frequencyBand : null,
       },
       {
         onSuccess: () => {
           toast({
             title: "Carte ajoutée",
             description:
-              template === "basic_reverse"
+              template === "basic_reverse" || template === "bidirectional"
                 ? "2 cartes ont été créées."
                 : template === "cloze"
                   ? `${uniqueClozeNumbers(clozeText).length} carte(s) cloze créée(s).`
@@ -160,6 +190,7 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
             resetFields(true);
             requestAnimationFrame(() => {
               if (template === "cloze") clozeRef.current?.focus();
+              else if (template === "bidirectional") sourceRef.current?.focus();
               else frontRef.current?.focus();
             });
           } else {
@@ -220,6 +251,10 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
           <TabsTrigger value="basic_reverse">Basic + Reverse</TabsTrigger>
           <TabsTrigger value="cloze">Cloze</TabsTrigger>
           <TabsTrigger value="occlusion">Image-occlusion</TabsTrigger>
+          <TabsTrigger value="bidirectional" className="gap-1.5">
+            <Languages className="h-3.5 w-3.5" />
+            Phrase
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="basic" className="space-y-4">
@@ -318,6 +353,81 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
               <ClozePreview text={clozeText} />
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="bidirectional" className="space-y-4">
+          <p className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
+            Génère <strong>deux cartes</strong> : langue cible → traduction <em>et</em> traduction →
+            langue cible (méthode Lampariello).
+          </p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="sentence-source">Phrase (langue cible)</Label>
+              <TtsButton text={source} />
+            </div>
+            <Input
+              id="sentence-source"
+              ref={sourceRef}
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              placeholder="Ich lerne jeden Tag Deutsch."
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="sentence-target">Traduction</Label>
+            <Input
+              id="sentence-target"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              placeholder="J'apprends l'allemand tous les jours."
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="sentence-hint">Indice / note (optionnel)</Label>
+            <Input
+              id="sentence-hint"
+              value={hint}
+              onChange={(e) => setHint(e.target.value)}
+              placeholder="jeden Tag = tous les jours"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="sentence-freq">Bande de fréquence</Label>
+            <select
+              id="sentence-freq"
+              value={frequencyBand ?? ""}
+              onChange={(e) => setFrequencyBand((e.target.value || null) as FrequencyBand | null)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {FREQUENCY_BAND_OPTIONS.map((opt) => (
+                <option key={opt.value ?? "none"} value={opt.value ?? ""}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Classe le vocabulaire par fréquence pour suivre ta couverture lexicale (Pareto 80/20).
+            </p>
+          </div>
+          {(source.trim() || target.trim()) && (
+            <div className="space-y-2">
+              <Label>Aperçu des 2 cartes</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="rounded-md border p-3 text-sm">
+                  <div className="text-xs font-medium text-muted-foreground">Carte 1 (recto)</div>
+                  <div className="mt-1">{source.trim() || "…"}</div>
+                  <div className="mt-2 text-xs font-medium text-muted-foreground">verso</div>
+                  <div className="mt-1 text-muted-foreground">{target.trim() || "…"}</div>
+                </div>
+                <div className="rounded-md border p-3 text-sm">
+                  <div className="text-xs font-medium text-muted-foreground">Carte 2 (recto)</div>
+                  <div className="mt-1">{target.trim() || "…"}</div>
+                  <div className="mt-2 text-xs font-medium text-muted-foreground">verso</div>
+                  <div className="mt-1 text-muted-foreground">{source.trim() || "…"}</div>
+                </div>
+              </div>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

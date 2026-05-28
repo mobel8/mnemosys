@@ -24,6 +24,12 @@ pub struct Deck {
     /// column (`'fsrs6'` / `'sm2'` / `'leitner'`). See
     /// [`crate::scheduler`] for details.
     pub scheduler_kind: SchedulerKind,
+    /// Vague 10 — optional ISO 639-1 language code (`'en'`, `'ja'`, …) that
+    /// flags this deck as a language-learning deck. `None` for ordinary
+    /// decks. When set, the deck-detail UI surfaces the frequency-coverage
+    /// card and the note editor defaults to the bidirectional template.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language_mode: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -41,6 +47,10 @@ pub struct DeckPatch {
     /// stored `stability` / `difficulty`; the new algorithm re-interprets
     /// those fields on the next review — see [`crate::scheduler`].
     pub scheduler_kind: Option<SchedulerKind>,
+    /// Vague 10 — set/clear the deck's language flag. The double-`Option`
+    /// distinguishes "leave alone" (`None`) from "set/clear to this value"
+    /// (`Some(Some("en"))` / `Some(None)`).
+    pub language_mode: Option<Option<String>>,
 }
 
 /// Aggregated counts used by the deck dashboard.
@@ -94,7 +104,7 @@ impl<'a> DeckRepo<'a> {
     /// All decks, alphabetical by name.
     pub fn list(&self) -> AppResult<Vec<Deck>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, description, color, desired_retention, scheduler_kind, created_at, updated_at
+            "SELECT id, name, description, color, desired_retention, scheduler_kind, language_mode, created_at, updated_at
              FROM decks
              ORDER BY name COLLATE NOCASE ASC",
         )?;
@@ -111,7 +121,7 @@ impl<'a> DeckRepo<'a> {
         let deck = self
             .conn
             .query_row(
-                "SELECT id, name, description, color, desired_retention, scheduler_kind, created_at, updated_at
+                "SELECT id, name, description, color, desired_retention, scheduler_kind, language_mode, created_at, updated_at
                  FROM decks WHERE id = ?1",
                 params![id],
                 row_to_deck,
@@ -125,6 +135,9 @@ impl<'a> DeckRepo<'a> {
     /// `scheduler_kind` defaults to FSRS-6 when `None` is passed — matches
     /// the SQL column default and stays backwards-compatible with
     /// callers that pre-date Vague 4.
+    ///
+    /// `language_mode` (Vague 10) is an optional ISO 639-1 code flagging the
+    /// deck as language-learning; `None` keeps it an ordinary deck.
     pub fn create(
         &self,
         name: &str,
@@ -132,6 +145,7 @@ impl<'a> DeckRepo<'a> {
         color: &str,
         desired_retention: f64,
         scheduler_kind: Option<SchedulerKind>,
+        language_mode: Option<&str>,
     ) -> AppResult<Deck> {
         if name.trim().is_empty() {
             return Err(AppError::Validation("deck name must not be empty".into()));
@@ -144,9 +158,9 @@ impl<'a> DeckRepo<'a> {
         let kind = scheduler_kind.unwrap_or_default();
         let now = Utc::now().timestamp();
         self.conn.execute(
-            "INSERT INTO decks (name, description, color, desired_retention, scheduler_kind, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
-            params![name, description, color, desired_retention, kind.as_str(), now],
+            "INSERT INTO decks (name, description, color, desired_retention, scheduler_kind, language_mode, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+            params![name, description, color, desired_retention, kind.as_str(), language_mode, now],
         )?;
         let id = self.conn.last_insert_rowid();
         self.get(id)
@@ -202,6 +216,13 @@ impl<'a> DeckRepo<'a> {
             self.conn.execute(
                 "UPDATE decks SET scheduler_kind = ?1, updated_at = ?2 WHERE id = ?3",
                 params![kind.as_str(), now, id],
+            )?;
+        }
+        if let Some(lang_opt) = patch.language_mode.as_ref() {
+            // `Some(None)` clears the flag, `Some(Some(code))` sets it.
+            self.conn.execute(
+                "UPDATE decks SET language_mode = ?1, updated_at = ?2 WHERE id = ?3",
+                params![lang_opt.as_deref(), now, id],
             )?;
         }
         self.get(id)
@@ -341,7 +362,8 @@ fn row_to_deck(row: &Row<'_>) -> rusqlite::Result<Deck> {
         color: row.get(3)?,
         desired_retention: row.get(4)?,
         scheduler_kind,
-        created_at: row.get(6)?,
-        updated_at: row.get(7)?,
+        language_mode: row.get(6)?,
+        created_at: row.get(7)?,
+        updated_at: row.get(8)?,
     })
 }

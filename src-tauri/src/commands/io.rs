@@ -58,12 +58,17 @@ pub struct ExportDeck {
     pub notes: Vec<ExportNote>,
 }
 
-/// One note in the export — template, raw fields and tags only.
+/// One note in the export — template, raw fields and tags. Vague 10 adds
+/// `frequency_band` (optional) so language-learning frequency tags
+/// round-trip through JSON exports. The field is `#[serde(default)]` so
+/// older pre-v10 export files (which don't carry the key) still import.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExportNote {
     pub template: NoteTemplate,
     pub fields: serde_json::Value,
     pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frequency_band: Option<String>,
 }
 
 /// Per-import summary returned to the frontend so it can render a toast.
@@ -104,6 +109,7 @@ pub fn build_export(db: &Database, deck_ids: &[i64]) -> AppResult<ExportFile> {
                 template: n.template,
                 fields: n.fields,
                 tags: n.tags,
+                frequency_band: n.frequency_band,
             })
             .collect::<Vec<_>>();
 
@@ -187,6 +193,7 @@ pub fn apply_import(db: &Database, import: ExportFile) -> AppResult<ImportResult
             &deck_data.color,
             deck_data.desired_retention,
             None,
+            None,
         )?;
 
         let card_count_before: i64 = conn
@@ -201,7 +208,13 @@ pub fn apply_import(db: &Database, import: ExportFile) -> AppResult<ImportResult
             // NoteRepo::create also materialises every derived card row, so
             // we don't need a separate card-count pass per template.
             db.notes(&conn)
-                .create(deck.id, note.template, note.fields, note.tags)?;
+                .create(
+                    deck.id,
+                    note.template,
+                    note.fields,
+                    note.tags,
+                    note.frequency_band,
+                )?;
             notes_imported += 1;
         }
 
@@ -251,7 +264,7 @@ mod tests {
         let conn = db.lock();
         let deck_a = db
             .decks(&conn)
-            .create("Spanish", Some("vocab"), "#3b82f6", 0.9, None)
+            .create("Spanish", Some("vocab"), "#3b82f6", 0.9, None, None)
             .unwrap();
         db.notes(&conn)
             .create(
@@ -259,6 +272,7 @@ mod tests {
                 NoteTemplate::Basic,
                 json!({ "front": "hola", "back": "hello" }),
                 vec!["greeting".to_string()],
+                None,
             )
             .unwrap();
         db.notes(&conn)
@@ -267,12 +281,13 @@ mod tests {
                 NoteTemplate::BasicReverse,
                 json!({ "front": "adios", "back": "goodbye" }),
                 vec![],
+                None,
             )
             .unwrap();
 
         let deck_b = db
             .decks(&conn)
-            .create("Capitals", None, "#ef4444", 0.92, None)
+            .create("Capitals", None, "#ef4444", 0.92, None, None)
             .unwrap();
         db.notes(&conn)
             .create(
@@ -280,6 +295,7 @@ mod tests {
                 NoteTemplate::Cloze,
                 json!({ "text": "The capital of {{c1::France}} is {{c2::Paris}}" }),
                 vec!["geo".to_string()],
+                None,
             )
             .unwrap();
         drop(conn);
@@ -352,7 +368,7 @@ mod tests {
             let conn = dst_db.lock();
             dst_db
                 .decks(&conn)
-                .create("Spanish", None, "#3b82f6", 0.9, None)
+                .create("Spanish", None, "#3b82f6", 0.9, None, None)
                 .unwrap();
         }
 

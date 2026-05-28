@@ -13,6 +13,15 @@
 //!                       "masks": [{ "x": 0, "y": 0, "width": 100, "height": 50,
 //!                                   "label": "optional" }, ...] }`
 //!                    One card per mask (`card_ord = mask_index`).
+//! - `sentence`      → `{ "source": "...", "target": "...",
+//!                        "notes": "optional", "source_lang": "ja",
+//!                        "target_lang": "fr" }` — one card (source→target).
+//! - `bidirectional` → `{ "source": "...", "target": "..." }` — two cards,
+//!                     the Lampariello pattern (0=source→target, 1=target→source).
+//!
+//! Vague 10 also introduces an optional `frequency_band` column on every
+//! note (independent of `template`): one of `top_100`, `top_1k`, `top_5k`,
+//! `top_10k`, `beyond`, or NULL when un-tagged.
 
 use std::collections::BTreeSet;
 use std::str::FromStr;
@@ -32,6 +41,10 @@ pub enum NoteTemplate {
     BasicReverse,
     Cloze,
     Occlusion,
+    /// Vague 10 — one-card sentence (source → target, language-learning).
+    Sentence,
+    /// Vague 10 — two-card bidirectional translation pair (Lampariello).
+    Bidirectional,
 }
 
 impl NoteTemplate {
@@ -41,6 +54,8 @@ impl NoteTemplate {
             NoteTemplate::BasicReverse => "basic_reverse",
             NoteTemplate::Cloze => "cloze",
             NoteTemplate::Occlusion => "occlusion",
+            NoteTemplate::Sentence => "sentence",
+            NoteTemplate::Bidirectional => "bidirectional",
         }
     }
 }
@@ -54,10 +69,35 @@ impl FromStr for NoteTemplate {
             "basic_reverse" => Ok(NoteTemplate::BasicReverse),
             "cloze" => Ok(NoteTemplate::Cloze),
             "occlusion" => Ok(NoteTemplate::Occlusion),
+            "sentence" => Ok(NoteTemplate::Sentence),
+            "bidirectional" => Ok(NoteTemplate::Bidirectional),
             other => Err(AppError::Database(format!(
                 "invalid note template '{}'",
                 other
             ))),
+        }
+    }
+}
+
+/// Vague 10 — accepted values for the optional `notes.frequency_band` column.
+const FREQUENCY_BANDS: &[&str] = &["top_100", "top_1k", "top_5k", "top_10k", "beyond"];
+
+/// Validate that `band` is either `None` or one of the accepted bucket
+/// names. The check is duplicated in SQL (the `CHECK` constraint catches
+/// a corrupted write); here we surface a friendly `Validation` error
+/// before the SQL even runs.
+fn validate_frequency_band(band: Option<&str>) -> AppResult<()> {
+    match band {
+        None => Ok(()),
+        Some(value) => {
+            if FREQUENCY_BANDS.contains(&value) {
+                Ok(())
+            } else {
+                Err(AppError::Validation(format!(
+                    "invalid frequency_band '{}' (expected one of {:?})",
+                    value, FREQUENCY_BANDS
+                )))
+            }
         }
     }
 }
@@ -71,6 +111,11 @@ pub struct Note {
     pub tags: Vec<String>,
     pub created_at: i64,
     pub updated_at: i64,
+    /// Vague 10 — Zipf-bucket label for language-learning notes
+    /// (`top_100` … `beyond`). `None` when un-tagged. Backwards-compatible:
+    /// every pre-v11 row migrates to `NULL`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frequency_band: Option<String>,
 }
 
 pub struct NoteRepo<'a> {
@@ -89,7 +134,7 @@ impl<'a> NoteRepo<'a> {
         offset: u32,
     ) -> AppResult<Vec<Note>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, deck_id, template, fields, tags, created_at, updated_at
+            "SELECT id, deck_id, template, fields, tags, created_at, updated_at, frequency_band
              FROM notes
              WHERE deck_id = ?1
              ORDER BY id DESC
@@ -107,7 +152,7 @@ impl<'a> NoteRepo<'a> {
         let row = self
             .conn
             .query_row(
-                "SELECT id, deck_id, template, fields, tags, created_at, updated_at
+                "SELECT id, deck_id, template, fields, tags, created_at, updated_at, frequency_band
                  FROM notes WHERE id = ?1",
                 params![id],
                 row_to_note,
@@ -123,20 +168,28 @@ impl<'a> NoteRepo<'a> {
     /// Create a note and all its derived cards in a single transaction.
     ///
     /// Card count by template:
-    /// - `Basic`        → 1 card (ord=0)
-    /// - `BasicReverse` → 2 cards (ord=0 front→back, ord=1 back→front)
-    /// - `Cloze`        → one card per unique `{{cN::…}}` index found in the
+    /// - `Basic`         → 1 card (ord=0)
+    /// - `BasicReverse`  → 2 cards (ord=0 front→back, ord=1 back→front)
+    /// - `Cloze`         → one card per unique `{{cN::…}}` index found in the
     ///   `text` field; if no cloze is found, returns a `Validation` error.
-    /// - `Occlusion`    → one card per entry in `fields.masks` (a JSON array).
+    /// - `Occlusion`     → one card per entry in `fields.masks` (a JSON array).
     ///   Empty or missing `masks` is rejected with a `Validation` error.
+    /// - `Sentence`      → 1 card (ord=0 source→target).
+    /// - `Bidirectional` → 2 cards (ord=0 source→target, ord=1 target→source).
+    ///
+    /// `frequency_band` is optional (Vague 10). When `Some`, the value must
+    /// be one of `top_100`, `top_1k`, `top_5k`, `top_10k`, `beyond` —
+    /// anything else returns a `Validation` error before the INSERT runs.
     pub fn create(
         &self,
         deck_id: i64,
         template: NoteTemplate,
         fields: serde_json::Value,
         tags: Vec<String>,
+        frequency_band: Option<String>,
     ) -> AppResult<Note> {
         validate_fields(template, &fields)?;
+        validate_frequency_band(frequency_band.as_deref())?;
 
         let now = Utc::now().timestamp();
         let fields_str = serde_json::to_string(&fields)?;
@@ -149,9 +202,16 @@ impl<'a> NoteRepo<'a> {
         self.conn.execute_batch("BEGIN;")?;
 
         let insert_res = self.conn.execute(
-            "INSERT INTO notes (deck_id, template, fields, tags, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
-            params![deck_id, template.as_str(), fields_str, tags_str, now],
+            "INSERT INTO notes (deck_id, template, fields, tags, created_at, updated_at, frequency_band)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6)",
+            params![
+                deck_id,
+                template.as_str(),
+                fields_str,
+                tags_str,
+                now,
+                frequency_band
+            ],
         );
         if let Err(e) = insert_res {
             let _ = self.conn.execute_batch("ROLLBACK;");
@@ -170,6 +230,24 @@ impl<'a> NoteRepo<'a> {
 
         self.conn.execute_batch("COMMIT;")?;
         self.get(note_id)
+    }
+
+    /// Vague 10 — set or clear the `frequency_band` tag on an existing note.
+    /// Passing `None` clears the tag. Validation runs both server-side
+    /// (via [`validate_frequency_band`]) and in SQL (the `CHECK` constraint).
+    pub fn set_frequency_band(&self, id: i64, band: Option<String>) -> AppResult<Note> {
+        validate_frequency_band(band.as_deref())?;
+        // Reject early if the note doesn't exist — gives a friendlier error.
+        let _existing = self.get(id)?;
+        let now = Utc::now().timestamp();
+        let affected = self.conn.execute(
+            "UPDATE notes SET frequency_band = ?1, updated_at = ?2 WHERE id = ?3",
+            params![band, now, id],
+        )?;
+        if affected == 0 {
+            return Err(AppError::NotFound(format!("note id={}", id)));
+        }
+        self.get(id)
     }
 
     pub fn update_fields(&self, id: i64, fields: serde_json::Value) -> AppResult<Note> {
@@ -210,7 +288,7 @@ impl<'a> NoteRepo<'a> {
         let fts_query = format!("\"{}\"", escaped);
 
         let mut stmt = self.conn.prepare(
-            "SELECT n.id, n.deck_id, n.template, n.fields, n.tags, n.created_at, n.updated_at
+            "SELECT n.id, n.deck_id, n.template, n.fields, n.tags, n.created_at, n.updated_at, n.frequency_band
              FROM notes n
              JOIN notes_fts fts ON fts.rowid = n.id
              WHERE notes_fts MATCH ?1
@@ -233,6 +311,54 @@ impl<'a> NoteRepo<'a> {
         )?;
         Ok(n)
     }
+
+    /// Vague 10 — tally the deck's notes by their `frequency_band` column.
+    ///
+    /// One indexed `GROUP BY`; NULL bands fold into `untagged`. The six
+    /// returned counts always sum to [`count_in_deck`]. Unknown band values
+    /// are skipped (the SQL CHECK constraint already guards writes), so a
+    /// hand-corrupted row can't crash the coverage card.
+    pub fn frequency_coverage(&self, deck_id: i64) -> AppResult<FrequencyCoverage> {
+        let mut stmt = self.conn.prepare(
+            "SELECT frequency_band, COUNT(*) FROM notes WHERE deck_id = ?1 GROUP BY frequency_band",
+        )?;
+        let rows = stmt.query_map(params![deck_id], |r| {
+            let band: Option<String> = r.get(0)?;
+            let count: i64 = r.get(1)?;
+            Ok((band, count))
+        })?;
+
+        let mut coverage = FrequencyCoverage::default();
+        for row in rows {
+            let (band, count) = row?;
+            match band.as_deref() {
+                Some("top_100") => coverage.top_100 = count,
+                Some("top_1k") => coverage.top_1k = count,
+                Some("top_5k") => coverage.top_5k = count,
+                Some("top_10k") => coverage.top_10k = count,
+                Some("beyond") => coverage.beyond = count,
+                None => coverage.untagged = count,
+                Some(_) => {} // unknown band — ignore (CHECK constraint guards writes)
+            }
+        }
+        Ok(coverage)
+    }
+}
+
+/// Vague 10 — vocabulary-coverage breakdown for a language deck.
+///
+/// Each bucket counts the deck's notes whose `frequency_band` equals the
+/// matching Zipf tier; `untagged` collects NULL-band notes (the Pareto long
+/// tail still waiting to be classified). The six fields sum to the deck's
+/// total note count, so the UI renders a stacked bar without a second query.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FrequencyCoverage {
+    pub top_100: i64,
+    pub top_1k: i64,
+    pub top_5k: i64,
+    pub top_10k: i64,
+    pub beyond: i64,
+    pub untagged: i64,
 }
 
 // ---- helpers ----------------------------------------------------------------
@@ -245,6 +371,7 @@ fn row_to_note(row: &Row<'_>) -> rusqlite::Result<AppResult<Note>> {
     let tags_str: String = row.get(4)?;
     let created_at: i64 = row.get(5)?;
     let updated_at: i64 = row.get(6)?;
+    let frequency_band: Option<String> = row.get(7)?;
 
     let parse = || -> AppResult<Note> {
         let template = NoteTemplate::from_str(&template_str)?;
@@ -258,6 +385,7 @@ fn row_to_note(row: &Row<'_>) -> rusqlite::Result<AppResult<Note>> {
             tags,
             created_at,
             updated_at,
+            frequency_band,
         })
     };
 
@@ -341,6 +469,39 @@ fn validate_fields(template: NoteTemplate, fields: &serde_json::Value) -> AppRes
                 }
             }
         }
+        NoteTemplate::Sentence | NoteTemplate::Bidirectional => {
+            // Both templates share the same two-string contract. The
+            // sentence template additionally accepts optional `notes`,
+            // `source_lang`, `target_lang` strings — we don't enforce
+            // those because « no notes » and « unknown languages » are
+            // both perfectly valid.
+            for key in ["source", "target"] {
+                let v = obj
+                    .get(key)
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        AppError::Validation(format!("missing string field '{}'", key))
+                    })?;
+                if v.trim().is_empty() {
+                    return Err(AppError::Validation(format!(
+                        "field '{}' must not be empty",
+                        key
+                    )));
+                }
+            }
+            if matches!(template, NoteTemplate::Sentence) {
+                for optional_key in ["notes", "source_lang", "target_lang"] {
+                    if let Some(value) = obj.get(optional_key) {
+                        if !value.is_null() && !value.is_string() {
+                            return Err(AppError::Validation(format!(
+                                "field '{}' must be a string when present",
+                                optional_key
+                            )));
+                        }
+                    }
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -380,6 +541,9 @@ fn ords_for_template(
             }
             Ok((0..masks.len() as i64).collect())
         }
+        // Vague 10 — language-learning templates.
+        NoteTemplate::Sentence => Ok(vec![0]),
+        NoteTemplate::Bidirectional => Ok(vec![0, 1]),
     }
 }
 
@@ -446,7 +610,7 @@ mod tests {
         let conn = db.lock();
         let deck = db
             .decks(&conn)
-            .create("Bio", None, "#3b82f6", 0.9, None)
+            .create("Bio", None, "#3b82f6", 0.9, None, None)
             .unwrap();
 
         let fields = json!({
@@ -462,7 +626,7 @@ mod tests {
 
         let note = db
             .notes(&conn)
-            .create(deck.id, NoteTemplate::Occlusion, fields, vec![])
+            .create(deck.id, NoteTemplate::Occlusion, fields, vec![], None)
             .expect("note creation");
         assert_eq!(note.template, NoteTemplate::Occlusion);
 
@@ -494,7 +658,7 @@ mod tests {
     fn occlusion_rejects_empty_masks() {
         let db = Database::for_test();
         let conn = db.lock();
-        let deck = db.decks(&conn).create("X", None, "#3b82f6", 0.9, None).unwrap();
+        let deck = db.decks(&conn).create("X", None, "#3b82f6", 0.9, None, None).unwrap();
 
         let err = db
             .notes(&conn)
@@ -508,6 +672,7 @@ mod tests {
                     "masks": []
                 }),
                 vec![],
+                None,
             )
             .unwrap_err();
         assert!(matches!(err, AppError::Validation(_)));
@@ -517,7 +682,7 @@ mod tests {
     fn occlusion_rejects_missing_image_path() {
         let db = Database::for_test();
         let conn = db.lock();
-        let deck = db.decks(&conn).create("Y", None, "#3b82f6", 0.9, None).unwrap();
+        let deck = db.decks(&conn).create("Y", None, "#3b82f6", 0.9, None, None).unwrap();
 
         let err = db
             .notes(&conn)
@@ -528,6 +693,7 @@ mod tests {
                     "masks": [{ "x": 1.0, "y": 1.0, "width": 10.0, "height": 10.0 }]
                 }),
                 vec![],
+                None,
             )
             .unwrap_err();
         assert!(matches!(err, AppError::Validation(_)));

@@ -22,7 +22,7 @@ fn fresh_db_with_deck() -> (Database, i64) {
     let conn = db.lock();
     let deck = db
         .decks(&conn)
-        .create("Default", None, "#3b82f6", 0.9, None)
+        .create("Default", None, "#3b82f6", 0.9, None, None)
         .expect("create deck");
     (db.clone(), deck.id)
 }
@@ -35,7 +35,7 @@ fn create_deck_returns_deck_with_id() {
     let conn = db.lock();
     let deck = db
         .decks(&conn)
-        .create("Spanish", Some("Vocab"), "#ff0000", 0.92, None)
+        .create("Spanish", Some("Vocab"), "#ff0000", 0.92, None, None)
         .expect("create deck");
     assert!(deck.id > 0);
     assert_eq!(deck.name, "Spanish");
@@ -49,9 +49,9 @@ fn list_decks_alphabetical() {
     let db = Database::for_test();
     let conn = db.lock();
     let repo = db.decks(&conn);
-    repo.create("Charlie", None, "#000000", 0.9, None).unwrap();
-    repo.create("alpha", None, "#000000", 0.9, None).unwrap();
-    repo.create("Bravo", None, "#000000", 0.9, None).unwrap();
+    repo.create("Charlie", None, "#000000", 0.9, None, None).unwrap();
+    repo.create("alpha", None, "#000000", 0.9, None, None).unwrap();
+    repo.create("Bravo", None, "#000000", 0.9, None, None).unwrap();
 
     let decks = repo.list().unwrap();
     let names: Vec<&str> = decks.iter().map(|d| d.name.as_str()).collect();
@@ -72,6 +72,7 @@ fn update_deck_partial() {
                 color: None,
                 desired_retention: Some(0.85),
                 scheduler_kind: None,
+                language_mode: None,
             },
         )
         .expect("update");
@@ -94,6 +95,7 @@ fn delete_deck_cascades_notes_and_cards() {
             NoteTemplate::Basic,
             json!({ "front": "hola", "back": "hello" }),
             vec!["greetings".into()],
+            None,
         )
         .expect("create note");
 
@@ -132,6 +134,7 @@ fn create_note_basic_creates_1_card() {
             NoteTemplate::Basic,
             json!({ "front": "Q", "back": "A" }),
             vec![],
+            None,
         )
         .unwrap();
 
@@ -156,6 +159,7 @@ fn create_note_basic_reverse_creates_2_cards() {
             NoteTemplate::BasicReverse,
             json!({ "front": "hola", "back": "hello" }),
             vec![],
+            None,
         )
         .unwrap();
 
@@ -183,6 +187,7 @@ fn create_note_cloze_creates_n_cards() {
                 "text": "The {{c1::capital}} of {{c2::France}} is {{c3::Paris}}"
             }),
             vec![],
+            None,
         )
         .unwrap();
 
@@ -208,6 +213,7 @@ fn fts_search_returns_matching_notes() {
             NoteTemplate::Basic,
             json!({ "front": "hola mundo", "back": "hello world" }),
             vec!["spanish".into()],
+            None,
         )
         .unwrap();
     db.notes(&conn)
@@ -216,6 +222,7 @@ fn fts_search_returns_matching_notes() {
             NoteTemplate::Basic,
             json!({ "front": "adios", "back": "goodbye" }),
             vec!["spanish".into()],
+            None,
         )
         .unwrap();
 
@@ -240,6 +247,7 @@ fn due_cards_excludes_suspended() {
             NoteTemplate::Basic,
             json!({ "front": "Q", "back": "A" }),
             vec![],
+            None,
         )
         .unwrap();
     // The note's lone card lives at id=1 (fresh DB).
@@ -280,6 +288,7 @@ fn insert_review_returns_review_with_id() {
             NoteTemplate::Basic,
             json!({ "front": "Q", "back": "A" }),
             vec![],
+            None,
         )
         .unwrap();
     let card_id = db
@@ -335,6 +344,7 @@ fn insert_review_persists_confidence_in_1_to_5() {
             NoteTemplate::Basic,
             json!({ "front": "Q", "back": "A" }),
             vec![],
+            None,
         )
         .unwrap();
     let card_id = db
@@ -389,6 +399,7 @@ fn deck_stats_counts_by_state() {
             NoteTemplate::BasicReverse,
             json!({ "front": "Q", "back": "A" }),
             vec![],
+            None,
         )
         .unwrap();
     let stats = db.decks(&conn).stats(deck_id).unwrap();
@@ -409,6 +420,7 @@ fn reset_card_clears_fsrs_state_and_preserves_reviews() {
             NoteTemplate::Basic,
             json!({ "front": "Q", "back": "A" }),
             vec![],
+            None,
         )
         .unwrap();
     let card_id = db
@@ -620,6 +632,7 @@ fn deck_mastery_distribution_buckets_by_stability() {
                 NoteTemplate::Basic,
                 json!({ "front": format!("Q{}", i), "back": "A" }),
                 vec![],
+            None,
             )
             .unwrap();
     }
@@ -746,6 +759,7 @@ fn seed_one_card(db: &Database, deck_id: i64) -> mnemosys_lib::db::Card {
             NoteTemplate::Basic,
             json!({ "front": "Q", "back": "A" }),
             vec![],
+            None,
         )
         .unwrap();
     db.cards(&conn)
@@ -846,6 +860,7 @@ fn deck_scheduler_kind_persists() {
             "#3b82f6",
             0.9,
             Some(SchedulerKind::Sm2),
+            None,
         )
         .expect("create");
     assert_eq!(deck.scheduler_kind, SchedulerKind::Sm2);
@@ -920,11 +935,11 @@ fn fresh_db_with_two_decks_of_due_cards(cards_per_deck: usize) -> (Database, i64
         let conn = db.lock();
         let deck_a = db
             .decks(&conn)
-            .create("Alpha", None, "#3b82f6", 0.9, None)
+            .create("Alpha", None, "#3b82f6", 0.9, None, None)
             .unwrap();
         let deck_b = db
             .decks(&conn)
-            .create("Bravo", None, "#10b981", 0.9, None)
+            .create("Bravo", None, "#10b981", 0.9, None, None)
             .unwrap();
 
         for deck in [&deck_a, &deck_b] {
@@ -939,6 +954,7 @@ fn fresh_db_with_two_decks_of_due_cards(cards_per_deck: usize) -> (Database, i64
                             "back":  format!("{}-A{}", deck.name, i),
                         }),
                         vec![],
+                    None,
                     )
                     .unwrap();
                 let card_id = db
@@ -1071,6 +1087,7 @@ fn seed_card_with_review(db: &Database, deck_id: i64) -> (i64, i64) {
             NoteTemplate::Basic,
             json!({ "front": "Q", "back": "A" }),
             vec![],
+            None,
         )
         .unwrap();
     let card_id = db
@@ -1185,6 +1202,7 @@ fn jol_pending_filters_by_age_and_resolution() {
                 NoteTemplate::Basic,
                 json!({ "front": "Q2", "back": "A2" }),
                 vec![],
+            None,
             )
             .unwrap();
         db.cards(&conn)
@@ -1331,6 +1349,7 @@ fn seed_n_cards(db: &Database, deck_id: i64, n: usize) -> Vec<i64> {
                 NoteTemplate::Basic,
                 json!({ "front": format!("Q{}", i), "back": format!("A{}", i) }),
                 vec![],
+            None,
             )
             .unwrap();
     }
@@ -1470,4 +1489,174 @@ fn reorder_loci_updates_ordinals() {
     assert_eq!(full.loci[0].ordinal, 1);
     assert_eq!(full.loci[1].ordinal, 2);
     assert_eq!(full.loci[2].ordinal, 3);
+}
+
+// ---- Vague 10: Mode Langue -------------------------------------------------
+
+/// A `Bidirectional` note materialises the two-card Lampariello pair
+/// (source→target at ord 0, target→source at ord 1). The brief calls this
+/// the "sentence" template; in the schema it's the bidirectional variant.
+#[test]
+fn create_sentence_note_creates_2_cards() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let conn = db.lock();
+    let note = db
+        .notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::Bidirectional,
+            json!({ "source": "学校", "target": "école", "hint": "le bâtiment" }),
+            vec![],
+            None,
+        )
+        .expect("create bidirectional note");
+    assert_eq!(note.template, NoteTemplate::Bidirectional);
+
+    let ords: Vec<i64> = {
+        let mut stmt = conn
+            .prepare("SELECT card_ord FROM cards WHERE note_id = ?1 ORDER BY card_ord ASC")
+            .unwrap();
+        stmt.query_map([note.id], |r| r.get::<_, i64>(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect()
+    };
+    assert_eq!(ords, vec![0, 1], "bidirectional → 2 cards (L2→L1, L1→L2)");
+
+    // The one-card sentence variant produces a single card.
+    let single = db
+        .notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::Sentence,
+            json!({ "source": "ありがとう", "target": "merci" }),
+            vec![],
+            None,
+        )
+        .expect("create sentence note");
+    let single_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM cards WHERE note_id = ?1",
+            [single.id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(single_count, 1, "sentence → 1 card (L2→L1 only)");
+}
+
+/// Both language templates reject a missing or blank `source` / `target`.
+#[test]
+fn sentence_requires_source_and_target() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let conn = db.lock();
+
+    // Missing `target`.
+    let err = db
+        .notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::Sentence,
+            json!({ "source": "hola" }),
+            vec![],
+            None,
+        )
+        .unwrap_err();
+    assert!(matches!(err, mnemosys_lib::error::AppError::Validation(_)));
+
+    // Blank `source` (whitespace only).
+    let err = db
+        .notes(&conn)
+        .create(
+            deck_id,
+            NoteTemplate::Bidirectional,
+            json!({ "source": "   ", "target": "hello" }),
+            vec![],
+            None,
+        )
+        .unwrap_err();
+    assert!(matches!(err, mnemosys_lib::error::AppError::Validation(_)));
+}
+
+/// `language_mode` round-trips through create + update on a deck.
+#[test]
+fn deck_language_mode_persists() {
+    let db = Database::for_test();
+    let conn = db.lock();
+
+    // create with a language code
+    let deck = db
+        .decks(&conn)
+        .create("Japonais", None, "#3b82f6", 0.9, None, Some("ja"))
+        .expect("create language deck");
+    assert_eq!(deck.language_mode.as_deref(), Some("ja"));
+
+    // a plain deck defaults to None
+    let plain = db
+        .decks(&conn)
+        .create("Maths", None, "#3b82f6", 0.9, None, None)
+        .expect("create plain deck");
+    assert_eq!(plain.language_mode, None);
+
+    // update: switch the code
+    let patched = db
+        .decks(&conn)
+        .update(
+            deck.id,
+            DeckPatch {
+                language_mode: Some(Some("en".to_string())),
+                ..Default::default()
+            },
+        )
+        .expect("update language_mode");
+    assert_eq!(patched.language_mode.as_deref(), Some("en"));
+
+    // update: clear it back to None
+    let cleared = db
+        .decks(&conn)
+        .update(
+            deck.id,
+            DeckPatch {
+                language_mode: Some(None),
+                ..Default::default()
+            },
+        )
+        .expect("clear language_mode");
+    assert_eq!(cleared.language_mode, None);
+}
+
+/// `frequency_coverage` buckets a deck's notes by their `frequency_band`,
+/// folding NULL bands into `untagged`. The six counts sum to the deck total.
+#[test]
+fn frequency_coverage_counts_by_tag() {
+    let (db, deck_id) = fresh_db_with_deck();
+    let conn = db.lock();
+
+    let mk = |band: Option<&str>, n: usize| {
+        for i in 0..n {
+            db.notes(&conn)
+                .create(
+                    deck_id,
+                    NoteTemplate::Basic,
+                    json!({ "front": format!("q{}-{:?}", i, band), "back": "a" }),
+                    vec![],
+                    band.map(str::to_string),
+                )
+                .unwrap();
+        }
+    };
+    mk(Some("top_100"), 3);
+    mk(Some("top_1k"), 2);
+    mk(Some("beyond"), 1);
+    mk(None, 4);
+
+    let cov = db.notes(&conn).frequency_coverage(deck_id).unwrap();
+    assert_eq!(cov.top_100, 3);
+    assert_eq!(cov.top_1k, 2);
+    assert_eq!(cov.top_5k, 0);
+    assert_eq!(cov.top_10k, 0);
+    assert_eq!(cov.beyond, 1);
+    assert_eq!(cov.untagged, 4);
+
+    let total = cov.top_100 + cov.top_1k + cov.top_5k + cov.top_10k + cov.beyond + cov.untagged;
+    assert_eq!(total, db.notes(&conn).count_in_deck(deck_id).unwrap());
 }

@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
+import { LANGUAGE_OPTIONS } from "@/lib/languages";
 import { useUpdateDeck } from "@/lib/queries";
 import type { Deck, SchedulerKind } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,7 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
   const [color, setColor] = useState(deck.color);
   const [retention, setRetention] = useState(deck.desired_retention);
   const [schedulerKind, setSchedulerKind] = useState<SchedulerKind>(deck.scheduler_kind);
+  const [languageMode, setLanguageMode] = useState<string | null>(deck.language_mode);
 
   // Reset local form whenever the deck changes or the dialog re-opens with
   // fresh data, so the user sees the current persisted values rather than
@@ -49,6 +51,7 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
       setColor(deck.color);
       setRetention(deck.desired_retention);
       setSchedulerKind(deck.scheduler_kind);
+      setLanguageMode(deck.language_mode);
     }
   }, [deck, open]);
 
@@ -84,6 +87,7 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
         color,
         desired_retention: retention,
         scheduler_kind: schedulerKind,
+        language_mode: languageMode,
       },
     });
   }
@@ -166,6 +170,26 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
                 : undefined
             }
           />
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-deck-language">Langue du deck</Label>
+            <select
+              id="edit-deck-language"
+              value={languageMode ?? ""}
+              onChange={(e) => setLanguageMode(e.target.value || null)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <option key={opt.code ?? "none"} value={opt.code ?? ""}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Active le mode langue : carte « Phrase » bidirectionnelle et suivi de couverture
+              lexicale.
+            </p>
+          </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
