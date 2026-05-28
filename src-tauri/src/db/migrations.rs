@@ -488,27 +488,35 @@ fn apply_migration(conn: &Connection, version: i32, sql: &str) -> AppResult<()> 
     // Must happen OUTSIDE any transaction (SQLite ignores the pragma inside one).
     conn.pragma_update(None, "foreign_keys", "OFF")?;
 
-    conn.execute_batch("BEGIN;")?;
+    // Run the whole migration body in a closure so we can restore
+    // `foreign_keys = ON` on EVERY exit path — including a failure of the
+    // `PRAGMA user_version` / `COMMIT` statements, which would otherwise
+    // leave the live connection with FK enforcement disabled (silent loss
+    // of cascade/constraint integrity for the rest of the session).
+    let result: AppResult<()> = (|| {
+        conn.execute_batch("BEGIN;")?;
+        if let Err(e) = conn.execute_batch(sql) {
+            // Best-effort rollback; surface the original error regardless.
+            let _ = conn.execute_batch("ROLLBACK;");
+            return Err(AppError::Database(format!(
+                "migration v{} failed: {}",
+                version, e
+            )));
+        }
+        // `PRAGMA user_version = ?` does not accept bind params, so format
+        // literally. `version` is a hard-coded i32 — no injection risk.
+        if let Err(e) = conn.execute_batch(&format!("PRAGMA user_version = {};", version)) {
+            let _ = conn.execute_batch("ROLLBACK;");
+            return Err(e.into());
+        }
+        conn.execute_batch("COMMIT;")?;
+        Ok(())
+    })();
 
-    if let Err(e) = conn.execute_batch(sql) {
-        // Best-effort rollback; if it fails too we still surface the original error.
-        let _ = conn.execute_batch("ROLLBACK;");
-        let _ = conn.pragma_update(None, "foreign_keys", "ON");
-        return Err(AppError::Database(format!(
-            "migration v{} failed: {}",
-            version, e
-        )));
-    }
-
-    // `PRAGMA user_version = ?` does not accept bind params, so format literally.
-    // `version` is a hard-coded i32 controlled by this crate — no injection risk.
-    conn.execute_batch(&format!("PRAGMA user_version = {};", version))?;
-    conn.execute_batch("COMMIT;")?;
-
-    // Restore enforcement for normal operation. A post-migration integrity
-    // sweep would surface any dangling reference introduced by the rebuild.
-    conn.pragma_update(None, "foreign_keys", "ON")?;
-
+    // ALWAYS restore enforcement, success or failure, before returning.
+    let restored = conn.pragma_update(None, "foreign_keys", "ON");
+    result?;
+    restored?;
     Ok(())
 }
 

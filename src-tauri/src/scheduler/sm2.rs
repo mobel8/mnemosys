@@ -39,6 +39,17 @@ pub const EF_DEFAULT: f64 = 2.5;
 /// Lowest allowed easiness factor. Anki uses the same floor.
 pub const EF_MIN: f64 = 1.3;
 
+/// Highest allowed easiness factor. Classic SM-2 leaves EF unbounded above,
+/// but ~24 consecutive `Easy` ratings then push the interval past i64::MAX
+/// (the `as i64` cast saturates rather than panics, but `next_review` lands
+/// centuries away). Capping EF — and the interval itself — keeps scheduling
+/// sane without changing behaviour for any realistic review history.
+const EF_MAX: f64 = 4.0;
+
+/// Hard ceiling on a computed interval (days) — ~100 years. Mirrors the
+/// half-life cap in `hlr.rs` so no scheduler can emit an absurd `next_review`.
+const MAX_INTERVAL_DAYS: i64 = 36_500;
+
 /// Multiplicative bonus on top of `EF` when the rating is Easy.
 const EASY_BONUS: f64 = 1.3;
 
@@ -141,9 +152,7 @@ fn apply_rating(
         }
         Sm2Rating::Hard => {
             let ef_next = (ef_prev - 0.15).max(EF_MIN);
-            let interval = ((prev_interval as f64) * 1.2)
-                .round()
-                .max(interval_floor as f64) as i64;
+            let interval = clamp_interval((prev_interval as f64) * 1.2, interval_floor);
             let next_state = if matches!(state_before, CardState::Learning | CardState::Relearning)
             {
                 CardState::Review
@@ -154,19 +163,26 @@ fn apply_rating(
         }
         Sm2Rating::Good => {
             let ef_next = ef_prev; // unchanged
-            let interval = ((prev_interval as f64) * ef_next)
-                .round()
-                .max(interval_floor as f64) as i64;
+            let interval = clamp_interval((prev_interval as f64) * ef_next, interval_floor);
             (CardState::Review, interval, ef_next)
         }
         Sm2Rating::Easy => {
-            let ef_next = ef_prev + 0.15; // no upper bound in SM-2
-            let interval = ((prev_interval as f64) * ef_next * EASY_BONUS)
-                .round()
-                .max(interval_floor as f64) as i64;
+            let ef_next = (ef_prev + 0.15).min(EF_MAX);
+            let interval = clamp_interval((prev_interval as f64) * ef_next * EASY_BONUS, interval_floor);
             (CardState::Review, interval, ef_next)
         }
     }
+}
+
+/// Round a floating interval, floor it at `floor` days and cap it at
+/// [`MAX_INTERVAL_DAYS`] so the `as i64` cast can never saturate to an
+/// absurd value.
+fn clamp_interval(days: f64, floor: i64) -> i64 {
+    let rounded = days.round();
+    if !rounded.is_finite() {
+        return MAX_INTERVAL_DAYS;
+    }
+    (rounded as i64).clamp(floor, MAX_INTERVAL_DAYS)
 }
 
 #[cfg(test)]
@@ -255,6 +271,37 @@ mod tests {
         // (2.5 + 0.15) * 1.3 * 10 = 34.45 → 34 (round-to-nearest)
         assert_eq!(out.scheduled_days, 34);
         assert!(out.difficulty > 2.5);
+    }
+
+    #[test]
+    fn ef_and_interval_stay_bounded_under_endless_easy() {
+        // Regression: classic SM-2 leaves EF unbounded above; ~24 consecutive
+        // Easy ratings used to overflow the interval past i64::MAX (saturating
+        // `next_review` to centuries away). EF must cap at EF_MAX and the
+        // interval at MAX_INTERVAL_DAYS.
+        let s = Sm2Scheduler;
+        let mut card = fresh_card();
+        card.state = CardState::Review;
+        card.reps = 1;
+        card.scheduled_days = 6;
+        card.difficulty = Some(EF_DEFAULT);
+
+        for _ in 0..200 {
+            let out = s.next_review(&card, 4, 1_700_000_000).unwrap();
+            assert!(
+                out.difficulty <= EF_MAX + 1e-9,
+                "EF exceeded cap: {}",
+                out.difficulty
+            );
+            assert!(
+                out.scheduled_days >= 1 && out.scheduled_days <= MAX_INTERVAL_DAYS,
+                "interval out of bounds: {}",
+                out.scheduled_days
+            );
+            card.difficulty = Some(out.difficulty);
+            card.scheduled_days = out.scheduled_days;
+            card.reps += 1;
+        }
     }
 
     #[test]

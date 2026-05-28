@@ -11,7 +11,7 @@
 use chrono::Utc;
 
 use crate::db::Database;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 
 use super::auth::SupabaseConfig;
 use super::client::SyncClient;
@@ -67,17 +67,34 @@ pub async fn run_cycle(
     let remote_reviews = client.pull_reviews(since).await?;
 
     // ---- 5. apply (single transaction) -------------------------------------
+    // The four `apply_*` calls run inside one manual transaction. We must
+    // ROLLBACK on ANY error: a bare `BEGIN;` + `?` early-return would leave
+    // the transaction open on the shared connection, so every later DB op
+    // (including the next sync's `BEGIN;`) would fail with "cannot start a
+    // transaction within a transaction" and partial writes would linger.
     let finished_at = Utc::now().timestamp();
     let (decks_stats, notes_stats, cards_stats, reviews_stats) = {
         let conn = db.lock();
         conn.execute_batch("BEGIN;")?;
-        let decks_stats = apply::apply_decks(&conn, &remote_decks)?;
-        let notes_stats = apply::apply_notes(&conn, &remote_notes)?;
-        let cards_stats = apply::apply_cards(&conn, &remote_cards)?;
-        let reviews_stats = apply::apply_reviews(&conn, &remote_reviews)?;
-        apply::write_cursor(&conn, finished_at, Some(&session.user_id))?;
-        conn.execute_batch("COMMIT;")?;
-        (decks_stats, notes_stats, cards_stats, reviews_stats)
+        let applied = (|| {
+            let decks_stats = apply::apply_decks(&conn, &remote_decks)?;
+            let notes_stats = apply::apply_notes(&conn, &remote_notes)?;
+            let cards_stats = apply::apply_cards(&conn, &remote_cards)?;
+            let reviews_stats = apply::apply_reviews(&conn, &remote_reviews)?;
+            apply::write_cursor(&conn, finished_at, Some(&session.user_id))?;
+            Ok::<_, AppError>((decks_stats, notes_stats, cards_stats, reviews_stats))
+        })();
+        match applied {
+            Ok(stats) => {
+                conn.execute_batch("COMMIT;")?;
+                stats
+            }
+            Err(e) => {
+                // Best-effort rollback so the connection stays usable.
+                let _ = conn.execute_batch("ROLLBACK;");
+                return Err(e);
+            }
+        }
     };
 
     Ok(SyncReport {
