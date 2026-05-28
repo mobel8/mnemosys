@@ -32,7 +32,9 @@ test.describe("Vagues 1-5 capture", () => {
 
   test("settings full page (with neuro section)", async ({ page }) => {
     await page.goto("/settings");
-    await expect(page.getByText(/Paramètres/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Paramètres" })).toBeVisible({
+      timeout: 10_000,
+    });
     await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(OUT, "v3-settings-full.png"), fullPage: true });
   });

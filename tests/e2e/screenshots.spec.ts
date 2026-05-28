@@ -40,7 +40,9 @@ test.describe("Mnemosys UI capture", () => {
 
   test("settings", async ({ page }) => {
     await page.goto("/settings");
-    await expect(page.getByText(/Paramètres/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Paramètres" })).toBeVisible({
+      timeout: 10_000,
+    });
     // Scroll through to capture every section.
     await page.waitForTimeout(700);
     await page.screenshot({ path: path.join(OUT, "03-settings.png"), fullPage: true });

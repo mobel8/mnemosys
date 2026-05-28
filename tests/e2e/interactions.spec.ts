@@ -99,7 +99,9 @@ test.describe("Interactive smoke", () => {
     attachHarvester(page, errors);
 
     await page.goto("/settings");
-    await expect(page.getByText(/Paramètres/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Paramètres" })).toBeVisible({
+      timeout: 10_000,
+    });
     await page.waitForTimeout(500);
 
     // Scroll to every section heading

@@ -19,7 +19,9 @@ test.describe("Detail captures", () => {
 
   test("settings — integrations section (scrolled)", async ({ page }) => {
     await page.goto("/settings");
-    await expect(page.getByText(/Paramètres/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Paramètres" })).toBeVisible({
+      timeout: 10_000,
+    });
     await page.waitForTimeout(500);
     // Scroll down to the Intégrations card.
     const integrations = page.getByText(/Intégrations/i).first();
@@ -33,7 +35,9 @@ test.describe("Detail captures", () => {
 
   test("settings — import export (scrolled)", async ({ page }) => {
     await page.goto("/settings");
-    await expect(page.getByText(/Paramètres/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Paramètres" })).toBeVisible({
+      timeout: 10_000,
+    });
     await page.waitForTimeout(500);
     const data = page.getByRole("heading", { name: /^Données$/ });
     await data.scrollIntoViewIfNeeded();
