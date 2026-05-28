@@ -22,6 +22,7 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { CalibrationDashboard } from "@/components/CalibrationDashboard";
+import { ConceptMastery } from "@/components/stats/ConceptMastery";
 import { PeriodSelector } from "@/components/stats/PeriodSelector";
 import { RetentionChart } from "@/components/stats/RetentionChart";
 import { ReviewsByDayChart } from "@/components/stats/ReviewsByDayChart";
@@ -67,6 +68,8 @@ export default function StatsPage() {
       </div>
 
       <CalibrationDashboard />
+
+      <ConceptMastery />
 
       {hasNoData && <NoDataCallout />}
     </div>

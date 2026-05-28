@@ -42,11 +42,13 @@ export type FrequencyBand = "top_100" | "top_1k" | "top_5k" | "top_10k" | "beyon
  * cards inside one deck always agree on which algorithm to run, while
  * different decks can mix and match.
  *
- * - `fsrs6`   — default, adaptive 21-parameter engine (predicts retention).
- * - `sm2`     — classic Anki-style SuperMemo-2 (deterministic, EF-based).
- * - `leitner` — 5-box system (forgiving, very simple).
+ * - `fsrs6`    — default, adaptive 21-parameter engine (predicts retention).
+ * - `sm2`      — classic Anki-style SuperMemo-2 (deterministic, EF-based).
+ * - `leitner`  — 5-box system (forgiving, very simple).
+ * - `hlr`      — Half-Life Regression (Settles & Meeder 2016, Duolingo).
+ * - `memorize` — optimal-control spacing (Tabibian et al. 2019).
  */
-export type SchedulerKind = "fsrs6" | "sm2" | "leitner";
+export type SchedulerKind = "fsrs6" | "sm2" | "leitner" | "hlr" | "memorize";
 
 /** One rectangular mask in an image-occlusion note. Coordinates are in
  *  source-image pixels (matching `natural_width` / `natural_height` in the
@@ -576,6 +578,20 @@ export interface PendingJol {
   card: CardWithNote;
 }
 
+/**
+ * One concept's mastery estimate from Bayesian Knowledge Tracing (Vague 20,
+ * Corbett & Anderson 1995). Concepts map to note tags; `mastery` is the
+ * posterior P(mastered) in `[0, 1]` after replaying every review of the
+ * cards carrying that tag.
+ */
+export interface ConceptMastery {
+  tag: string;
+  /** Posterior probability of mastery in `[0, 1]`. */
+  mastery: number;
+  /** Number of reviews that fed the estimate. */
+  reviews: number;
+}
+
 // --- Vague 8: Deck Podcast + Whisper Mode Review -------------------------
 
 /** Tone preset used by the podcast scriptwriter. */
@@ -838,6 +854,8 @@ export const api = {
     today: () => invoke<TodayStats>("get_today_stats"),
     reviewsByDay: (days: number) => invoke<DayCount[]>("get_reviews_by_day", { days }),
     retentionByDay: (days: number) => invoke<DayRetention[]>("get_retention_by_day", { days }),
+    /** BKT concept-mastery breakdown by tag (Vague 20). */
+    conceptMastery: () => invoke<ConceptMastery[]>("get_concept_mastery"),
   },
   demo: {
     load: () => invoke<number>("load_demo_decks"),

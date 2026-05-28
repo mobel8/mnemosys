@@ -26,6 +26,7 @@ import {
   type CardCritique,
   type CardElaboration,
   type CardWithNote,
+  type ConceptMastery,
   type ConversionResult,
   type DayCount,
   type DayRetention,
@@ -87,6 +88,7 @@ export const queryKeys = {
   todayStats: ["today-stats"] as const,
   reviewsByDay: (days: number) => ["reviews-by-day", days] as const,
   retentionByDay: (days: number) => ["retention-by-day", days] as const,
+  conceptMastery: ["concept-mastery"] as const,
   settings: ["settings"] as const,
   ttsCacheSize: ["tts-cache-size"] as const,
   syncStatus: ["sync-status"] as const,
@@ -279,6 +281,15 @@ export function useRetentionByDay(days = 30, opts?: Partial<UseQueryOptions<DayR
   return useQuery<DayRetention[]>({
     queryKey: queryKeys.retentionByDay(days),
     queryFn: () => api.stats.retentionByDay(days),
+    ...opts,
+  });
+}
+
+/** BKT concept-mastery breakdown by tag (Vague 20). */
+export function useConceptMastery(opts?: Partial<UseQueryOptions<ConceptMastery[]>>) {
+  return useQuery<ConceptMastery[]>({
+    queryKey: queryKeys.conceptMastery,
+    queryFn: () => api.stats.conceptMastery(),
     ...opts,
   });
 }

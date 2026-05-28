@@ -27,7 +27,9 @@
 //! always reset a card from the UI if they want a true fresh start.
 
 pub mod fsrs6_adapter;
+pub mod hlr;
 pub mod leitner;
+pub mod memorize;
 pub mod sm2;
 
 use std::str::FromStr;
@@ -40,8 +42,9 @@ use crate::error::{AppError, AppResult};
 /// Which scheduling algorithm a deck uses.
 ///
 /// Stored in the `decks.scheduler_kind` TEXT column. Serde uses
-/// lowercase strings (`"fsrs6"`, `"sm2"`, `"leitner"`) so the wire
-/// format matches what SQLite stores and what the frontend ships.
+/// lowercase strings (`"fsrs6"`, `"sm2"`, `"leitner"`, `"hlr"`,
+/// `"memorize"`) so the wire format matches what SQLite stores and what
+/// the frontend ships.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SchedulerKind {
@@ -49,6 +52,10 @@ pub enum SchedulerKind {
     Fsrs6,
     Sm2,
     Leitner,
+    /// Half-Life Regression (Settles & Meeder 2016 — Duolingo). See [`hlr`].
+    Hlr,
+    /// Optimal-control spacing (Tabibian et al. 2019). See [`memorize`].
+    Memorize,
 }
 
 impl SchedulerKind {
@@ -59,6 +66,8 @@ impl SchedulerKind {
             SchedulerKind::Fsrs6 => "fsrs6",
             SchedulerKind::Sm2 => "sm2",
             SchedulerKind::Leitner => "leitner",
+            SchedulerKind::Hlr => "hlr",
+            SchedulerKind::Memorize => "memorize",
         }
     }
 }
@@ -71,6 +80,8 @@ impl FromStr for SchedulerKind {
             "fsrs6" => Ok(SchedulerKind::Fsrs6),
             "sm2" => Ok(SchedulerKind::Sm2),
             "leitner" => Ok(SchedulerKind::Leitner),
+            "hlr" => Ok(SchedulerKind::Hlr),
+            "memorize" => Ok(SchedulerKind::Memorize),
             other => Err(AppError::Validation(format!(
                 "unknown scheduler_kind '{}'",
                 other
@@ -155,6 +166,8 @@ pub fn from_kind<'a>(
         SchedulerKind::Fsrs6 => Box::new(fsrs6_adapter::Fsrs6Adapter::new(fsrs)),
         SchedulerKind::Sm2 => Box::new(sm2::Sm2Scheduler),
         SchedulerKind::Leitner => Box::new(leitner::LeitnerScheduler),
+        SchedulerKind::Hlr => Box::new(hlr::HlrScheduler),
+        SchedulerKind::Memorize => Box::new(memorize::MemorizeScheduler),
     }
 }
 
@@ -181,6 +194,8 @@ mod tests {
             SchedulerKind::Fsrs6,
             SchedulerKind::Sm2,
             SchedulerKind::Leitner,
+            SchedulerKind::Hlr,
+            SchedulerKind::Memorize,
         ] {
             assert_eq!(SchedulerKind::from_str(k.as_str()).unwrap(), k);
         }

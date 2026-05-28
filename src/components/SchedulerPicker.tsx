@@ -54,6 +54,18 @@ const OPTIONS: readonly SchedulerOption[] = [
     description:
       "5 boîtes simples (1, 3, 7, 14, 30 jours). Idéal pour les matières non critiques ou pour débuter.",
   },
+  {
+    kind: "hlr",
+    title: "HLR",
+    description:
+      "Régression demi-vie (Settles & Meeder 2016, Duolingo). La demi-vie de la mémoire grandit à chaque bonne réponse.",
+  },
+  {
+    kind: "memorize",
+    title: "MEMORIZE",
+    description:
+      "Contrôle optimal (Tabibian 2019). L'espacement suit la politique de révision optimale 1/√(taux d'oubli).",
+  },
 ];
 
 export function SchedulerPicker({ value, onChange, helperText }: SchedulerPickerProps) {
@@ -116,5 +128,9 @@ export function schedulerLabel(kind: SchedulerKind): string {
       return "SM-2";
     case "leitner":
       return "Leitner";
+    case "hlr":
+      return "HLR";
+    case "memorize":
+      return "MEMORIZE";
   }
 }

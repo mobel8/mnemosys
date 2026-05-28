@@ -104,6 +104,8 @@ pub fn run() {
             commands::stats::get_today_stats,
             commands::stats::get_reviews_by_day,
             commands::stats::get_retention_by_day,
+            // concept mastery (Vague 20 — Bayesian Knowledge Tracing)
+            commands::mastery::get_concept_mastery,
             // demo
             commands::demo::load_demo_decks,
             // settings

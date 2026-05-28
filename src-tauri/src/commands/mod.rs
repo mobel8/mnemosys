@@ -14,6 +14,7 @@ pub mod demo;
 pub mod fsrs_optimizer;
 pub mod gamification;
 pub mod io;
+pub mod mastery;
 pub mod media;
 pub mod metacognition;
 pub mod palaces;

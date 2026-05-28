@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 14;
+pub const CURRENT_VERSION: i32 = 15;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -286,6 +286,51 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_decks_remote_id
     ON decks(remote_id) WHERE remote_id IS NOT NULL;
 "#;
 
+/// v15 — Vague 20 advanced schedulers: widen the `decks.scheduler_kind`
+/// CHECK constraint to accept `'hlr'` (Half-Life Regression, Settles &
+/// Meeder 2016) and `'memorize'` (optimal-control spacing, Tabibian et al.
+/// 2019).
+///
+/// As in v7, SQLite has no `ALTER … DROP/ADD CONSTRAINT`, so we rebuild
+/// `decks` via the 12-step recipe. Two columns were added after v7 by plain
+/// `ALTER TABLE ADD COLUMN` (v11's `language_mode`, v13's
+/// `prerequisite_deck_id`); both are carried across verbatim and the column
+/// ORDER matches the live table so `row_to_deck`'s positional `get(n)` keeps
+/// working. Existing decks keep their `scheduler_kind` value (we copy the
+/// column rather than resetting it).
+const SCHEMA_V15: &str = r#"
+PRAGMA defer_foreign_keys = ON;
+
+CREATE TABLE decks_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    color TEXT NOT NULL DEFAULT '#3b82f6',
+    desired_retention REAL NOT NULL DEFAULT 0.9,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    remote_id TEXT,
+    scheduler_kind TEXT NOT NULL DEFAULT 'fsrs6'
+        CHECK(scheduler_kind IN ('fsrs6', 'sm2', 'leitner', 'hlr', 'memorize')),
+    language_mode TEXT,
+    prerequisite_deck_id INTEGER REFERENCES decks(id)
+);
+
+INSERT INTO decks_new (id, name, description, color, desired_retention,
+                       created_at, updated_at, remote_id, scheduler_kind,
+                       language_mode, prerequisite_deck_id)
+SELECT id, name, description, color, desired_retention,
+       created_at, updated_at, remote_id, scheduler_kind,
+       language_mode, prerequisite_deck_id
+FROM decks;
+
+DROP TABLE decks;
+ALTER TABLE decks_new RENAME TO decks;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_decks_remote_id
+    ON decks(remote_id) WHERE remote_id IS NOT NULL;
+"#;
+
 /// Apply all pending migrations to `conn`.
 ///
 /// Reads `PRAGMA user_version` and applies migrations in order. Each migration
@@ -380,6 +425,12 @@ pub fn run(conn: &Connection) -> AppResult<()> {
         apply_migration(conn, 14, SCHEMA_V14)?;
     }
 
+    // v15 — Vague 20 advanced schedulers: widen `decks.scheduler_kind` CHECK
+    // to accept `'hlr'` + `'memorize'`.
+    if current < 15 {
+        apply_migration(conn, 15, SCHEMA_V15)?;
+    }
+
     Ok(())
 }
 
@@ -460,5 +511,31 @@ mod tests {
         let db = crate::db::Database::for_test();
         let conn = db.lock();
         run(&conn).expect("second run should be a no-op");
+    }
+
+    /// v15 widened the `decks.scheduler_kind` CHECK: the two Vague 20
+    /// algorithms must now be storable, while bogus values stay rejected.
+    #[test]
+    fn migration_v15_allows_hlr_and_memorize() {
+        let db = crate::db::Database::for_test();
+        let conn = db.lock();
+        let now = chrono::Utc::now().timestamp();
+
+        for kind in ["fsrs6", "sm2", "leitner", "hlr", "memorize"] {
+            conn.execute(
+                "INSERT INTO decks (name, color, desired_retention, scheduler_kind, created_at, updated_at)
+                 VALUES (?1, '#3b82f6', 0.9, ?2, ?3, ?3)",
+                rusqlite::params![format!("deck-{kind}"), kind, now],
+            )
+            .unwrap_or_else(|e| panic!("scheduler_kind '{kind}' must satisfy the CHECK: {e}"));
+        }
+
+        // A value outside the widened set is still rejected by the CHECK.
+        let bad = conn.execute(
+            "INSERT INTO decks (name, color, desired_retention, scheduler_kind, created_at, updated_at)
+             VALUES ('bad', '#3b82f6', 0.9, 'anki21', ?1, ?1)",
+            rusqlite::params![now],
+        );
+        assert!(bad.is_err(), "unknown scheduler_kind must violate the CHECK");
     }
 }
