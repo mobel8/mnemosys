@@ -21,13 +21,23 @@
  */
 
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { Download, FileArchive, Loader2, Upload } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Captions, Download, FileArchive, Loader2, Upload } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
-import { useDecks, useExportJson, useImportApkg, useImportJson } from "@/lib/queries";
+import {
+  useDecks,
+  useExportJson,
+  useImportApkg,
+  useImportJson,
+  useImportSubtitles,
+} from "@/lib/queries";
+import type { SubtitleMode } from "@/lib/tauri";
+
+const SELECT_CLASS =
+  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 /**
  * Build the default filename used by the save dialog — easy for the user
@@ -45,10 +55,24 @@ export function ImportExportSection() {
   const exportMut = useExportJson();
   const importMut = useImportJson();
   const importApkgMut = useImportApkg();
+  const importSubsMut = useImportSubtitles();
 
   // Selection state for the export sub-section. We start empty so a stray
   // click on the export button can't accidentally dump the whole DB.
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  // Subtitle-import controls: which deck receives the cues and in what mode.
+  const [subsDeckId, setSubsDeckId] = useState<number | null>(null);
+  const [subsMode, setSubsMode] = useState<SubtitleMode>("sentence");
+
+  // Default the subtitle target deck to the first available one once decks
+  // load, so the user isn't forced to touch the dropdown for the common case.
+  useEffect(() => {
+    const first = decks[0];
+    if (subsDeckId === null && first) {
+      setSubsDeckId(first.id);
+    }
+  }, [decks, subsDeckId]);
 
   const allSelected = decks.length > 0 && selectedIds.size === decks.length;
   const noneSelected = selectedIds.size === 0;
@@ -169,6 +193,43 @@ export function ImportExportSection() {
     } catch (err) {
       toast({
         title: "Import Anki impossible",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleImportSubtitles() {
+    if (subsDeckId === null) {
+      toast({
+        title: "Aucun deck sélectionné",
+        description: "Choisis d'abord le deck qui recevra les cartes.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const picked = await open({
+        multiple: false,
+        directory: false,
+        filters: [{ name: "Sous-titres", extensions: ["srt", "vtt"] }],
+      });
+      if (!picked) return;
+      const path = typeof picked === "string" ? picked : picked[0];
+      if (!path) return;
+      const report = await importSubsMut.mutateAsync({ path, deckId: subsDeckId, mode: subsMode });
+
+      const skippedSuffix =
+        report.skipped_empty > 0
+          ? ` (${report.skipped_empty} ignorée${report.skipped_empty > 1 ? "s" : ""})`
+          : "";
+      toast({
+        title: "Sous-titres importés",
+        description: `${report.cues_parsed} réplique${report.cues_parsed > 1 ? "s" : ""} → ${report.notes_created} carte${report.notes_created > 1 ? "s" : ""}${skippedSuffix}.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Import des sous-titres impossible",
         description: err instanceof Error ? err.message : String(err),
         variant: "destructive",
       });
@@ -300,6 +361,68 @@ export function ImportExportSection() {
             L'import Anki crée de nouveaux decks. L'historique de révision Anki n'est pas conservé
             (les cartes repartent en « new »).
           </p>
+        </section>
+
+        {/* ---- Subtitle import sub-section (Vague 11) ---- */}
+        <section aria-labelledby="io-subs-heading" className="space-y-3">
+          <h3 id="io-subs-heading" className="text-sm font-semibold">
+            Sous-titres (sentence mining)
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Transforme un fichier <code>.srt</code> ou <code>.vtt</code> en cartes phrase. Chaque
+            réplique devient une carte dans le deck choisi.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="io-subs-deck" className="text-xs">
+                Deck cible
+              </Label>
+              <select
+                id="io-subs-deck"
+                className={SELECT_CLASS}
+                value={subsDeckId ?? ""}
+                onChange={(e) => setSubsDeckId(e.target.value ? Number(e.target.value) : null)}
+                disabled={decks.length === 0}
+              >
+                {decks.length === 0 ? (
+                  <option value="">Aucun deck disponible</option>
+                ) : (
+                  decks.map((deck) => (
+                    <option key={deck.id} value={deck.id}>
+                      {deck.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="io-subs-mode" className="text-xs">
+                Mode
+              </Label>
+              <select
+                id="io-subs-mode"
+                className={SELECT_CLASS}
+                value={subsMode}
+                onChange={(e) => setSubsMode(e.target.value as SubtitleMode)}
+              >
+                <option value="sentence">Phrase basique (recto / verso)</option>
+                <option value="cloze">Cloze auto (mot le plus long)</option>
+              </select>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleImportSubtitles}
+            disabled={importSubsMut.isPending || decks.length === 0}
+          >
+            {importSubsMut.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Captions className="h-4 w-4" />
+            )}
+            Importer des sous-titres (.srt/.vtt)
+          </Button>
         </section>
       </CardContent>
     </Card>

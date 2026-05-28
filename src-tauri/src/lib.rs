@@ -7,6 +7,7 @@
 //! - [`ai`]        — Claude-powered flashcard generation (Vague A2.1).
 //! - [`tts`]       — text-to-speech (OpenAI + on-disk cache, Vague A2.2).
 //! - [`apkg`]      — Anki `.apkg` importer (Vague A2.3).
+//! - [`subtitles`] — `.srt` / `.vtt` subtitle importer (Vague 11).
 //! - [`commands`]  — Tauri `#[command]` handlers (frontend-facing API).
 //! - [`app_state`] — `AppState` bundling DB + scheduler, registered via
 //!   `app.manage(...)` in [`run`].
@@ -23,6 +24,7 @@ pub mod db;
 pub mod error;
 pub mod fsrs;
 pub mod scheduler;
+pub mod subtitles;
 pub mod sync;
 pub mod tts;
 
@@ -88,6 +90,10 @@ pub fn run() {
             commands::cards::suspend_card,
             commands::cards::reset_card,
             commands::cards::get_frequency_coverage,
+            // knowledge graph (Vague 11 — tag co-occurrence)
+            commands::cards::get_tag_graph,
+            // subtitle import (Vague 11 — .srt / .vtt sentence-mining)
+            commands::subtitles::import_subtitles,
             // review
             commands::review::get_due_cards,
             commands::review::get_interleaved_due_cards,

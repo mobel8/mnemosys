@@ -53,9 +53,12 @@ import {
   type ReviewResult,
   type SchedulerKind,
   type Sketch,
+  type SubtitleImportResult,
+  type SubtitleMode,
   type SyncLoginOutput,
   type SyncReport,
   type SyncStatus,
+  type TagGraph,
   type TodayStats,
   type TTSResult,
   type TTSVoice,
@@ -98,6 +101,8 @@ export const queryKeys = {
   palace: (id: number) => ["palace", id] as const,
   // Session 4 — FSRS optimizer
   totalReviewsCount: ["total-reviews-count"] as const,
+  // Vague 11 — Knowledge Graph (tag co-occurrence)
+  tagGraph: (deckId: number | null) => ["tag-graph", deckId] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -148,6 +153,18 @@ export function useFrequencyCoverage(
     queryKey: queryKeys.frequencyCoverage(deckId),
     queryFn: () => api.cards.frequencyCoverage(deckId),
     enabled: Number.isFinite(deckId),
+    ...opts,
+  });
+}
+
+/**
+ * Vague 11 — tag co-occurrence graph for the Knowledge Graph view.
+ * `deckId = null` spans every deck.
+ */
+export function useTagGraph(deckId: number | null, opts?: Partial<UseQueryOptions<TagGraph>>) {
+  return useQuery<TagGraph>({
+    queryKey: queryKeys.tagGraph(deckId),
+    queryFn: () => api.cards.tagGraph(deckId),
     ...opts,
   });
 }
@@ -618,6 +635,32 @@ export function useImportApkg(
       qc.invalidateQueries({ queryKey: ["cards-in-deck"] });
       qc.invalidateQueries({ queryKey: ["due-cards"] });
       qc.invalidateQueries({ queryKey: queryKeys.todayStats });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+/**
+ * Vague 11 — import a `.srt` / `.vtt` subtitle file as sentence-mining notes.
+ * Invalidates the target deck's card/stats queries plus every tag-graph query
+ * (the new notes are tagged `subtitles`, which reshapes the graph).
+ */
+export function useImportSubtitles(
+  opts?: UseMutationOptions<
+    SubtitleImportResult,
+    Error,
+    { path: string; deckId: number; mode: SubtitleMode }
+  >,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ path, deckId, mode }) => api.io.importSubtitles(path, deckId, mode),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.decks });
+      qc.invalidateQueries({ queryKey: queryKeys.deckStats(variables.deckId) });
+      qc.invalidateQueries({ queryKey: ["cards-in-deck", variables.deckId] });
+      qc.invalidateQueries({ queryKey: ["tag-graph"] });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

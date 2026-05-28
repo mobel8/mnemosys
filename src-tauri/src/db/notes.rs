@@ -343,6 +343,40 @@ impl<'a> NoteRepo<'a> {
         }
         Ok(coverage)
     }
+
+    /// Vague 11 — return the tag list of every note, optionally scoped to one
+    /// deck. Each inner `Vec<String>` is one note's tags (the `tags` column is
+    /// a JSON array). Used to build the Knowledge Graph's tag co-occurrence
+    /// edges without materialising full [`Note`] rows. Notes whose `tags`
+    /// column fails to parse are skipped rather than aborting the query.
+    pub fn all_tags(&self, deck_id: Option<i64>) -> AppResult<Vec<Vec<String>>> {
+        let mut out = Vec::new();
+        // Two near-identical statements keep the SQL parameter binding simple
+        // (rusqlite doesn't love optional params in one prepared statement).
+        match deck_id {
+            Some(id) => {
+                let mut stmt = self
+                    .conn
+                    .prepare("SELECT tags FROM notes WHERE deck_id = ?1")?;
+                let rows = stmt.query_map(params![id], |r| r.get::<_, String>(0))?;
+                for row in rows {
+                    if let Ok(tags) = serde_json::from_str::<Vec<String>>(&row?) {
+                        out.push(tags);
+                    }
+                }
+            }
+            None => {
+                let mut stmt = self.conn.prepare("SELECT tags FROM notes")?;
+                let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+                for row in rows {
+                    if let Ok(tags) = serde_json::from_str::<Vec<String>>(&row?) {
+                        out.push(tags);
+                    }
+                }
+            }
+        }
+        Ok(out)
+    }
 }
 
 /// Vague 10 — vocabulary-coverage breakdown for a language deck.

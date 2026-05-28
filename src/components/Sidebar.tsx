@@ -13,6 +13,7 @@ import {
   Github,
   Home,
   Moon,
+  Network,
   Settings,
   Shuffle,
   Sparkles,
@@ -35,6 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/ai-generate", label: "Génération IA", icon: Sparkles },
   { to: "/palaces", label: "Memory Palaces", icon: Compass },
   { to: "/stats", label: "Stats", icon: BarChart3 },
+  { to: "/graph", label: "Graphe", icon: Network },
   { to: "/achievements", label: "Succès", icon: Trophy },
   { to: "/settings", label: "Settings", icon: Settings },
 ];

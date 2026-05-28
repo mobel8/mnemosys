@@ -385,6 +385,42 @@ export interface ConversionResult {
   skipped_decks: string[];
 }
 
+// --- Vague 11: subtitle import (.srt / .vtt sentence-mining) ---------------
+
+/** How a subtitle file is turned into notes. */
+export type SubtitleMode = "sentence" | "cloze";
+
+/** Outcome tally for one subtitle import. */
+export interface SubtitleImportResult {
+  /** Cues the parser produced after stripping formatting + merging lines. */
+  cues_parsed: number;
+  /** Notes actually inserted. */
+  notes_created: number;
+  /** Cues dropped as empty / music / un-clozable. */
+  skipped_empty: number;
+}
+
+// --- Vague 11: knowledge graph (tag co-occurrence) -------------------------
+
+/** A distinct tag node: the tag string and how many notes carry it. */
+export interface TagNode {
+  tag: string;
+  count: number;
+}
+
+/** An undirected edge: two tags co-occurring on `weight` notes. */
+export interface TagEdge {
+  source: string;
+  target: string;
+  weight: number;
+}
+
+/** Tag co-occurrence graph for the Knowledge Graph view. */
+export interface TagGraph {
+  nodes: TagNode[];
+  edges: TagEdge[];
+}
+
 // --- Vague 7: drawing effect + delayed JOL --------------------------------
 
 /**
@@ -623,6 +659,11 @@ export const api = {
     /** Vague 10 — vocabulary-coverage breakdown for a language deck. */
     frequencyCoverage: (deckId: number) =>
       invoke<FrequencyCoverage>("get_frequency_coverage", { deckId }),
+    /**
+     * Vague 11 — tag co-occurrence graph for the Knowledge Graph view.
+     * `deckId = null` spans every deck; a number scopes to one deck.
+     */
+    tagGraph: (deckId: number | null) => invoke<TagGraph>("get_tag_graph", { deckId }),
     updateNote: (id: number, fields: Record<string, unknown>) =>
       invoke<Note>("update_note", { id, fields }),
     deleteNote: (id: number) => invoke<void>("delete_note", { id }),
@@ -694,6 +735,14 @@ export const api = {
      * Anki review history is dropped — imported cards start in `new`.
      */
     importApkg: (path: string) => invoke<ConversionResult>("import_apkg", { path }),
+    /**
+     * Vague 11 — import a `.srt` / `.vtt` subtitle file as sentence-mining
+     * notes into `deckId`. `mode` is `"sentence"` (Basic front/back, back
+     * pre-filled with a translation placeholder) or `"cloze"` (longest word
+     * blanked). Music/empty cues are filtered and reported in `skipped_empty`.
+     */
+    importSubtitles: (path: string, deckId: number, mode: SubtitleMode) =>
+      invoke<SubtitleImportResult>("import_subtitles", { path, deckId, mode }),
   },
   ai: {
     /** Generate up to `maxCards` cards from a raw text blob. `language` is a hint. */

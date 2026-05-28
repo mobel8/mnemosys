@@ -92,6 +92,12 @@ vi.mock("@/lib/queries", () => ({
       }),
     isPending: false,
   }),
+  // Vague 11 subtitle import. Not exercised by the JSON round-trip tests, so
+  // a no-op mock keeps the component renderable.
+  useImportSubtitles: () => ({
+    mutateAsync: () => Promise.resolve({ cues_parsed: 0, notes_created: 0, skipped_empty: 0 }),
+    isPending: false,
+  }),
 }));
 
 import { ImportExportSection } from "@/components/settings/ImportExportSection";
