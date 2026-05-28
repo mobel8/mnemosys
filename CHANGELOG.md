@@ -1,5 +1,66 @@
 # Changelog
 
+## [0.7.0] — Vagues 10-19 (2026-05-27)
+
+Suite de l'effort de recherche appliquée : modes disciplinaires, langue,
+créatifs, IA locale et une passe d'optimisation. Tout opt-in, tout testé.
+
+### V10 — Mode Langue
+Template bidirectional (L2↔L1), frequency_band (couverture vocab Pareto),
+deck language_mode. Migration v11.
+
+### V11 — Subtitle Import + Knowledge Graph
+Parser .srt/.vtt → cartes, graphe de co-occurrence de tags (route /graph,
+SVG force-directed maison). Migration : néant (table words via v14 plus tard).
+
+### V12 — Modes cognitifs avancés
+Pretest Mode (Pan 2023), Self-explanation (Chi 1989), WebGazer Focus Guard
+(mind-wandering webcam, 100% local, opt-in).
+
+### V13 — IA multi-agent
+Card critic pass (Generator→Critic, PROClaim 2025) + Mnemonic Helper
+(aide mnémotechnique pour cartes à lapses ≥ 3).
+
+### V14 — Modes disciplinaires
+Illness Script (médecine, Charlin 2007) + Refutation Card (sciences,
+Tippett 2010). Migration v12.
+
+### V15 — Maths + métacognition
+Faded Worked Example (Sweller/Renkl) + Mastery Gating (Bloom 90%,
+prerequisite_deck_id) + Two-step retrospective confidence (Bang & Fleming
+2018). Migration v13.
+
+### V16 — Modes créatifs
+Métronome + Ear Training (route /music), Gesture Drawing Timer
+(route /gesture). 100% Web Audio + Canvas, zéro backend.
+
+### V17 — Langue/lecture avancé
+Shadowing Mode (waveforms TTS vs voix, /shadowing), Reading Import
+LingQ-style (mots par statut, /reading, migration v14 word_status),
+citations PDF (tag source).
+
+### V18 — IA locale + neuro
+Local AI Tutor via Ollama (génération offline, privacy), Chronotype
+Calibration (rMEQ), Context Ambient sound (white/pink/brown/rain Web Audio).
+Aucune migration (tout en settings).
+
+### V19 — Performance & fluidité
+- Bundle : chunk eager **598 kB → 90 kB** (gzip 28 kB) via manualChunks
+  (react-vendor/tanstack/motion/radix). webgazer/three/recharts hors
+  graphe eager.
+- Memoization : CardRow (React.memo), KnowledgeGraph layout (useMemo).
+- Animations GPU : wizard progress (scaleX), flip 180ms.
+- Qualité : flakiness tts-button corrigée (vitest parallèle 164/164),
+  biome 0 sur tout le repo, clippy 0 warning.
+
+### Validation v0.7.0
+- cargo : 203 lib + 55 integration (0 failed, 1 ignored documenté)
+- vitest : 164/164 (parallèle, plus de flakiness)
+- tsc + biome (repo entier) + clippy : 0 erreur
+- DB migrations v1→v14, ~80 commandes Tauri, 17 routes
+
+---
+
 ## [0.6.0] — Vagues 7-9 + S4 final (2026-05-27)
 
 Continuation de l'effort de recherche scientifique appliquée. Vagues 7-9
