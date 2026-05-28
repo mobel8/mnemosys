@@ -57,6 +57,9 @@ vi.mock("@/lib/queries", () => ({
     mutate: vi.fn(),
     isPending: false,
   }),
+  // Vague 7/25 — sketch-history hook (used by the same menu's « Voir les
+  // croquis » item); empty list stub keeps these mnemonic-only tests focused.
+  useCardSketches: () => ({ data: [], isLoading: false }),
 }));
 
 import { CardList } from "@/components/CardList";

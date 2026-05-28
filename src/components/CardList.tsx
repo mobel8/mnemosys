@@ -14,6 +14,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
+  Brush,
   ChevronLeft,
   ChevronRight,
   ImagePlus,
@@ -44,6 +45,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/use-toast";
 import {
+  useCardSketches,
   useCardsInDeck,
   useDeleteNote,
   useGenerateMnemonic,
@@ -148,9 +150,29 @@ function noteFrontPreview(note: Note): string {
   return front || "(vide)";
 }
 
-function formatTimestamp(ts: number | null): string {
-  if (!ts) return "—";
-  const date = new Date(ts);
+/**
+ * Format a card's `last_review` timestamp. The backend stores it as Unix
+ * *seconds* (`Utc::now().timestamp()`), so we convert to milliseconds before
+ * building the Date — otherwise every review reads as Jan 1970.
+ */
+function formatTimestamp(unixSeconds: number | null): string {
+  if (!unixSeconds || !Number.isFinite(unixSeconds)) return "—";
+  const date = new Date(unixSeconds * 1000);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+/**
+ * Format a sketch `created_at` (stored as Unix *seconds* by the Rust backend
+ * via `Utc::now().timestamp()`) into a localized date + time. Converts to
+ * milliseconds first; falls back to «—» on garbage.
+ */
+function formatSketchDate(unixSeconds: number): string {
+  if (!Number.isFinite(unixSeconds) || unixSeconds <= 0) return "—";
+  const date = new Date(unixSeconds * 1000);
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
@@ -359,6 +381,11 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
     generateImage.mutate({ cardId: card.id });
   }
 
+  // Vague 7/25 — sketch-before-flip history. The drawings are saved during
+  // review; this dialog replays them for the card. Only available when we have
+  // a real card (search-result rows carry only the note, no card id).
+  const [sketchesOpen, setSketchesOpen] = useState(false);
+
   return (
     <tr
       className={cn(
@@ -453,6 +480,11 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
                 <RotateCcw className="h-4 w-4" /> Réinitialiser (FSRS)
               </DropdownMenuItem>
             )}
+            {card && (
+              <DropdownMenuItem onSelect={() => setSketchesOpen(true)}>
+                <Brush className="h-4 w-4" /> Voir les croquis
+              </DropdownMenuItem>
+            )}
             {showMnemonicItem && (
               <DropdownMenuItem onSelect={() => handleGenerateMnemonic()}>
                 <Lightbulb className="h-4 w-4" /> Aide mnémotechnique
@@ -534,7 +566,92 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
             ) : null}
           </DialogContent>
         </Dialog>
+
+        {/* Vague 7/25 — past sketches captured before flipping this card. */}
+        {card && (
+          <SketchHistoryDialog
+            cardId={card.id}
+            cardLabel={noteFrontPreview(note)}
+            open={sketchesOpen}
+            onOpenChange={setSketchesOpen}
+          />
+        )}
       </td>
     </tr>
   );
 });
+
+/** Cap on how many past sketches to fetch/show (backend also caps at 50). */
+const SKETCH_HISTORY_LIMIT = 24;
+
+/**
+ * Replay the sketch-before-flip drawings saved for a card. Each `sketch_data`
+ * is already a base64-encoded PNG (`data:image/png;base64,…` or a bare base64
+ * payload), so it renders directly — no `convertFileSrc`. The query is gated on
+ * `open` so we don't fetch until the dialog is actually shown.
+ */
+function SketchHistoryDialog({
+  cardId,
+  cardLabel,
+  open,
+  onOpenChange,
+}: {
+  cardId: number;
+  cardLabel: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const sketches = useCardSketches(cardId, SKETCH_HISTORY_LIMIT, { enabled: open });
+
+  /** Normalise the stored payload to a usable `src`, tolerating both forms. */
+  function toSrc(data: string): string {
+    return data.startsWith("data:") ? data : `data:image/png;base64,${data}`;
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl" data-testid="sketch-history-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Brush className="h-5 w-5 text-primary" />
+            Croquis de rappel
+          </DialogTitle>
+          <DialogDescription>{cardLabel}</DialogDescription>
+        </DialogHeader>
+        {sketches.isLoading ? (
+          <div
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+            data-testid="sketch-history-loading"
+          >
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Chargement des croquis…
+          </div>
+        ) : sketches.data && sketches.data.length > 0 ? (
+          <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3">
+            {sketches.data.map((sketch) => (
+              <figure
+                key={`${sketch.review_id}-${sketch.created_at}`}
+                className="space-y-1"
+                data-testid="sketch-history-item"
+              >
+                <img
+                  src={toSrc(sketch.sketch_data)}
+                  alt={`Croquis du ${formatSketchDate(sketch.created_at)}`}
+                  className="aspect-[4/3] w-full rounded-md border bg-white object-contain"
+                />
+                <figcaption className="text-center text-[11px] text-muted-foreground">
+                  {formatSketchDate(sketch.created_at)}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground" data-testid="sketch-history-empty">
+            Aucun croquis pour cette carte. Active le « croquis avant de retourner » dans les modes
+            de révision pour en capturer.
+          </p>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}

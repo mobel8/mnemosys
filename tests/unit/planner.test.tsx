@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudyPlan } from "@/lib/tauri";
 
 const createMutate = vi.fn();
+const updateMutate = vi.fn();
 const toggleMutate = vi.fn();
 const deleteMutate = vi.fn();
 const toastMock = vi.fn();
@@ -45,6 +46,7 @@ vi.mock("@/lib/queries", () => ({
     isLoading: false,
   }),
   useCreatePlan: () => ({ mutate: createMutate, isPending: false }),
+  useUpdatePlan: () => ({ mutate: updateMutate, isPending: false }),
   useTogglePlan: () => ({ mutate: toggleMutate, isPending: false }),
   useDeletePlan: () => ({ mutate: deleteMutate, isPending: false }),
 }));
@@ -53,6 +55,7 @@ import PlannerPage from "@/routes/planner.page";
 
 beforeEach(() => {
   createMutate.mockReset();
+  updateMutate.mockReset();
   toggleMutate.mockReset();
   deleteMutate.mockReset();
   toastMock.mockReset();
@@ -118,5 +121,45 @@ describe("PlannerPage", () => {
 
     expect(toggleMutate).toHaveBeenCalledTimes(1);
     expect(toggleMutate.mock.calls[0]?.[0]).toMatchObject({ id: 7, enabled: false });
+  });
+
+  it("pre-fills the form on « Modifier » and calls useUpdatePlan on save", () => {
+    planRows = [
+      {
+        id: 9,
+        trigger_type: "time",
+        trigger_value: "08:30",
+        action: "Réviser le vocabulaire",
+        deck_id: 3,
+        days: "[2,4]",
+        enabled: true,
+        created_at: 0,
+      },
+    ];
+    render(<PlannerPage />);
+
+    // Enter edit mode for the existing plan.
+    fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
+
+    // The form heading and action input reflect the plan being edited.
+    expect(screen.getByText(/Modifier l'intention/i)).toBeInTheDocument();
+    const actionInput = screen.getByLabelText(/alors j'étudie/i) as HTMLInputElement;
+    expect(actionInput.value).toBe("Réviser le vocabulaire");
+
+    // Tweak the action and save.
+    fireEvent.change(actionInput, { target: { value: "Réviser 20 min" } });
+    fireEvent.click(screen.getByRole("button", { name: /Enregistrer les modifications/i }));
+
+    expect(updateMutate).toHaveBeenCalledTimes(1);
+    const payload = updateMutate.mock.calls[0]?.[0];
+    expect(payload).toMatchObject({
+      id: 9,
+      triggerType: "time",
+      triggerValue: "08:30",
+      action: "Réviser 20 min",
+      enabled: true,
+    });
+    // Pre-filled weekdays are preserved as a JSON array.
+    expect(JSON.parse(payload.days).sort()).toEqual([2, 4]);
   });
 });

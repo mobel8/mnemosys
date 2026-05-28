@@ -9,7 +9,7 @@
  * turns into action (Gollwitzer & Sheeran 2006 meta, d ≈ 0.65).
  */
 
-import { AlarmClock, CalendarClock, Plus, Trash2 } from "lucide-react";
+import { AlarmClock, CalendarClock, Pencil, Plus, Trash2, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,8 +17,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/use-toast";
-import { useCreatePlan, useDecks, useDeletePlan, usePlans, useTogglePlan } from "@/lib/queries";
+import {
+  useCreatePlan,
+  useDecks,
+  useDeletePlan,
+  usePlans,
+  useTogglePlan,
+  useUpdatePlan,
+} from "@/lib/queries";
 import type { PlanTriggerType, StudyPlan } from "@/lib/tauri";
+
+/** Parse a plan's `days` JSON string into an ISO-weekday array; `[]` on garbage. */
+function parseDays(days: string): number[] {
+  try {
+    const raw = JSON.parse(days);
+    return Array.isArray(raw) ? (raw as number[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 /** ISO weekday labels for the day picker (`1`=Mon … `7`=Sun). */
 const WEEKDAYS: { iso: number; label: string }[] = [
@@ -70,10 +87,13 @@ export default function PlannerPage() {
   const plans = usePlans();
   const decks = useDecks();
   const createPlan = useCreatePlan();
+  const updatePlan = useUpdatePlan();
   const togglePlan = useTogglePlan();
   const deletePlan = useDeletePlan();
 
   // --- form state ---
+  // `editingId` is `null` in create mode, or the id of the plan being edited.
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [triggerType, setTriggerType] = useState<PlanTriggerType>("time");
   const [triggerValue, setTriggerValue] = useState("19:00");
   const [action, setAction] = useState("");
@@ -92,6 +112,26 @@ export default function PlannerPage() {
     setTriggerValue(next === "time" ? "19:00" : "");
   }
 
+  /** Clear the form back to create-mode defaults. */
+  function resetForm() {
+    setEditingId(null);
+    setTriggerType("time");
+    setTriggerValue("19:00");
+    setAction("");
+    setDeckId(null);
+    setSelectedDays([]);
+  }
+
+  /** Load an existing plan into the form for editing. */
+  function startEdit(plan: StudyPlan) {
+    setEditingId(plan.id);
+    setTriggerType(plan.trigger_type);
+    setTriggerValue(plan.trigger_value);
+    setAction(plan.action);
+    setDeckId(plan.deck_id);
+    setSelectedDays(parseDays(plan.days));
+  }
+
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (action.trim().length === 0) {
@@ -102,6 +142,33 @@ export default function PlannerPage() {
       toast({ title: "Renseigne le déclencheur.", variant: "destructive" });
       return;
     }
+
+    if (editingId !== null) {
+      // Preserve the plan's current `enabled` flag across an edit; the Switch
+      // in the list stays the source of truth for activation.
+      const enabled = plans.data?.find((p) => p.id === editingId)?.enabled ?? true;
+      updatePlan.mutate(
+        {
+          id: editingId,
+          triggerType,
+          triggerValue: triggerValue.trim(),
+          action: action.trim(),
+          deckId,
+          days: JSON.stringify(selectedDays),
+          enabled,
+        },
+        {
+          onSuccess: () => {
+            toast({ title: "Intention mise à jour." });
+            resetForm();
+          },
+          onError: (err) =>
+            toast({ title: "Échec", description: String(err), variant: "destructive" }),
+        },
+      );
+      return;
+    }
+
     createPlan.mutate(
       {
         triggerType,
@@ -124,6 +191,8 @@ export default function PlannerPage() {
   }
 
   const rows = plans.data ?? [];
+  const isEditing = editingId !== null;
+  const submitting = createPlan.isPending || updatePlan.isPending;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
@@ -140,7 +209,9 @@ export default function PlannerPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Nouvelle intention</CardTitle>
+          <CardTitle className="text-base">
+            {isEditing ? "Modifier l'intention" : "Nouvelle intention"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
@@ -232,9 +303,24 @@ export default function PlannerPage() {
               </div>
             </fieldset>
 
-            <Button type="submit" disabled={createPlan.isPending} className="gap-2">
-              <Plus className="h-4 w-4" /> Ajouter l'intention
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="submit" disabled={submitting} className="gap-2">
+                {isEditing ? (
+                  <>
+                    <Pencil className="h-4 w-4" /> Enregistrer les modifications
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" /> Ajouter l'intention
+                  </>
+                )}
+              </Button>
+              {isEditing && (
+                <Button type="button" variant="ghost" className="gap-2" onClick={resetForm}>
+                  <X className="h-4 w-4" /> Annuler
+                </Button>
+              )}
+            </div>
           </form>
         </CardContent>
       </Card>
@@ -252,7 +338,9 @@ export default function PlannerPage() {
             {rows.map((plan) => (
               <li
                 key={plan.id}
-                className="flex items-center gap-3 rounded-md border bg-card/40 p-3"
+                className={`flex items-center gap-3 rounded-md border bg-card/40 p-3 ${
+                  editingId === plan.id ? "ring-1 ring-primary" : ""
+                }`}
               >
                 {plan.trigger_type === "time" ? (
                   <AlarmClock className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -276,10 +364,23 @@ export default function PlannerPage() {
                   type="button"
                   variant="ghost"
                   size="icon"
+                  aria-label="Modifier"
+                  onClick={() => startEdit(plan)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
                   aria-label="Supprimer"
                   onClick={() =>
                     deletePlan.mutate(plan.id, {
-                      onSuccess: () => toast({ title: "Intention supprimée." }),
+                      onSuccess: () => {
+                        toast({ title: "Intention supprimée." });
+                        // If we were editing the plan we just deleted, drop the form.
+                        if (editingId === plan.id) resetForm();
+                      },
                     })
                   }
                 >

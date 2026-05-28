@@ -1,43 +1,44 @@
-# V22 — Compléments IA/audio (no DB migration, DB stays v16)
+# Wire 4 dead-UI features (backend complete, UI never connected)
 
-## Feature 1 — Piper TTS local
-- [x] `tts/cache.rs`: generalize cache with extension param (mp3 default + wav for piper); `clear()` removes both
-- [x] `tts/piper.rs` (new): `synthesize_piper(binary, model, text, out_path)` via process::Command, text on stdin
-- [x] `tts/mod.rs`: register `pub mod piper`
-- [x] `commands/tts.rs`: `synthesize_audio_local` cmd (piper, cache key "piper:<model>", wav)
-- [x] `lib.rs`: register `synthesize_audio_local`
-- [x] settings.rs: 3 fields piper_enabled/piper_binary_path/piper_model_path + defaults
-- [x] Test: `piper_command_construction` (no real process)
-- [x] tauri.ts: 3 AppSettings fields + api.tts.synthesizeLocal
-- [x] queries.ts: route useSynthesizeAudio to piper when piper_enabled
-- [x] IntegrationsSection: "TTS local (Piper)" section + 3 DEFAULTS fields
+Branch: `feat/wire-dead-ui`. Frontend-only; no backend/DB changes.
+Cargo baseline (MUST stay identical): 246 passed / 0 failed / 1 ignored ; 55 passed.
 
-## Feature 2 — Mnemonic image (DALL-E)
-- [x] `ai/image.rs` (new): `generate_image(key, prompt) -> path` (OpenAI Images API, save png under app_data/mnemonic-images/<sha>.png)
-- [x] `ai/mod.rs`: register `pub mod image`
-- [x] `commands/ai.rs`: `generate_card_mnemonic_image(card_id) -> path` + resolve OpenAI key
-- [x] `lib.rs`: register cmd
-- [x] Test: `mnemonic_image_prompt_from_card` (prompt build, no network)
-- [x] tauri.ts + queries.ts: api.ai.generateMnemonicImage + useGenerateMnemonicImage
-- [x] CardList: "Image mnémotechnique" menu item (lapses>=3) + dialog w/ convertFileSrc
+## Feature 1 — Palace delete + rename (`src/routes/palaces.page.tsx`)
+- [ ] Extract palace tile into `PalaceCard` with a DropdownMenu (Renommer / Supprimer), mirroring `DeckCard`.
+- [ ] Rename: Dialog editing name/description/template via `useUpdatePalace`.
+- [ ] Delete: AlertDialog confirm via `useDeletePalace`. Toasts both paths.
+- [ ] Keep the whole-tile `<Link>`; stop dropdown clicks from navigating.
 
-## Feature 3 — Calibration rétrospectif
-- [x] metacognition.rs: extend CalibrationStats with gamma_post/bias_post (Option<f64>) from reviews.confidence_post vs rating>=3
-- [x] Test: `calibration_includes_retrospective`
-- [x] tauri.ts CalibrationStats: + gamma_post/bias_post
-- [x] CalibrationDashboard: 2nd line "Calibration rétrospective"
+## Feature 2 — Plan edit (`src/routes/planner.page.tsx`)
+- [ ] Add `useUpdatePlan` hook in queries.ts (mirror toggle/delete, invalidate studyPlans).
+- [ ] "Modifier" button per plan → pre-fills the existing form via `editingId` state.
+- [ ] Submit branches create vs update; "Annuler" resets edit mode + form.
 
-## Verifs finales
-- [x] cargo test --no-fail-fast | grep "test result"
-- [x] tsc --noEmit
-- [x] biome check . | tail -3
-- [x] cargo clippy --all-targets -- -D warnings | tail -3
-- [x] vitest run --no-file-parallelism | tail -6
+## Feature 3 — Sketch history (`src/components/CardList.tsx`)
+- [ ] Add "Voir les croquis" menu item (only when `card != null`).
+- [ ] Dialog with grid of past sketches via `useCardSketches(card.id)`. base64 PNG `<img>`, with date. Empty-state message.
 
-## Review (résultats)
-- Rust: 235 + 55 tests OK, 1 ignored (FSRS). 12 nouveaux tests V22 verts.
-- tsc: clean. biome: 202 fichiers, 0 erreur. clippy: 0 warning. vitest: 177/177 (41 fichiers).
-- DB inchangée : CURRENT_VERSION = 16. Aucun nouveau .sql.
-- 2 nouveaux fichiers (tts/piper.rs, ai/image.rs) ; 5 DEFAULTS mis à jour.
-- Fix test : mock `useGenerateMnemonicImage` ajouté à mnemonic-helper.test.tsx (CardList l'importe désormais).
-- Compromis : cache TTSCache généralisé (mp3+wav) ; routing Piper via getQueryData(settings) pour ne pas changer la signature de useSynthesizeAudio/TtsButton ; b64 décodé à la main (zéro dépendance Cargo) ; DALL·E en b64_json (un seul aller-retour).
+## Feature 4 — Wellness history (`src/components/stats/WellnessHistory.tsx` new)
+- [ ] New component via `useRecentWellness(14)`: mood emoji, sleep h, stress. List/mini-bars.
+- [ ] Loading + empty (invite to enable neuro modes) states (mirror `ConceptMastery`).
+- [ ] Mount in `stats.page.tsx` after existing sections.
+
+## Tests
+- [ ] tests/unit/palace-management.test.tsx (menu renders, delete confirm calls hook)
+- [ ] tests/unit/wellness-history.test.tsx (empty state, renders logs)
+- [ ] sketch + plan edit: 1 test each if simple
+
+## Final checks (all green)
+- [x] cargo test result UNCHANGED vs baseline (246/0/1 ; 55) — identical, backend untouched
+- [x] tsc --noEmit — exit 0
+- [x] biome check . — 211 files, 0 errors
+- [x] vitest run — 46 files / 191 tests passed (was 177; +14 new)
+
+## Review
+- All 4 features wired; every checkbox above done.
+- Diff touches only `src/` + `tests/` (zero `src-tauri/` changes). No new deps, no `.sql`, no `any`, no `unwrap`.
+- F1: extracted `PalaceCard` w/ DropdownMenu (Renommer dialog + Supprimer AlertDialog). Bonus fix: badge now shows humanized template label ("Maison") instead of raw "house".
+- F2: added `useUpdatePlan` (invalidates studyPlans); planner form doubles as edit form via `editingId`.
+- F3: `SketchHistoryDialog` in CardList (lazy query gated on open). Found+handled a unit bug: sketch `created_at` is Unix *seconds* (Utc::now().timestamp()), so added `formatSketchDate` that ×1000 — avoids 1970 dates.
+- F4: new `WellnessHistory.tsx` mounted after MasteryTimeline; mood emoji + sleep + stress; opt-in empty state.
+- Side note (NOT fixed, out of scope): CardList's existing "Dernière review" column feeds `last_review` (also seconds) into the ms-based `formatTimestamp` — pre-existing date bug, untouched per "backend/behaviour minimal impact".

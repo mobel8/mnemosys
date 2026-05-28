@@ -118,6 +118,10 @@ vi.mock("@/lib/queries", () => ({
     isLoading: false,
   }),
   useCreatePalace: () => ({ mutate: createMutate, isPending: false }),
+  // Vague 9 — palace tiles now expose rename/delete; stub the mutations so the
+  // index page mounts (these builder tests don't exercise those flows).
+  useUpdatePalace: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeletePalace: () => ({ mutate: vi.fn(), isPending: false }),
   useAddPalaceLocus: () => ({ mutate: addLocusMutate, isPending: false }),
   useRemovePalaceLocus: () => ({ mutate: removeLocusMutate, isPending: false }),
   useReorderPalaceLoci: () => ({ mutate: reorderMutate, isPending: false }),

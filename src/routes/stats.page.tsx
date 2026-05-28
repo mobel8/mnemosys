@@ -29,6 +29,7 @@ import { RetentionChart } from "@/components/stats/RetentionChart";
 import { ReviewsByDayChart } from "@/components/stats/ReviewsByDayChart";
 import { ReviewsHeatmap } from "@/components/stats/ReviewsHeatmap";
 import { TodayCard } from "@/components/stats/TodayCard";
+import { WellnessHistory } from "@/components/stats/WellnessHistory";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Period } from "@/lib/date";
@@ -73,6 +74,8 @@ export default function StatsPage() {
       <ConceptMastery />
 
       <MasteryTimeline />
+
+      <WellnessHistory />
 
       {hasNoData && <NoDataCallout />}
     </div>

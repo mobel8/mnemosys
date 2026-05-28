@@ -1443,6 +1443,33 @@ export function useTogglePlan(
   });
 }
 
+/** Overwrite a plan's mutable fields, then refresh the plan list. */
+export function useUpdatePlan(
+  opts?: UseMutationOptions<
+    StudyPlan,
+    Error,
+    {
+      id: number;
+      triggerType: PlanTriggerType;
+      triggerValue: string;
+      action: string;
+      deckId?: number | null;
+      days?: string;
+      enabled: boolean;
+    }
+  >,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data) => api.plans.update(data),
+    ...opts,
+    onSuccess: (data, variables, onMutateResult, context) => {
+      qc.invalidateQueries({ queryKey: queryKeys.studyPlans });
+      opts?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
 /** Delete a plan, then refresh the plan list. */
 export function useDeletePlan(opts?: UseMutationOptions<void, Error, number>) {
   const qc = useQueryClient();
