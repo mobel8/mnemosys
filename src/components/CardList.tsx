@@ -15,6 +15,8 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   ChevronLeft,
   ChevronRight,
+  Lightbulb,
+  Loader2,
   MoreHorizontal,
   PauseCircle,
   PlayCircle,
@@ -24,6 +26,13 @@ import {
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +44,7 @@ import { toast } from "@/components/ui/use-toast";
 import {
   useCardsInDeck,
   useDeleteNote,
+  useGenerateMnemonic,
   useResetCard,
   useSearchNotes,
   useSuspendCard,
@@ -44,6 +54,15 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 25;
 const SEARCH_LIMIT = 50;
+
+/**
+ * Vague 13 — minimum FSRS `lapses` before a card is deemed « difficult »
+ * enough to offer an AI mnemonic aid. Below this the menu item is hidden.
+ */
+const MNEMONIC_LAPSE_THRESHOLD = 3;
+
+/** Default output language for the mnemonic helper (matches the app default). */
+const MNEMONIC_LANGUAGE = "fr";
 
 interface CardListProps {
   deckId: number;
@@ -271,6 +290,31 @@ function CardRow({ row }: { row: DisplayRow }) {
     },
   });
 
+  // Vague 13 — mnemonic helper. Only surfaced for high-lapse cards; the
+  // generated aid lands in a controlled dialog (kept outside the dropdown so
+  // the two radix overlays don't fight over focus).
+  const [mnemonicOpen, setMnemonicOpen] = useState(false);
+  const [mnemonic, setMnemonic] = useState<string | null>(null);
+  const generateMnemonic = useGenerateMnemonic({
+    onSuccess: (text) => setMnemonic(text),
+    onError: (err) => {
+      setMnemonicOpen(false);
+      toast({
+        title: "Aide mnémotechnique indisponible",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+  const showMnemonicItem = card != null && card.lapses >= MNEMONIC_LAPSE_THRESHOLD;
+
+  function handleGenerateMnemonic() {
+    if (!card) return;
+    setMnemonic(null);
+    setMnemonicOpen(true);
+    generateMnemonic.mutate({ cardId: card.id, language: MNEMONIC_LANGUAGE });
+  }
+
   return (
     <tr
       className={cn(
@@ -365,6 +409,11 @@ function CardRow({ row }: { row: DisplayRow }) {
                 <RotateCcw className="h-4 w-4" /> Réinitialiser (FSRS)
               </DropdownMenuItem>
             )}
+            {showMnemonicItem && (
+              <DropdownMenuItem onSelect={() => handleGenerateMnemonic()}>
+                <Lightbulb className="h-4 w-4" /> Aide mnémotechnique
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
@@ -378,6 +427,35 @@ function CardRow({ row }: { row: DisplayRow }) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Vague 13 — mnemonic aid dialog for high-lapse cards. */}
+        <Dialog open={mnemonicOpen} onOpenChange={setMnemonicOpen}>
+          <DialogContent data-testid="mnemonic-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Lightbulb className="h-5 w-5 text-primary" />
+                Aide mnémotechnique
+              </DialogTitle>
+              <DialogDescription>{noteFrontPreview(note)}</DialogDescription>
+            </DialogHeader>
+            {generateMnemonic.isPending ? (
+              <div
+                className="flex items-center gap-2 text-sm text-muted-foreground"
+                data-testid="mnemonic-loading"
+              >
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Génération de l'aide mnémotechnique…
+              </div>
+            ) : mnemonic ? (
+              <p
+                className="whitespace-pre-wrap text-sm leading-relaxed"
+                data-testid="mnemonic-text"
+              >
+                {mnemonic}
+              </p>
+            ) : null}
+          </DialogContent>
+        </Dialog>
       </td>
     </tr>
   );

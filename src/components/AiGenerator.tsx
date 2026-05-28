@@ -40,12 +40,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 import {
   useCreateNote,
+  useCritiqueCards,
   useDecks,
   useGenerateCardElaboration,
   useGenerateCardsFromPdf,
   useGenerateCardsFromText,
 } from "@/lib/queries";
-import type { AICardTemplate, GeneratedCard, NoteTemplate } from "@/lib/tauri";
+import type { AICardTemplate, CardCritique, GeneratedCard, NoteTemplate } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
 /** Max chars accepted in the text-area before we refuse to submit. */
@@ -82,6 +83,17 @@ interface CardDraft {
   tags: string[];
   why: string;
   example: string;
+  /**
+   * Vague 13 — quality verdict from the optional « critic » pass. `undefined`
+   * means the card was never critiqued (toggle off, or critique failed). When
+   * present, `score` is in `[0, 1]`; `suggestedFix` is a one-click rewrite the
+   * critic proposed for low-scoring cards (`null` when nothing to apply).
+   */
+  critique?: {
+    score: number;
+    issues: string[];
+    suggestedFix: GeneratedCard | null;
+  };
 }
 
 function draftFromGenerated(card: GeneratedCard, index: number): CardDraft {
@@ -109,6 +121,22 @@ function draftToCardText(draft: CardDraft): string {
   if (draft.template === "cloze") return draft.text.trim();
   return `${draft.front.trim()}\n\n${draft.back.trim()}`.trim();
 }
+
+/**
+ * Vague 13 — rebuild a `GeneratedCard` from a local draft so the critic sees
+ * exactly the card the user is about to persist (including any edits made
+ * before requesting the quality check).
+ */
+function draftToGeneratedCard(draft: CardDraft): GeneratedCard {
+  const fields: Record<string, unknown> =
+    draft.template === "cloze"
+      ? { text: draft.text.trim() }
+      : { front: draft.front.trim(), back: draft.back.trim() };
+  return { template: draft.template, fields, tags: draft.tags };
+}
+
+/** Below this critic score a card is flagged « to improve » in the UI. */
+const QUALITY_THRESHOLD = 0.7;
 
 /**
  * Map an `AICardTemplate` to the `NoteTemplate` accepted by `create_note`.
@@ -141,6 +169,13 @@ export function AiGenerator() {
    */
   const [includeElaboration, setIncludeElaboration] = useState(false);
   const [isElaborating, setIsElaborating] = useState(false);
+  /**
+   * Vague 13 — opt-in Generator → Critic pass. When `true`, after generation
+   * a second Claude call scores each card and may propose corrections. Off by
+   * default: it's an extra round-trip the user explicitly asks for.
+   */
+  const [includeCritique, setIncludeCritique] = useState(false);
+  const [isCritiquing, setIsCritiquing] = useState(false);
 
   // Drafts (the validation queue) ----------------------------------------
   const [drafts, setDrafts] = useState<CardDraft[]>([]);
@@ -160,6 +195,7 @@ export function AiGenerator() {
   const genText = useGenerateCardsFromText();
   const genPdf = useGenerateCardsFromPdf();
   const genElaboration = useGenerateCardElaboration();
+  const critiqueCards = useCritiqueCards();
   const createNote = useCreateNote();
 
   const isGenerating = genText.isPending || genPdf.isPending;
@@ -170,6 +206,7 @@ export function AiGenerator() {
   const maxCardsId = useId();
   const langSelectId = useId();
   const elaborationCheckboxId = useId();
+  const critiqueCheckboxId = useId();
 
   // ----- Handlers --------------------------------------------------------
 
@@ -245,9 +282,91 @@ export function AiGenerator() {
       if (includeElaboration) {
         await enrichDraftsWithElaboration(nextDrafts);
       }
+
+      // Vague 13 — opt-in critic pass. Runs after elaboration so the reviewer
+      // sees the same cards the user will. One batched call (not per-card),
+      // and a failure is purely additive: drafts stay usable without scores.
+      if (includeCritique) {
+        await critiqueDrafts(nextDrafts);
+      }
     } catch (err) {
       handleGenerationError(err);
     }
+  }
+
+  /**
+   * Vague 13 — Generator → Critic pass. Sends the batch (in draft order, so
+   * each verdict's `card_index` lines up with our local list) to Claude and
+   * patches the returned scores / suggested fixes onto the matching drafts.
+   * Failures are swallowed into a single toast — the critic is advisory.
+   */
+  async function critiqueDrafts(targetDrafts: CardDraft[]): Promise<void> {
+    if (targetDrafts.length === 0) return;
+    setIsCritiquing(true);
+    try {
+      const cards = targetDrafts.map(draftToGeneratedCard);
+      const verdicts = await critiqueCards.mutateAsync({ cards });
+      // Index verdicts by their reported `card_index` for an O(1) join.
+      const byIndex = new Map<number, CardCritique>();
+      for (const v of verdicts) byIndex.set(v.card_index, v);
+      setDrafts((prev) =>
+        prev.map((d) => {
+          const pos = targetDrafts.findIndex((t) => t.id === d.id);
+          const verdict = pos >= 0 ? byIndex.get(pos) : undefined;
+          if (!verdict) return d;
+          return {
+            ...d,
+            critique: {
+              score: verdict.score,
+              issues: Array.isArray(verdict.issues) ? verdict.issues : [],
+              suggestedFix: verdict.suggested_fix,
+            },
+          };
+        }),
+      );
+      const flagged = verdicts.filter((v) => v.score < QUALITY_THRESHOLD).length;
+      toast({
+        title: "Vérification qualité terminée",
+        description:
+          flagged === 0
+            ? `${verdicts.length} carte${verdicts.length > 1 ? "s" : ""} évaluée${verdicts.length > 1 ? "s" : ""} — aucune correction suggérée.`
+            : `${flagged} carte${flagged > 1 ? "s" : ""} à améliorer (correction proposée).`,
+      });
+    } catch (err) {
+      console.warn("[ai] critique pass failed", err);
+      toast({
+        title: "Vérification qualité indisponible",
+        description: "Les cartes restent utilisables sans score de qualité.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCritiquing(false);
+    }
+  }
+
+  /** Apply a critic's `suggestedFix` onto a draft, then clear its verdict. */
+  function applyCritiqueFix(id: string) {
+    setDrafts((prev) =>
+      prev.map((d) => {
+        if (d.id !== id || !d.critique?.suggestedFix) return d;
+        const fix = d.critique.suggestedFix;
+        const fields = fix.fields;
+        const front = typeof fields.front === "string" ? fields.front : d.front;
+        const back = typeof fields.back === "string" ? fields.back : d.back;
+        const text = typeof fields.text === "string" ? fields.text : d.text;
+        return {
+          ...d,
+          template: fix.template,
+          front: fix.template === "basic" ? front : d.front,
+          back: fix.template === "basic" ? back : d.back,
+          text: fix.template === "cloze" ? text : d.text,
+          tags: Array.isArray(fix.tags) ? fix.tags : d.tags,
+          // Drop the verdict once applied — the card now reflects the fix.
+          critique: undefined,
+        };
+      }),
+    );
+    toast({ title: "Correction appliquée" });
   }
 
   async function enrichDraftsWithElaboration(targetDrafts: CardDraft[]): Promise<void> {
@@ -543,8 +662,33 @@ export function AiGenerator() {
             </div>
           </div>
 
+          <div className="flex items-start gap-2 rounded-md border border-dashed bg-muted/20 p-3">
+            <input
+              id={critiqueCheckboxId}
+              type="checkbox"
+              checked={includeCritique}
+              onChange={(e) => setIncludeCritique(e.target.checked)}
+              disabled={isGenerating || isElaborating || isCritiquing}
+              className="mt-0.5 h-4 w-4 rounded border-input"
+            />
+            <div className="space-y-0.5">
+              <Label htmlFor={critiqueCheckboxId} className="cursor-pointer text-sm">
+                Vérification qualité IA (2e passe critic)
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Après génération, un relecteur IA évalue chaque carte (factualité, clarté,
+                atomicité) et propose une correction pour les cartes faibles — pipeline Generator →
+                Critic, coût IA supplémentaire.
+              </p>
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Button type="button" onClick={handleGenerate} disabled={!canGenerate || isElaborating}>
+            <Button
+              type="button"
+              onClick={handleGenerate}
+              disabled={!canGenerate || isElaborating || isCritiquing}
+            >
               {isGenerating ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -554,6 +698,11 @@ export function AiGenerator() {
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Enrichissement…
+                </>
+              ) : isCritiquing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Vérification…
                 </>
               ) : (
                 <>
@@ -567,7 +716,7 @@ export function AiGenerator() {
                 type="button"
                 variant="ghost"
                 onClick={resetAll}
-                disabled={isCreatingAll || isGenerating || isElaborating}
+                disabled={isCreatingAll || isGenerating || isElaborating || isCritiquing}
               >
                 Réinitialiser
               </Button>
@@ -597,6 +746,7 @@ export function AiGenerator() {
                   disabled={isCreatingAll}
                   onChange={(patch) => updateDraft(draft.id, patch)}
                   onRemove={() => removeDraft(draft.id)}
+                  onApplyFix={() => applyCritiqueFix(draft.id)}
                 />
               </li>
             ))}
@@ -664,15 +814,19 @@ interface DraftCardProps {
   disabled: boolean;
   onChange: (patch: Partial<CardDraft>) => void;
   onRemove: () => void;
+  onApplyFix: () => void;
 }
 
-function DraftCard({ draft, index, disabled, onChange, onRemove }: DraftCardProps) {
+function DraftCard({ draft, index, disabled, onChange, onRemove, onApplyFix }: DraftCardProps) {
   const frontId = useId();
   const backId = useId();
   const textId = useId();
   const whyId = useId();
   const exampleId = useId();
   const hasElaboration = draft.why.length > 0 || draft.example.length > 0;
+  const critique = draft.critique;
+  const scorePct = critique ? Math.round(critique.score * 100) : null;
+  const isLowQuality = critique != null && critique.score < QUALITY_THRESHOLD;
 
   return (
     <Card>
@@ -688,6 +842,18 @@ function DraftCard({ draft, index, disabled, onChange, onRemove }: DraftCardProp
             {hasElaboration && (
               <Badge variant="outline" className="border-primary/40 text-primary">
                 Enrichi
+              </Badge>
+            )}
+            {critique != null && (
+              <Badge
+                data-testid={`critique-badge-${index}`}
+                variant={isLowQuality ? "destructive" : "secondary"}
+                className="font-mono"
+                title={
+                  critique.issues.length > 0 ? critique.issues.join("\n") : "Aucun problème détecté"
+                }
+              >
+                Qualité {scorePct}%
               </Badge>
             )}
             {draft.tags.map((tag) => (
@@ -783,6 +949,27 @@ function DraftCard({ draft, index, disabled, onChange, onRemove }: DraftCardProp
                 className="text-sm"
               />
             </div>
+          </div>
+        )}
+
+        {critique?.suggestedFix != null && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+            <div className="space-y-0.5 text-xs">
+              <p className="font-medium text-destructive">Le relecteur suggère une correction</p>
+              {critique.issues.length > 0 && (
+                <p className="text-muted-foreground">{critique.issues.join(" · ")}</p>
+              )}
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={disabled}
+              onClick={onApplyFix}
+              data-testid={`apply-fix-${index}`}
+            >
+              Appliquer la correction
+            </Button>
           </div>
         )}
       </CardContent>

@@ -23,6 +23,7 @@ import {
   api,
   type CalibrationStats,
   type Card,
+  type CardCritique,
   type CardElaboration,
   type CardWithNote,
   type ConversionResult,
@@ -573,6 +574,34 @@ export function useGenerateCardElaboration(
 ) {
   return useMutation({
     mutationFn: ({ cardText, language }) => api.ai.generateCardElaboration(cardText, language),
+    ...opts,
+  });
+}
+
+/**
+ * Vague 13 — run the multi-agent "critic" pass over a batch of generated
+ * cards. Stateless — no cache invalidation. The caller surfaces the scores
+ * and applies `suggested_fix` into its local draft state.
+ */
+export function useCritiqueCards(
+  opts?: UseMutationOptions<CardCritique[], Error, { cards: GeneratedCard[] }>,
+) {
+  return useMutation({
+    mutationFn: ({ cards }) => api.ai.critiqueCards(cards),
+    ...opts,
+  });
+}
+
+/**
+ * Vague 13 — generate a mnemonic aid for one (high-lapse) card. Stateless —
+ * the result is shown in a toast/dialog, nothing is persisted, so no cache
+ * invalidation is needed.
+ */
+export function useGenerateMnemonic(
+  opts?: UseMutationOptions<string, Error, { cardId: number; language: string }>,
+) {
+  return useMutation({
+    mutationFn: ({ cardId, language }) => api.ai.generateMnemonic(cardId, language),
     ...opts,
   });
 }

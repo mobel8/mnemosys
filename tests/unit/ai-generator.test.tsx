@@ -56,6 +56,12 @@ vi.mock("@/lib/queries", () => ({
     mutateAsync: vi.fn(async () => ({ why: "", example: "" })),
     isPending: false,
   }),
+  // Vague 13 — opt-in critic mutation. Stubbed for the same reason; these
+  // tests never opt into the critic pass so a no-op is enough.
+  useCritiqueCards: () => ({
+    mutateAsync: vi.fn(async () => []),
+    isPending: false,
+  }),
   useCreateNote: () => ({
     mutateAsync: createNoteMutateAsync,
     isPending: false,

@@ -18,9 +18,14 @@
 //!    to surface as a "configure your key" hint.
 
 use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
+use tauri::{AppHandle, State};
 
-use crate::ai::{generate_cards_from_pdf, generate_cards_from_text, ClaudeClient, GeneratedCard};
+use crate::ai::{
+    critique_cards, generate_cards_from_pdf, generate_cards_from_text, generate_mnemonic,
+    CardCritique, ClaudeClient, GeneratedCard,
+};
+use crate::app_state::AppState;
+use crate::db::CardRepo;
 use crate::error::{AppError, AppResult};
 
 /// Resolve the Anthropic API key. Env var wins; falls back to the persisted
@@ -214,6 +219,96 @@ pub async fn generate_card_elaboration(
     parse_elaboration_response(&response)
 }
 
+// ---------------------------------------------------------------------------
+// Vague 13 — Multi-Agent Card Pipeline (Generator → Critic)
+// ---------------------------------------------------------------------------
+
+/// Run a "critic" pass over a batch of freshly-generated cards.
+///
+/// The frontend hands us the drafts it currently holds; we ask Claude to
+/// score each one (factuality, clarity, atomicity, ambiguity) and propose a
+/// corrected card when the score is low. Stateless — the result is meant for
+/// the user to review and optionally apply before persistence, exactly like
+/// the generation step it follows.
+///
+/// An empty `cards` list short-circuits to `Ok(vec![])` without an API call,
+/// so an over-eager UI can't burn a request on nothing.
+#[tauri::command]
+pub async fn critique_generated_cards(
+    app: AppHandle,
+    cards: Vec<GeneratedCard>,
+) -> AppResult<Vec<CardCritique>> {
+    if cards.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let api_key = resolve_api_key(&app)?;
+    let client = ClaudeClient::new(api_key);
+    critique_cards(&client, &cards)
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))
+}
+
+// ---------------------------------------------------------------------------
+// Vague 13 — Mnemonic Helper
+// ---------------------------------------------------------------------------
+
+/// Pull a `(front, back)` pair out of a note's `fields` JSON.
+///
+/// `basic` / `basic_reverse` map to `{ front, back }`; `cloze` maps to
+/// `{ text }` (returned as `(text, "")`). Any other template (occlusion,
+/// sentence, …) yields an error — there's no meaningful prompt/answer pair to
+/// build a mnemonic from. Mirrors the extraction logic in `commands::podcast`.
+fn front_back_from_fields(fields: &serde_json::Value) -> AppResult<(String, String)> {
+    if let (Some(front), Some(back)) = (
+        fields.get("front").and_then(|v| v.as_str()),
+        fields.get("back").and_then(|v| v.as_str()),
+    ) {
+        let f = front.trim();
+        if !f.is_empty() {
+            return Ok((f.to_string(), back.trim().to_string()));
+        }
+    }
+    if let Some(text) = fields.get("text").and_then(|v| v.as_str()) {
+        let t = text.trim();
+        if !t.is_empty() {
+            return Ok((t.to_string(), String::new()));
+        }
+    }
+    Err(AppError::Validation(
+        "this card has no front/back text to build a mnemonic from".to_string(),
+    ))
+}
+
+/// Generate a vivid mnemonic aid for one card the learner keeps forgetting.
+///
+/// Loads the card + its parent note from the DB, extracts the prompt/answer
+/// pair, and asks Claude for a memorable association. `language` is forwarded
+/// verbatim. The command does NOT gate on `lapses` — the UI decides when to
+/// surface the affordance (typically `lapses >= 3`); calling it on any card
+/// is harmless and always returns a usable aid.
+#[tauri::command]
+pub async fn generate_card_mnemonic(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    card_id: i64,
+    language: String,
+) -> AppResult<String> {
+    // Lock + load are cheap and synchronous; do them before the async API
+    // call so we never hold the DB mutex across an `.await`.
+    let (front, back) = {
+        let conn = state.db.lock();
+        let with_note = CardRepo::new(&conn).get_with_note(card_id)?;
+        front_back_from_fields(&with_note.note.fields)?
+    };
+
+    let api_key = resolve_api_key(&app)?;
+    let client = ClaudeClient::new(api_key);
+    generate_mnemonic(&client, &front, &back, &language)
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,5 +333,27 @@ mod tests {
     fn elaboration_rejects_malformed_payload() {
         let raw = "not json at all";
         assert!(parse_elaboration_response(raw).is_err());
+    }
+
+    #[test]
+    fn front_back_from_basic_fields() {
+        let fields = serde_json::json!({"front": "Capitale ?", "back": "Paris"});
+        let (front, back) = front_back_from_fields(&fields).expect("basic must parse");
+        assert_eq!(front, "Capitale ?");
+        assert_eq!(back, "Paris");
+    }
+
+    #[test]
+    fn front_back_from_cloze_fields_has_empty_back() {
+        let fields = serde_json::json!({"text": "La {{c1::capitale}} est Paris"});
+        let (front, back) = front_back_from_fields(&fields).expect("cloze must parse");
+        assert_eq!(front, "La {{c1::capitale}} est Paris");
+        assert!(back.is_empty());
+    }
+
+    #[test]
+    fn front_back_rejects_occlusion() {
+        let fields = serde_json::json!({"image_path": "/tmp/x.png", "masks": []});
+        assert!(front_back_from_fields(&fields).is_err());
     }
 }

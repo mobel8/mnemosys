@@ -14,6 +14,8 @@
 
 pub mod cards;
 pub mod claude;
+pub mod critic;
+pub mod mnemonic;
 pub mod pdf;
 pub mod podcast;
 
@@ -24,5 +26,7 @@ pub use cards::{
     generate_cards_from_pdf, generate_cards_from_text, CardTemplate, GeneratedCard,
 };
 pub use claude::{ClaudeClient, ClaudeError};
+pub use critic::{critique_cards, CardCritique};
+pub use mnemonic::generate_mnemonic;
 pub use pdf::{chunk_text, extract_pdf_text};
 pub use podcast::{generate_podcast_script, PodcastFormat, PodcastLine};

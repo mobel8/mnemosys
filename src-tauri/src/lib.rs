@@ -119,6 +119,9 @@ pub fn run() {
             commands::ai::generate_cards_text,
             commands::ai::generate_cards_pdf,
             commands::ai::generate_card_elaboration,
+            // multi-agent pipeline + mnemonic helper (Vague 13)
+            commands::ai::critique_generated_cards,
+            commands::ai::generate_card_mnemonic,
             // apkg (Vague A2.3)
             commands::apkg::import_apkg,
             // media (image-occlusion template)

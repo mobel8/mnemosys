@@ -363,6 +363,21 @@ export interface CardElaboration {
   example: string;
 }
 
+/**
+ * Vague 13 — one critic verdict for a generated card (Generator → Critic
+ * multi-agent pipeline). Mirrors the Rust `CardCritique`. `card_index` is the
+ * 0-based position in the batch the critic was given; `score` is the
+ * reviewer's overall quality estimate in `[0, 1]`. `suggested_fix` is a
+ * rewritten card the UI can apply with one click, present only when the
+ * reviewer judged the original below the quality bar.
+ */
+export interface CardCritique {
+  card_index: number;
+  score: number;
+  issues: string[];
+  suggested_fix: GeneratedCard | null;
+}
+
 // --- Session 2: TTS ------------------------------------------------------
 
 export type TTSVoice = "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" | "coral" | "sage";
@@ -765,6 +780,20 @@ export const api = {
      */
     generateCardElaboration: (cardText: string, language: string) =>
       invoke<CardElaboration>("generate_card_elaboration", { cardText, language }),
+    /**
+     * Vague 13 — run a "critic" pass over a batch of generated cards. Returns
+     * one verdict per card (same order). Stateless; the caller reviews scores
+     * and optionally applies `suggested_fix` before persisting.
+     */
+    critiqueCards: (cards: GeneratedCard[]) =>
+      invoke<CardCritique[]>("critique_generated_cards", { cards }),
+    /**
+     * Vague 13 — generate a vivid mnemonic aid for a card the learner keeps
+     * forgetting. Loads the card's front/back server-side; `language` is a
+     * locale hint. Returns 2-3 sentences of plain prose.
+     */
+    generateMnemonic: (cardId: number, language: string) =>
+      invoke<string>("generate_card_mnemonic", { cardId, language }),
   },
   tts: {
     /** Synthesise speech. Hits cache first; otherwise calls OpenAI. */
