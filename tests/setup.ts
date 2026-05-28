@@ -76,6 +76,25 @@ if (typeof globalThis.AudioContext === "undefined") {
   globalThis.AudioContext = FakeAudioContext as unknown as typeof AudioContext;
 }
 
+// jsdom does not implement `HTMLMediaElement.prototype.play` / `.pause`: the
+// real impl throws "Not implemented", and `<TtsButton>` does
+// `audio.play().catch(...)`. Without a stub `play()` returns undefined (so the
+// `.catch` throws) or jsdom emits an *unhandled* promise rejection that leaks
+// across the parallel test run and makes `tts-button.test.tsx` flaky. Return a
+// resolved Promise so the `.catch` chain is well-formed and never rejects.
+Object.defineProperty(globalThis.HTMLMediaElement.prototype, "play", {
+  configurable: true,
+  writable: true,
+  value: () => Promise.resolve(),
+});
+Object.defineProperty(globalThis.HTMLMediaElement.prototype, "pause", {
+  configurable: true,
+  writable: true,
+  value: () => {
+    /* no-op */
+  },
+});
+
 // Run cleanup after every test to ensure tests are isolated.
 afterEach(() => {
   cleanup();

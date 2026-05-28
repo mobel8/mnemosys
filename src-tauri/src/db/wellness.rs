@@ -46,6 +46,8 @@ impl<'a> WellnessRepo<'a> {
 
     /// Persist a brand-new check-in. `created_at` is filled by the caller so
     /// tests can pin the wall-clock timestamp (mirrors `gamification.rs`).
+    // One parameter per check-in column; a struct would just relocate them.
+    #[allow(clippy::too_many_arguments)]
     pub fn insert_log(
         &self,
         date: &str,

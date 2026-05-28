@@ -23,7 +23,7 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -260,7 +260,7 @@ function rowKey(row: DisplayRow): string {
   return row.kind === "card" ? `card-${row.entry.card.id}` : `note-${row.note.id}`;
 }
 
-function CardRow({ row }: { row: DisplayRow }) {
+const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
   const navigate = useNavigate();
   const note = row.kind === "card" ? row.entry.note : row.note;
   const card = row.kind === "card" ? row.entry.card : null;
@@ -477,4 +477,4 @@ function CardRow({ row }: { row: DisplayRow }) {
       </td>
     </tr>
   );
-}
+});

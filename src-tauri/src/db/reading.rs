@@ -91,7 +91,10 @@ impl<'a> ReadingRepo<'a> {
         // Chunk the IN-list to stay well under SQLite's default 999-variable
         // limit (we bind `language` too, so cap the word slice at 900).
         for chunk in wanted.chunks(900) {
-            let placeholders = std::iter::repeat_n("?", chunk.len())
+            // `repeat_n` is only stable since Rust 1.82; this crate pins MSRV
+            // 1.81, so use the long-stable `repeat().take()` form instead.
+            let placeholders = std::iter::repeat("?")
+                .take(chunk.len())
                 .collect::<Vec<_>>()
                 .join(", ");
             let sql = format!(

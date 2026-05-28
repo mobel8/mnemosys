@@ -5,38 +5,33 @@
 //! card rows, in a single transaction.
 //!
 //! `fields` is stored as a JSON object string. Conventions:
-//! - `basic`         → `{ "front": "...", "back": "..." }`
+//! - `basic` → `{ "front": "...", "back": "..." }`
 //! - `basic_reverse` → `{ "front": "...", "back": "..." }` (two cards: 0=F→B, 1=B→F)
-//! - `cloze`         → `{ "text": "The {{c1::capital}} of {{c2::France}} is Paris" }`
-//! - `occlusion`     → `{ "image_path": "/abs/path", "natural_width": 800,
-//!                       "natural_height": 600,
-//!                       "masks": [{ "x": 0, "y": 0, "width": 100, "height": 50,
-//!                                   "label": "optional" }, ...] }`
-//!                    One card per mask (`card_ord = mask_index`).
-//! - `sentence`      → `{ "source": "...", "target": "...",
-//!                        "notes": "optional", "source_lang": "ja",
-//!                        "target_lang": "fr" }` — one card (source→target).
+//! - `cloze` → `{ "text": "The {{c1::capital}} of {{c2::France}} is Paris" }`
+//! - `occlusion` → `{ "image_path": "/abs/path", "natural_width": 800,
+//!   "natural_height": 600, "masks": [{ "x": 0, "y": 0, "width": 100,
+//!   "height": 50, "label": "optional" }, ...] }`. One card per mask
+//!   (`card_ord = mask_index`).
+//! - `sentence` → `{ "source": "...", "target": "...", "notes": "optional",
+//!   "source_lang": "ja", "target_lang": "fr" }` — one card (source→target).
 //! - `bidirectional` → `{ "source": "...", "target": "..." }` — two cards,
-//!                     the Lampariello pattern (0=source→target, 1=target→source).
+//!   the Lampariello pattern (0=source→target, 1=target→source).
 //! - `illness_script` → `{ "condition": "...", "epidemiology": "...",
-//!                        "pathophysiology": "...", "clinical": "...",
-//!                        "management": "..." }` (Vague 14, médecine — Charlin
-//!                        2007). One card: recto = condition, verso = the four
-//!                        sections. `condition` is required; at least one of
-//!                        the four sections must be non-empty.
-//! - `refutation`    → `{ "misconception": "...", "correct": "...",
-//!                        "explanation": "..." }` (Vague 14, sciences — Tippett
-//!                        2010 meta). One card confronting a false belief:
-//!                        recto = « Vrai ou faux ? {misconception} », verso =
-//!                        « FAUX. {correct} » + explanation. `misconception`
-//!                        and `correct` are both required.
+//!   "pathophysiology": "...", "clinical": "...", "management": "..." }`
+//!   (Vague 14, médecine — Charlin 2007). One card: recto = condition, verso
+//!   = the four sections. `condition` is required; at least one of the four
+//!   sections must be non-empty.
+//! - `refutation` → `{ "misconception": "...", "correct": "...",
+//!   "explanation": "..." }` (Vague 14, sciences — Tippett 2010 meta). One
+//!   card confronting a false belief: recto = « Vrai ou faux ?
+//!   {misconception} », verso = « FAUX. {correct} » + explanation.
+//!   `misconception` and `correct` are both required.
 //! - `worked_example` → `{ "problem": "...", "steps": ["...", "..."],
-//!                        "answer": "..." }` (Vague 15, maths — Sweller/Renkl/
-//!                        Atkinson 2003 faded worked example). One card: recto =
-//!                        the problem, verso reveals the solution `steps` one by
-//!                        one (the learner predicts each), then the final
-//!                        `answer`. `problem` and `answer` are required and the
-//!                        `steps` array must hold at least one non-empty string.
+//!   "answer": "..." }` (Vague 15, maths — Sweller/Renkl/Atkinson 2003 faded
+//!   worked example). One card: recto = the problem, verso reveals the
+//!   solution `steps` one by one (the learner predicts each), then the final
+//!   `answer`. `problem` and `answer` are required and the `steps` array must
+//!   hold at least one non-empty string.
 //!
 //! Vague 10 also introduces an optional `frequency_band` column on every
 //! note (independent of `template`): one of `top_100`, `top_1k`, `top_5k`,

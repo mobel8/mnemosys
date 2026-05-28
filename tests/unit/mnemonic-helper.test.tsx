@@ -123,7 +123,9 @@ describe("CardList — mnemonic helper", () => {
     await waitFor(() => {
       expect(screen.getByRole("menuitem", { name: /Supprimer la note/i })).toBeInTheDocument();
     });
-    expect(screen.queryByRole("menuitem", { name: /Aide mnémotechnique/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: /Aide mnémotechnique/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("generates and displays a mnemonic for a high-lapse card", async () => {

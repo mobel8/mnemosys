@@ -153,12 +153,13 @@ export function FirstRunWizard({ open, onClose }: FirstRunWizardProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur"
     >
       <div className="relative mx-4 flex w-full max-w-xl flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl">
-        {/* Progress bar */}
+        {/* Progress bar — animate via scaleX (GPU/transform) rather than
+            `width` so the bar never triggers a layout reflow on each step. */}
         <div className="h-1 w-full bg-muted">
           <motion.div
-            className="h-full bg-primary"
+            className="h-full w-full origin-left bg-primary"
             initial={false}
-            animate={{ width: `${((index + 1) / SLIDES.length) * 100}%` }}
+            animate={{ scaleX: (index + 1) / SLIDES.length }}
             transition={{ duration: 0.3, ease: "easeOut" }}
           />
         </div>

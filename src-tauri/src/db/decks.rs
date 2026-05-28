@@ -182,6 +182,9 @@ impl<'a> DeckRepo<'a> {
     ///
     /// `prerequisite_deck_id` (Vague 15) optionally gates this deck behind
     /// another deck's mastery; `None` keeps it ungated.
+    // One parameter per deck column; grouping them into a struct would just
+    // shuffle the same fields without removing any.
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         &self,
         name: &str,

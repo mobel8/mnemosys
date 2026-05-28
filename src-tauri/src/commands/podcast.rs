@@ -358,7 +358,7 @@ pub fn list_deck_podcasts(app: AppHandle, deck_id: i64) -> AppResult<Vec<Podcast
         });
     }
     // Newest first.
-    files.sort_by(|a, b| b.generated_at.cmp(&a.generated_at));
+    files.sort_by_key(|f| std::cmp::Reverse(f.generated_at));
     Ok(files)
 }
 

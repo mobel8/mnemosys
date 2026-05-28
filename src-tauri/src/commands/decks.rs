@@ -24,6 +24,10 @@ pub fn get_deck(state: State<'_, AppState>, id: i64) -> AppResult<Deck> {
     state.db.decks(&conn).get(id)
 }
 
+// Arguments mirror the deck's persisted columns 1:1 and are passed by name
+// over the Tauri IPC boundary; collapsing them into a struct would only move
+// the same fields behind an extra layer, so we accept the count here.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn create_deck(
     state: State<'_, AppState>,

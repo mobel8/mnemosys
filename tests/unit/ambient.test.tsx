@@ -137,17 +137,19 @@ describe("createAmbient", () => {
 });
 
 describe("fillNoiseBuffer", () => {
-  it.each(["white", "pink", "brown", "rain"] as const)(
-    "fills %s noise within the normalised range",
-    (kind) => {
-      const data = new Float32Array(2048);
-      fillNoiseBuffer(data, kind);
-      // Not all-zero (it actually wrote something)...
-      expect(data.some((v) => v !== 0)).toBe(true);
-      // ...and stays within a sane amplitude band (allow a little headroom).
-      for (const v of data) {
-        expect(Math.abs(v)).toBeLessThanOrEqual(1.5);
-      }
-    },
-  );
+  it.each([
+    "white",
+    "pink",
+    "brown",
+    "rain",
+  ] as const)("fills %s noise within the normalised range", (kind) => {
+    const data = new Float32Array(2048);
+    fillNoiseBuffer(data, kind);
+    // Not all-zero (it actually wrote something)...
+    expect(data.some((v) => v !== 0)).toBe(true);
+    // ...and stays within a sane amplitude band (allow a little headroom).
+    for (const v of data) {
+      expect(Math.abs(v)).toBeLessThanOrEqual(1.5);
+    }
+  });
 });

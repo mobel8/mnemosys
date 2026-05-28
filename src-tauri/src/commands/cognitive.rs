@@ -128,11 +128,9 @@ fn sample_deck_excerpts(state: &AppState, deck_id: i64) -> AppResult<Vec<String>
         r.get::<_, String>(0)
     })?;
     let mut all_excerpts = Vec::new();
-    for row in rows {
-        if let Ok(fields_json) = row {
-            if let Some(excerpt) = excerpt_from_fields(&fields_json) {
-                all_excerpts.push(excerpt);
-            }
+    for fields_json in rows.flatten() {
+        if let Some(excerpt) = excerpt_from_fields(&fields_json) {
+            all_excerpts.push(excerpt);
         }
     }
     Ok(all_excerpts)

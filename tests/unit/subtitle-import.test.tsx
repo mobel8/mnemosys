@@ -28,8 +28,26 @@ vi.mock("@/components/ui/use-toast", () => ({
 vi.mock("@/lib/queries", () => ({
   useDecks: () => ({
     data: [
-      { id: 1, name: "Spanish", color: "#3b82f6", description: null, desired_retention: 0.9, scheduler_kind: "fsrs6", created_at: 0, updated_at: 0 },
-      { id: 2, name: "French", color: "#ef4444", description: null, desired_retention: 0.9, scheduler_kind: "fsrs6", created_at: 0, updated_at: 0 },
+      {
+        id: 1,
+        name: "Spanish",
+        color: "#3b82f6",
+        description: null,
+        desired_retention: 0.9,
+        scheduler_kind: "fsrs6",
+        created_at: 0,
+        updated_at: 0,
+      },
+      {
+        id: 2,
+        name: "French",
+        color: "#ef4444",
+        description: null,
+        desired_retention: 0.9,
+        scheduler_kind: "fsrs6",
+        created_at: 0,
+        updated_at: 0,
+      },
     ],
     isLoading: false,
   }),
@@ -63,9 +81,7 @@ describe("ImportExportSection — subtitle import", () => {
     expect(
       screen.getByRole("heading", { name: /Sous-titres \(sentence mining\)/i }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /Importer des sous-titres/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Importer des sous-titres/i })).toBeInTheDocument();
     // The mode dropdown offers both sentence + cloze options.
     expect(screen.getByRole("option", { name: /Phrase basique/i })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /Cloze auto/i })).toBeInTheDocument();

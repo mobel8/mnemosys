@@ -202,6 +202,9 @@ impl<'a> PalaceRepo<'a> {
     /// new pins land at the end of the traversal route. The
     /// `UNIQUE(palace_id, card_id)` constraint surfaces a Database error
     /// if the card is already pinned in this palace.
+    // One parameter per locus column (ids + x/y/z + label); a struct would
+    // not remove any of them.
+    #[allow(clippy::too_many_arguments)]
     pub fn add_locus(
         &self,
         palace_id: i64,

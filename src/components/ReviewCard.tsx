@@ -365,7 +365,10 @@ export function ReviewCard({
             className="relative w-full"
             initial={false}
             animate={{ rotateY: isAnswer ? 180 : 0 }}
-            transition={{ duration: 0.35, ease: "easeInOut" }}
+            // GPU transform (rotateY) — kept snappy so reveal feels instant.
+            // A full 3D flip below ~150ms reads as a jump-cut and loses the
+            // front→back spatial cue, so we sit just above the 100ms target.
+            transition={{ duration: 0.18, ease: "easeInOut" }}
             style={{ transformStyle: "preserve-3d" }}
           >
             {/* Front (question) face */}

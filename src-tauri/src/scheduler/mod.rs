@@ -42,9 +42,10 @@ use crate::error::{AppError, AppResult};
 /// Stored in the `decks.scheduler_kind` TEXT column. Serde uses
 /// lowercase strings (`"fsrs6"`, `"sm2"`, `"leitner"`) so the wire
 /// format matches what SQLite stores and what the frontend ships.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SchedulerKind {
+    #[default]
     Fsrs6,
     Sm2,
     Leitner,
@@ -59,12 +60,6 @@ impl SchedulerKind {
             SchedulerKind::Sm2 => "sm2",
             SchedulerKind::Leitner => "leitner",
         }
-    }
-}
-
-impl Default for SchedulerKind {
-    fn default() -> Self {
-        SchedulerKind::Fsrs6
     }
 }
 
@@ -158,8 +153,8 @@ pub fn from_kind<'a>(
 ) -> Box<dyn Scheduler + 'a> {
     match kind {
         SchedulerKind::Fsrs6 => Box::new(fsrs6_adapter::Fsrs6Adapter::new(fsrs)),
-        SchedulerKind::Sm2 => Box::new(sm2::Sm2Scheduler::default()),
-        SchedulerKind::Leitner => Box::new(leitner::LeitnerScheduler::default()),
+        SchedulerKind::Sm2 => Box::new(sm2::Sm2Scheduler),
+        SchedulerKind::Leitner => Box::new(leitner::LeitnerScheduler),
     }
 }
 

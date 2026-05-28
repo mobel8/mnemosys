@@ -28,7 +28,9 @@ vi.mock("@tanstack/react-router", () => ({
   // so a stub function-returning hook is enough.
   useNavigate: () => vi.fn(),
   useParams: () => ({ palaceId: 42 }),
-  Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
+  Link: ({ children, to }: { children: React.ReactNode; to?: string }) => (
+    <a href={to ?? "#"}>{children}</a>
+  ),
 }));
 
 const palaceFixture = {

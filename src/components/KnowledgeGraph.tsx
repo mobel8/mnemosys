@@ -187,6 +187,10 @@ export function KnowledgeGraph({ graph, className }: KnowledgeGraphProps) {
 
   const layout = useMemo(() => computeLayout(graph), [graph]);
   const maxWeight = useMemo(() => Math.max(1, ...graph.edges.map((e) => e.weight)), [graph.edges]);
+  // Position lookup only depends on the (memoised) layout, not on `hovered`.
+  // Hoisting it out of the render body avoids rebuilding the Map on every
+  // mouse-move hover state change.
+  const posByTag = useMemo(() => new Map(layout.nodes.map((node) => [node.tag, node])), [layout]);
 
   if (graph.nodes.length === 0) {
     return (
@@ -203,8 +207,6 @@ export function KnowledgeGraph({ graph, className }: KnowledgeGraphProps) {
       </div>
     );
   }
-
-  const posByTag = new Map(layout.nodes.map((node) => [node.tag, node]));
 
   function isActive(tag: string): boolean {
     if (hovered === null) return true;

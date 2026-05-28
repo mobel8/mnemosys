@@ -70,5 +70,34 @@ export default defineConfig({
     minify: !process.env.TAURI_ENV_DEBUG ? "esbuild" : false,
     // produce sourcemaps for debug builds
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    rollupOptions: {
+      output: {
+        // Split heavy, rarely-changing vendors into their own long-term
+        // cacheable chunks so the eager entry stays small. Route-level lazy
+        // libraries (three via PalaceScene, recharts via stats, webgazer via
+        // FocusGuard) are already emitted as dynamic chunks by their
+        // `import()` sites — we deliberately do NOT name them here so Rollup
+        // keeps them out of the eager graph.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          // React core — pinned first so react/react-dom never leak into a
+          // sibling vendor chunk (which would force-load them eagerly).
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) {
+            return "react-vendor";
+          }
+          if (/[\\/]node_modules[\\/]@tanstack[\\/]/.test(id)) {
+            return "tanstack";
+          }
+          if (/[\\/]node_modules[\\/]@radix-ui[\\/]/.test(id)) {
+            return "radix";
+          }
+          // framer-motion ships as `framer-motion` + `motion-dom` + `motion-utils`.
+          if (/[\\/]node_modules[\\/](framer-motion|motion-dom|motion-utils)[\\/]/.test(id)) {
+            return "motion";
+          }
+          return undefined;
+        },
+      },
+    },
   },
 });

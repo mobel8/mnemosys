@@ -120,7 +120,7 @@ fn parse_timing_line(line: &str) -> Option<(i64, i64)> {
 
     // The end side may carry space-separated cue settings (VTT). Keep only
     // the first whitespace-delimited token as the timestamp.
-    let end_token = right.trim().split_whitespace().next().unwrap_or("");
+    let end_token = right.split_whitespace().next().unwrap_or("");
     let start = parse_timestamp(left.trim())?;
     let end = parse_timestamp(end_token)?;
     Some((start, end))
