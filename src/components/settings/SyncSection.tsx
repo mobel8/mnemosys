@@ -57,6 +57,11 @@ const DEFAULTS: AppSettings = {
   pretest_mode_enabled: false,
   self_explanation_enabled: false,
   focus_guard_enabled: false,
+  ollama_enabled: false,
+  ollama_url: null,
+  ollama_model: null,
+  chronotype: null,
+  ambient_sound: "none",
 };
 
 function formatLastSync(ts: number | null): string {

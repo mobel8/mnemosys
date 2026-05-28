@@ -46,6 +46,12 @@ vi.mock("@/lib/queries", () => ({
     mutateAsync: generateMutateAsync,
     isPending: false,
   }),
+  // Vague 18 — local AI (Ollama) mutation. Stubbed so the existing tests
+  // (which never opt into local mode) don't trip on a missing export.
+  useGenerateCardsLocal: () => ({
+    mutateAsync: vi.fn(async () => []),
+    isPending: false,
+  }),
   useGenerateCardsFromPdf: () => ({
     mutateAsync: vi.fn(),
     isPending: false,

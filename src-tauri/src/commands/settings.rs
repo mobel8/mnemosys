@@ -156,6 +156,35 @@ pub struct AppSettings {
     /// al., ACM 2024). Requires explicit consent. Defaults off.
     #[serde(default)]
     pub focus_guard_enabled: bool,
+
+    // --- Vague 18 (local AI + advanced neuro, opt-in) -----------------------
+    /// Local AI Tutor: when on, the AI generator uses a local Ollama LLM
+    /// instead of Claude (privacy + zero API cost). Defaults off — the
+    /// existing Claude path is untouched for current users.
+    #[serde(default)]
+    pub ollama_enabled: bool,
+    /// Base URL of the local Ollama daemon. Empty/absent -> the backend falls
+    /// back to `http://localhost:11434`.
+    #[serde(default)]
+    pub ollama_url: Option<String>,
+    /// Ollama model slug to generate with (e.g. `"llama3.2"`). Empty/absent ->
+    /// the backend falls back to `llama3.2`.
+    #[serde(default)]
+    pub ollama_model: Option<String>,
+    /// Chronotype determined by the MEQ-short quiz: `"morning"` /
+    /// `"intermediate"` / `"evening"`. `None` means the learner hasn't
+    /// calibrated yet. Drives the « recommended study slots » hint.
+    #[serde(default)]
+    pub chronotype: Option<String>,
+    /// Context ambient sound played during review sessions (Godden & Baddeley
+    /// 1975 — context-dependent memory). `"none"` / `"white"` / `"pink"` /
+    /// `"brown"` / `"rain"`. Defaults to `"none"` (silent).
+    #[serde(default = "default_ambient_sound")]
+    pub ambient_sound: String,
+}
+
+fn default_ambient_sound() -> String {
+    "none".to_string()
 }
 
 fn default_movement_break_minutes() -> u32 {
@@ -202,6 +231,12 @@ impl Default for AppSettings {
             pretest_mode_enabled: false,
             self_explanation_enabled: false,
             focus_guard_enabled: false,
+            // Vague 18 — local AI off; Ollama config defaults applied backend-side.
+            ollama_enabled: false,
+            ollama_url: None,
+            ollama_model: None,
+            chronotype: None,
+            ambient_sound: default_ambient_sound(),
         }
     }
 }
@@ -257,6 +292,23 @@ pub fn save_settings(
             "jol_delay_minutes out of range (5-120): {}",
             settings.jol_delay_minutes
         )));
+    }
+    if !matches!(
+        settings.ambient_sound.as_str(),
+        "none" | "white" | "pink" | "brown" | "rain"
+    ) {
+        return Err(AppError::Validation(format!(
+            "invalid ambient_sound: {}",
+            settings.ambient_sound
+        )));
+    }
+    if let Some(ct) = settings.chronotype.as_deref() {
+        if !matches!(ct, "morning" | "intermediate" | "evening") {
+            return Err(AppError::Validation(format!(
+                "invalid chronotype: {}",
+                ct
+            )));
+        }
     }
 
     let store = app

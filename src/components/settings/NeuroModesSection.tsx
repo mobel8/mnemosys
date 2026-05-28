@@ -11,16 +11,30 @@
  *   - Cyclic sighing      : Spiegel et al., Cell Reports Medicine 2023.
  */
 
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Moon, Save, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { CHRONOTYPE_INFO, type Chronotype, ChronotypeQuiz } from "@/components/ChronotypeQuiz";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/use-toast";
+import { type AmbientKind, createAmbient } from "@/lib/ambient";
 import { useSaveSettings, useSettingsQuery } from "@/lib/queries";
 import type { AppSettings } from "@/lib/tauri";
+
+/** Ambient-sound dropdown options. */
+const AMBIENT_OPTIONS: { value: AmbientKind; label: string }[] = [
+  { value: "none", label: "Aucune" },
+  { value: "white", label: "Bruit blanc" },
+  { value: "pink", label: "Bruit rose (doux)" },
+  { value: "brown", label: "Bruit brun (grave)" },
+  { value: "rain", label: "Pluie" },
+];
+
+/** How long the « Tester » button previews an ambience, in ms. */
+const AMBIENT_PREVIEW_MS = 3000;
 
 const DEFAULTS: AppSettings = {
   theme: "system",
@@ -48,6 +62,11 @@ const DEFAULTS: AppSettings = {
   pretest_mode_enabled: false,
   self_explanation_enabled: false,
   focus_guard_enabled: false,
+  ollama_enabled: false,
+  ollama_url: null,
+  ollama_model: null,
+  chronotype: null,
+  ambient_sound: "none",
 };
 
 const MIN_MINUTES = 10;
@@ -74,12 +93,43 @@ export function NeuroModesSection() {
   });
 
   const [draft, setDraft] = useState<AppSettings>(DEFAULTS);
+  // Vague 18 — chronotype quiz dialog + ambient preview controller.
+  const [quizOpen, setQuizOpen] = useState(false);
 
   useEffect(() => {
     if (query.data) {
       setDraft(query.data);
     }
   }, [query.data]);
+
+  // Persist a single-field patch immediately (used by the chronotype result
+  // and the ambient dropdown — both act on their own, not via « Sauvegarder »).
+  function persistPatch(patch: Partial<AppSettings>) {
+    const base = query.data ?? DEFAULTS;
+    save.mutate({ ...base, ...patch });
+  }
+
+  function handleChronotypeResult(chronotype: Chronotype) {
+    setDraft((d) => ({ ...d, chronotype }));
+    persistPatch({ chronotype });
+  }
+
+  function handleAmbientChange(value: AmbientKind) {
+    setDraft((d) => ({ ...d, ambient_sound: value }));
+    persistPatch({ ambient_sound: value });
+  }
+
+  // Preview the chosen ambience for a few seconds. Self-stopping so we never
+  // leave an AudioContext running after the user leaves Settings.
+  function handleTestAmbient() {
+    const kind = draft.ambient_sound;
+    if (kind === "none") return;
+    const controller = createAmbient(kind, 0.15);
+    controller.start();
+    window.setTimeout(() => controller.stop(), AMBIENT_PREVIEW_MS);
+  }
+
+  const currentChronotype = (query.data?.chronotype ?? null) as Chronotype | null;
 
   const dirty = useMemo(() => {
     if (!query.data) return false;
@@ -218,7 +268,83 @@ export function NeuroModesSection() {
             Sauvegarder
           </Button>
         </div>
+
+        {/* Vague 18 — Chronotype calibration (saves immediately, independent of
+            the master switch above). */}
+        <div className="space-y-3 rounded-md border bg-muted/30 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Moon className="h-4 w-4" />
+            <Label className="text-sm font-semibold">Chronotype</Label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Détermine si tu es plutôt du matin ou du soir pour repérer tes meilleurs créneaux
+            d'étude (rMEQ, Horne &amp; Östberg).
+          </p>
+          {currentChronotype ? (
+            <p className="text-sm" data-testid="chronotype-current">
+              Tu es plutôt <strong>{CHRONOTYPE_INFO[currentChronotype].label}</strong>. Créneaux
+              d'étude conseillés : <strong>{CHRONOTYPE_INFO[currentChronotype].slots}</strong>.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Pas encore calibré.</p>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setQuizOpen(true)}
+            data-testid="chronotype-calibrate"
+          >
+            {currentChronotype ? "Recalibrer mon chronotype" : "Calibrer mon chronotype"}
+          </Button>
+        </div>
+
+        {/* Vague 18 — Context ambient sound (saves immediately on change). */}
+        <div className="space-y-3 rounded-md border bg-muted/30 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Volume2 className="h-4 w-4" />
+            <Label htmlFor="ambient-select" className="text-sm font-semibold">
+              Ambiance sonore en session
+            </Label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Un fond sonore léger pendant les révisions pour recréer un contexte stable (Godden &amp;
+            Baddeley 1975). Généré localement, volume bas.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              id="ambient-select"
+              data-testid="ambient-select"
+              value={draft.ambient_sound}
+              onChange={(e) => handleAmbientChange(e.target.value as AmbientKind)}
+              disabled={save.isPending}
+              className="flex h-9 min-w-[12rem] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {AMBIENT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleTestAmbient}
+              disabled={draft.ambient_sound === "none"}
+              data-testid="ambient-test"
+            >
+              Tester (3s)
+            </Button>
+          </div>
+        </div>
       </CardContent>
+
+      <ChronotypeQuiz
+        open={quizOpen}
+        onClose={() => setQuizOpen(false)}
+        onResult={handleChronotypeResult}
+      />
     </Card>
   );
 }

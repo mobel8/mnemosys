@@ -38,7 +38,11 @@ pub struct GeneratedCard {
 /// System prompt. Refined to be aggressive about the "JSON only" contract
 /// because Claude's default behaviour is to add a preamble like
 /// "Here are your flashcards:" which then breaks `serde_json::from_str`.
-const SYSTEM_PROMPT: &str = r#"You generate flashcards for spaced repetition learning.
+///
+/// Exposed `pub(crate)` so the local-LLM path ([`commands::ai::generate_cards_local`])
+/// drives Ollama with the **exact same** contract — the parser is LLM-agnostic,
+/// so the prompt must be too.
+pub(crate) const SYSTEM_PROMPT: &str = r#"You generate flashcards for spaced repetition learning.
 
 Rules:
 1. Output a JSON array — NO markdown fences, NO preamble, NO trailing prose.
@@ -66,6 +70,19 @@ const MAX_OUTPUT_TOKENS: u32 = 8000;
 // Public API
 // ---------------------------------------------------------------------------
 
+/// Build the user-facing prompt for a card-generation request.
+///
+/// Pulled out (and made `pub(crate)`) so the Claude and Ollama paths emit the
+/// byte-identical instruction — the only difference between the two backends
+/// is the transport, never the contract.
+pub(crate) fn build_card_prompt(text: &str, max_cards: u32, language: &str) -> String {
+    format!(
+        "Generate up to {max_cards} flashcards from the content below. \
+         Output language: {language}. Return ONLY the JSON array.\n\n\
+         Content:\n{text}"
+    )
+}
+
 /// Generate up to `max_cards` flashcards from a raw text chunk.
 ///
 /// `language` is a hint (`"fr"`, `"en"`, `"es"`, …) that the model uses to
@@ -80,11 +97,7 @@ pub async fn generate_cards_from_text(
         return Ok(Vec::new());
     }
 
-    let prompt = format!(
-        "Generate up to {max_cards} flashcards from the content below. \
-         Output language: {language}. Return ONLY the JSON array.\n\n\
-         Content:\n{text}"
-    );
+    let prompt = build_card_prompt(text, max_cards, language);
 
     let response = client
         .complete(Some(SYSTEM_PROMPT), &prompt, MAX_OUTPUT_TOKENS)
@@ -141,8 +154,10 @@ pub async fn generate_cards_from_pdf(
 
 /// Strip markdown code fences if present and parse the JSON array.
 ///
-/// Pulled out so it's unit-testable without making an HTTP call.
-pub(super) fn parse_cards_response(response: &str) -> Result<Vec<GeneratedCard>, ClaudeError> {
+/// Pulled out so it's unit-testable without making an HTTP call. `pub(crate)`
+/// because the Ollama path ([`commands::ai::generate_cards_local`]) parses its
+/// raw `response` string with the same defensive logic.
+pub(crate) fn parse_cards_response(response: &str) -> Result<Vec<GeneratedCard>, ClaudeError> {
     let cleaned = strip_code_fences(response.trim());
 
     serde_json::from_str::<Vec<GeneratedCard>>(cleaned).map_err(|e| {

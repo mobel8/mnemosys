@@ -34,6 +34,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { AmbientPlayer } from "@/components/AmbientPlayer";
 import { ConfidenceRating } from "@/components/ConfidenceRating";
 import { CyclicSighing } from "@/components/CyclicSighing";
 import { FocusGuard } from "@/components/FocusGuard";
@@ -105,6 +106,9 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   const pretestModeEnabled = settings.data?.pretest_mode_enabled ?? false;
   const selfExplanationEnabled = settings.data?.self_explanation_enabled ?? false;
   const focusGuardEnabled = settings.data?.focus_guard_enabled ?? false;
+  // Vague 18 — context ambient sound (Godden & Baddeley). Independent of the
+  // neuro master switch; gated only by its own setting.
+  const ambientSound = settings.data?.ambient_sound ?? "none";
   // Per-card pretest gate: which card index has already shown (or skipped)
   // its pretest prompt. Reset implicitly because we key on the index.
   const [pretestDoneForIndex, setPretestDoneForIndex] = useState<number | null>(null);
@@ -531,6 +535,10 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
 
       {/* Vague 12 — opt-in webcam focus guard (consent-gated, 100% local). */}
       {focusGuardEnabled && <FocusGuard enabled={focusGuardEnabled} />}
+
+      {/* Vague 18 — context ambient sound; plays for the active review, stops
+          when the session ends (this branch unmounts) or the learner quits. */}
+      {ambientSound !== "none" && <AmbientPlayer kind={ambientSound} />}
 
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent>

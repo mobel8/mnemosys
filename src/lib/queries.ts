@@ -579,6 +579,26 @@ export function useGenerateCardsFromText(
   });
 }
 
+/**
+ * Vague 18 — generate cards from text via a **local** Ollama LLM. Same shape
+ * as `useGenerateCardsFromText`; the only difference is privacy + zero API
+ * cost (and the « Ollama unreachable » error when the daemon isn't running).
+ * Stateless — no cache invalidation.
+ */
+export function useGenerateCardsLocal(
+  opts?: UseMutationOptions<
+    GeneratedCard[],
+    Error,
+    { text: string; maxCards: number; language: string }
+  >,
+) {
+  return useMutation({
+    mutationFn: ({ text, maxCards, language }) =>
+      api.ai.generateCardsLocal(text, maxCards, language),
+    ...opts,
+  });
+}
+
 /** Same as `useGenerateCardsFromText` but feeds Claude a PDF path. */
 export function useGenerateCardsFromPdf(
   opts?: UseMutationOptions<

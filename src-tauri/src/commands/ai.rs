@@ -22,8 +22,10 @@ use tauri::{AppHandle, State};
 
 use crate::ai::{
     critique_cards, generate_cards_from_pdf, generate_cards_from_text, generate_mnemonic,
-    CardCritique, ClaudeClient, GeneratedCard,
+    CardCritique, ClaudeClient, GeneratedCard, OllamaClient,
 };
+use crate::ai::cards::{build_card_prompt, parse_cards_response, SYSTEM_PROMPT};
+use crate::ai::ollama::{DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL};
 use crate::app_state::AppState;
 use crate::db::CardRepo;
 use crate::error::{AppError, AppResult};
@@ -85,6 +87,74 @@ pub async fn generate_cards_text(
     generate_cards_from_text(&client, &text, max_cards, &language)
         .await
         .map_err(|e| AppError::Other(e.to_string()))
+}
+
+/// Resolve the Ollama daemon URL + model from persisted settings, falling back
+/// to the upstream defaults (`http://localhost:11434` / `llama3.2`) when a
+/// field is absent or blank. Unlike [`resolve_api_key`] this never errors:
+/// there's no secret to miss, and an unreachable daemon is reported later by
+/// [`OllamaClient::generate`] with an actionable message.
+fn resolve_ollama_config(app: &AppHandle) -> (String, String) {
+    let mut url = DEFAULT_OLLAMA_URL.to_string();
+    let mut model = DEFAULT_OLLAMA_MODEL.to_string();
+
+    use tauri_plugin_store::StoreExt;
+    if let Ok(store) = app.store("settings.json") {
+        if let Some(value) = store.get("app_settings") {
+            if let Some(u) = value
+                .get("ollama_url")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                url = u.to_string();
+            }
+            if let Some(m) = value
+                .get("ollama_model")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                model = m.to_string();
+            }
+        }
+    }
+    (url, model)
+}
+
+/// Generate up to `max_cards` flashcards from a raw text blob using a **local**
+/// Ollama LLM instead of Claude (Vague 18 — privacy + zero API cost).
+///
+/// Reuses the exact same `SYSTEM_PROMPT`, user-prompt builder, and defensive
+/// JSON parser as the Claude path — only the transport differs. The daemon URL
+/// and model come from settings (`ollama_url` / `ollama_model`) with sane
+/// fallbacks. If the daemon isn't running the error names the URL so the UI can
+/// show « Ollama injoignable ».
+#[tauri::command]
+pub async fn generate_cards_local(
+    app: AppHandle,
+    text: String,
+    max_cards: u32,
+    language: String,
+) -> AppResult<Vec<GeneratedCard>> {
+    if text.trim().is_empty() {
+        return Err(AppError::Validation("text must not be empty".to_string()));
+    }
+    if max_cards == 0 {
+        return Err(AppError::Validation(
+            "max_cards must be at least 1".to_string(),
+        ));
+    }
+
+    let (url, model) = resolve_ollama_config(&app);
+    let client = OllamaClient::new(url, model)?;
+
+    let prompt = build_card_prompt(text.trim(), max_cards, &language);
+    let response = client.generate(Some(SYSTEM_PROMPT), &prompt).await?;
+
+    let mut cards = parse_cards_response(&response).map_err(|e| AppError::Other(e.to_string()))?;
+    cards.truncate(max_cards as usize);
+    Ok(cards)
 }
 
 /// Extract the file name (no directory) from a path. Falls back to the raw

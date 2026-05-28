@@ -44,6 +44,9 @@ vi.mock("@/lib/queries", () => ({
   useDecks: () => ({ data: decksData, isLoading: false }),
   useGenerateCardsFromText: () => ({ mutateAsync: generateMutateAsync, isPending: false }),
   useGenerateCardsFromPdf: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  // V18 — Ollama local generation toggle. Stubbed: these tests never opt
+  // into local mode, so a no-op keeps AiGenerator renderable.
+  useGenerateCardsLocal: () => ({ mutateAsync: vi.fn(async () => []), isPending: false }),
   useGenerateCardElaboration: () => ({
     mutateAsync: vi.fn(async () => ({ why: "", example: "" })),
     isPending: false,

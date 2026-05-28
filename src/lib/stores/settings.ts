@@ -41,6 +41,12 @@ const DEFAULTS: AppSettings = {
   pretest_mode_enabled: false,
   self_explanation_enabled: false,
   focus_guard_enabled: false,
+  // Vague 18 — local AI + advanced neuro.
+  ollama_enabled: false,
+  ollama_url: null,
+  ollama_model: null,
+  chronotype: null,
+  ambient_sound: "none",
 };
 
 interface SettingsState extends AppSettings {

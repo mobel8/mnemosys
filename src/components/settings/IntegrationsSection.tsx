@@ -10,13 +10,14 @@
  * for the MVP; Session 3+ will migrate them to the OS keychain.
  */
 
-import { Key, Loader2, Trash2 } from "lucide-react";
+import { Cpu, Key, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/use-toast";
 import {
   useClearTtsCache,
@@ -74,6 +75,11 @@ const DEFAULTS: AppSettings = {
   pretest_mode_enabled: false,
   self_explanation_enabled: false,
   focus_guard_enabled: false,
+  ollama_enabled: false,
+  ollama_url: null,
+  ollama_model: null,
+  chronotype: null,
+  ambient_sound: "none",
 };
 
 export function IntegrationsSection() {
@@ -109,6 +115,10 @@ export function IntegrationsSection() {
   const [openai, setOpenai] = useState("");
   const [voice, setVoice] = useState<TTSVoice>("nova");
   const [speed, setSpeed] = useState(1.0);
+  // Vague 18 — local AI (Ollama) config.
+  const [ollamaEnabled, setOllamaEnabled] = useState(false);
+  const [ollamaUrl, setOllamaUrl] = useState("");
+  const [ollamaModel, setOllamaModel] = useState("");
 
   // Hydrate local state once settings arrive from the backend.
   useEffect(() => {
@@ -117,6 +127,9 @@ export function IntegrationsSection() {
     setOpenai(s.openai_api_key ?? "");
     setVoice(((s.tts_voice as TTSVoice | null) ?? "nova") as TTSVoice);
     setSpeed(s.tts_speed ?? 1.0);
+    setOllamaEnabled(s.ollama_enabled);
+    setOllamaUrl(s.ollama_url ?? "");
+    setOllamaModel(s.ollama_model ?? "");
   }, [query.data]);
 
   async function handleSave() {
@@ -127,6 +140,9 @@ export function IntegrationsSection() {
       openai_api_key: openai.trim() === "" ? null : openai.trim(),
       tts_voice: voice,
       tts_speed: speed,
+      ollama_enabled: ollamaEnabled,
+      ollama_url: ollamaUrl.trim() === "" ? null : ollamaUrl.trim(),
+      ollama_model: ollamaModel.trim() === "" ? null : ollamaModel.trim(),
     };
     save.mutate(next);
   }
@@ -178,6 +194,66 @@ export function IntegrationsSection() {
               />
               <p className="text-xs text-muted-foreground">
                 Utilisée par le bouton 🔊 dans les cartes.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ---- Local AI (Ollama) ---- */}
+        <section className="space-y-4">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <Cpu className="h-4 w-4" />
+            IA locale (Ollama)
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Génère des cartes avec un LLM tournant sur ta machine — aucune donnée envoyée, zéro coût
+            API. Installe Ollama (<code>ollama.com</code>) puis lance{" "}
+            <code>ollama pull llama3.2</code>. Active ensuite « IA locale » sur la page Génération
+            IA.
+          </p>
+          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="ollama-enabled" className="text-sm">
+                Activer l'IA locale par défaut
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Pré-coche le mode local sur la page Génération IA (modifiable carte par carte).
+              </p>
+            </div>
+            <Switch
+              id="ollama-enabled"
+              data-testid="ollama-enabled-switch"
+              checked={ollamaEnabled}
+              onCheckedChange={setOllamaEnabled}
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="ollama-url">URL du serveur Ollama</Label>
+              <Input
+                id="ollama-url"
+                type="text"
+                autoComplete="off"
+                placeholder="http://localhost:11434"
+                value={ollamaUrl}
+                onChange={(e) => setOllamaUrl(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Vide = <code>http://localhost:11434</code>.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ollama-model">Modèle</Label>
+              <Input
+                id="ollama-model"
+                type="text"
+                autoComplete="off"
+                placeholder="llama3.2"
+                value={ollamaModel}
+                onChange={(e) => setOllamaModel(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Vide = <code>llama3.2</code>. Doit être téléchargé via <code>ollama pull</code>.
               </p>
             </div>
           </div>

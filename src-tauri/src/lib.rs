@@ -120,6 +120,8 @@ pub fn run() {
             commands::ai::generate_cards_text,
             commands::ai::generate_cards_pdf,
             commands::ai::generate_card_elaboration,
+            // local AI (Vague 18 — Ollama)
+            commands::ai::generate_cards_local,
             // multi-agent pipeline + mnemonic helper (Vague 13)
             commands::ai::critique_generated_cards,
             commands::ai::generate_card_mnemonic,

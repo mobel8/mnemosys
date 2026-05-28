@@ -45,6 +45,7 @@ import {
   useGenerateCardElaboration,
   useGenerateCardsFromPdf,
   useGenerateCardsFromText,
+  useGenerateCardsLocal,
 } from "@/lib/queries";
 import type { AICardTemplate, CardCritique, GeneratedCard, NoteTemplate } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
@@ -151,6 +152,12 @@ function isApiKeyError(err: unknown): boolean {
   return /api[_ ]?key|anthropic|unauthor/i.test(msg);
 }
 
+/** Vague 18 — detect the « Ollama daemon not reachable / model missing » error. */
+function isOllamaError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /ollama/i.test(msg);
+}
+
 export function AiGenerator() {
   const decksQuery = useDecks();
   const decks = useMemo(() => decksQuery.data ?? [], [decksQuery.data]);
@@ -176,6 +183,13 @@ export function AiGenerator() {
    */
   const [includeCritique, setIncludeCritique] = useState(false);
   const [isCritiquing, setIsCritiquing] = useState(false);
+  /**
+   * Vague 18 — opt-in local generation. When `true`, the text tab routes
+   * through a local Ollama LLM (`generate_cards_local`) instead of Claude:
+   * private + free, but requires the daemon to be running. PDF generation
+   * stays on the Claude path (Ollama text-only here).
+   */
+  const [useLocalAI, setUseLocalAI] = useState(false);
 
   // Drafts (the validation queue) ----------------------------------------
   const [drafts, setDrafts] = useState<CardDraft[]>([]);
@@ -193,12 +207,13 @@ export function AiGenerator() {
 
   // Mutations -------------------------------------------------------------
   const genText = useGenerateCardsFromText();
+  const genLocal = useGenerateCardsLocal();
   const genPdf = useGenerateCardsFromPdf();
   const genElaboration = useGenerateCardElaboration();
   const critiqueCards = useCritiqueCards();
   const createNote = useCreateNote();
 
-  const isGenerating = genText.isPending || genPdf.isPending;
+  const isGenerating = genText.isPending || genLocal.isPending || genPdf.isPending;
 
   // Stable ids for accessible label/control wiring.
   const deckSelectId = useId();
@@ -207,6 +222,7 @@ export function AiGenerator() {
   const langSelectId = useId();
   const elaborationCheckboxId = useId();
   const critiqueCheckboxId = useId();
+  const localAiCheckboxId = useId();
 
   // ----- Handlers --------------------------------------------------------
 
@@ -230,6 +246,16 @@ export function AiGenerator() {
   }
 
   function handleGenerationError(err: unknown) {
+    // Vague 18 — local-AI failures are about the daemon, not an API key.
+    if (isOllamaError(err)) {
+      toast({
+        title: "Ollama injoignable",
+        description:
+          "Vérifie qu'Ollama tourne (ollama.com) et que le modèle est téléchargé (ollama pull). Réglages dans Paramètres → Intégrations.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (isApiKeyError(err)) {
       toast({
         title: "Clé API Anthropic manquante",
@@ -248,19 +274,22 @@ export function AiGenerator() {
   async function handleGenerate() {
     const safeMaxCards = clampMaxCards(maxCards);
     try {
-      const cards =
-        sourceTab === "text"
-          ? await genText.mutateAsync({
-              text: text.trim(),
-              maxCards: safeMaxCards,
-              language,
-            })
-          : await genPdf.mutateAsync({
-              // Cast guarded by `canGenerate` — button is disabled when null.
-              pdfPath: pdfPath ?? "",
-              maxCards: safeMaxCards,
-              language,
-            });
+      let cards: GeneratedCard[];
+      if (sourceTab === "text") {
+        // Vague 18 — route text generation through Ollama when the local-AI
+        // toggle is on; otherwise the standard Claude path.
+        const textPayload = { text: text.trim(), maxCards: safeMaxCards, language };
+        cards = useLocalAI
+          ? await genLocal.mutateAsync(textPayload)
+          : await genText.mutateAsync(textPayload);
+      } else {
+        cards = await genPdf.mutateAsync({
+          // Cast guarded by `canGenerate` — button is disabled when null.
+          pdfPath: pdfPath ?? "",
+          maxCards: safeMaxCards,
+          language,
+        });
+      }
       const nextDrafts = cards.map((c, i) => draftFromGenerated(c, i));
       setDrafts(nextDrafts);
       if (nextDrafts.length === 0) {
@@ -638,6 +667,27 @@ export function AiGenerator() {
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2 rounded-md border border-dashed bg-muted/20 p-3">
+            <input
+              id={localAiCheckboxId}
+              type="checkbox"
+              checked={useLocalAI}
+              onChange={(e) => setUseLocalAI(e.target.checked)}
+              disabled={isGenerating || isElaborating || isCritiquing || sourceTab === "pdf"}
+              className="mt-0.5 h-4 w-4 rounded border-input"
+            />
+            <div className="space-y-0.5">
+              <Label htmlFor={localAiCheckboxId} className="cursor-pointer text-sm">
+                🖥️ IA locale (Ollama) — privée &amp; gratuite
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Génère les cartes via un modèle LLM tournant sur ta machine (aucune donnée envoyée,
+                zéro coût API). Nécessite Ollama installé et lancé. Onglet Texte uniquement —
+                configure l'URL et le modèle dans Paramètres → Intégrations.
+              </p>
             </div>
           </div>
 

@@ -368,6 +368,17 @@ export interface AppSettings {
   self_explanation_enabled: boolean;
   /** Focus Guard: opt-in local webcam mind-wandering detection during a session (Hutt 2024). */
   focus_guard_enabled: boolean;
+  // --- Vague 18 (local AI + advanced neuro, opt-in) ---
+  /** Local AI Tutor: generate cards via a local Ollama LLM instead of Claude. */
+  ollama_enabled: boolean;
+  /** Ollama daemon base URL. `null` falls back to `http://localhost:11434`. */
+  ollama_url: string | null;
+  /** Ollama model slug (e.g. `"llama3.2"`). `null` falls back to `llama3.2`. */
+  ollama_model: string | null;
+  /** Chronotype from the MEQ quiz: `"morning" | "intermediate" | "evening"`, or `null` if uncalibrated. */
+  chronotype: string | null;
+  /** Context ambient sound during reviews (Godden & Baddeley 1975). */
+  ambient_sound: "none" | "white" | "pink" | "brown" | "rain";
 }
 
 // --- Vague 3: wellness ----------------------------------------------------
@@ -870,6 +881,13 @@ export const api = {
     /** Generate cards from a PDF on disk. */
     generateCardsPdf: (pdfPath: string, maxCards: number, language: string) =>
       invoke<GeneratedCard[]>("generate_cards_pdf", { pdfPath, maxCards, language }),
+    /**
+     * Vague 18 — generate cards from text via a **local** Ollama LLM (privacy
+     * + zero API cost). Reads the daemon URL/model from settings. Throws with
+     * an « Ollama unreachable » message when the daemon isn't running.
+     */
+    generateCardsLocal: (text: string, maxCards: number, language: string) =>
+      invoke<GeneratedCard[]>("generate_cards_local", { text, maxCards, language }),
     /**
      * Vague 5 — produce a `{ why, example }` pedagogical elaboration for a
      * single card. `cardText` is the prompt+answer concatenation the
