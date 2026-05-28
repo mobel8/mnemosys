@@ -19,8 +19,10 @@ import { Route as achievementsRoute } from "./achievements";
 import { Route as aiGenerateRoute } from "./ai-generate";
 import { Route as decksDeckIdRoute } from "./decks.$deckId";
 import { Route as decksDeckIdNewCardRoute } from "./decks.$deckId.new-card";
+import { Route as gestureRoute } from "./gesture";
 import { Route as graphRoute } from "./graph";
 import { Route as indexRoute } from "./index";
+import { Route as musicRoute } from "./music";
 import { Route as palacesRoute } from "./palaces";
 import { Route as palacesPalaceIdRoute } from "./palaces.$palaceId";
 import { Route as palacesPalaceIdReviewRoute } from "./palaces.$palaceId.review";
@@ -42,5 +44,7 @@ export const routeTree = rootRoute.addChildren([
   statsRoute,
   graphRoute,
   achievementsRoute,
+  musicRoute,
+  gestureRoute,
   settingsRoute,
 ]);

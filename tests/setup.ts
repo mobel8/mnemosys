@@ -20,6 +20,62 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 }
 
+// jsdom ships no Web Audio API, but the Vague 16 creative tools (metronome,
+// ear training, gesture timer) create an `AudioContext` and oscillator/gain
+// nodes the moment the user starts them. Provide a minimal no-op stub so those
+// components render and toggle without throwing during component tests.
+if (typeof globalThis.AudioContext === "undefined") {
+  class FakeAudioParam {
+    value = 0;
+    setValueAtTime() {
+      /* no-op */
+    }
+    exponentialRampToValueAtTime() {
+      /* no-op */
+    }
+  }
+  class FakeAudioNode {
+    connect(target: unknown) {
+      return target;
+    }
+    disconnect() {
+      /* no-op */
+    }
+  }
+  class FakeOscillator extends FakeAudioNode {
+    type = "sine";
+    frequency = new FakeAudioParam();
+    start() {
+      /* no-op */
+    }
+    stop() {
+      /* no-op */
+    }
+  }
+  class FakeGain extends FakeAudioNode {
+    gain = new FakeAudioParam();
+  }
+  class FakeAudioContext {
+    state: AudioContextState = "running";
+    currentTime = 0;
+    destination = new FakeAudioNode();
+    createOscillator() {
+      return new FakeOscillator();
+    }
+    createGain() {
+      return new FakeGain();
+    }
+    resume() {
+      return Promise.resolve();
+    }
+    close() {
+      this.state = "closed";
+      return Promise.resolve();
+    }
+  }
+  globalThis.AudioContext = FakeAudioContext as unknown as typeof AudioContext;
+}
+
 // Run cleanup after every test to ensure tests are isolated.
 afterEach(() => {
   cleanup();

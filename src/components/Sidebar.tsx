@@ -13,7 +13,9 @@ import {
   Github,
   Home,
   Moon,
+  Music2,
   Network,
+  Palette,
   Settings,
   Shuffle,
   Sparkles,
@@ -38,6 +40,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/stats", label: "Stats", icon: BarChart3 },
   { to: "/graph", label: "Graphe", icon: Network },
   { to: "/achievements", label: "Succès", icon: Trophy },
+  { to: "/music", label: "Musique", icon: Music2 },
+  { to: "/gesture", label: "Gesture", icon: Palette },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
