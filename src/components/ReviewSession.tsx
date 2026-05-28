@@ -34,6 +34,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { ConfidenceRating } from "@/components/ConfidenceRating";
 import { CyclicSighing } from "@/components/CyclicSighing";
 import { FocusGuard } from "@/components/FocusGuard";
 import { MoodCheckIn } from "@/components/MoodCheckIn";
@@ -93,6 +94,9 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   const [preQuestionsDone, setPreQuestionsDone] = useState(false);
   // Per-card confidence buffer. Reset on every card transition.
   const [confidence, setConfidence] = useState<number | null>(null);
+  // Vague 15 — per-card retrospective confidence (captured AFTER the flip).
+  // Reset on every card transition like the prospective buffer.
+  const [confidencePost, setConfidencePost] = useState<number | null>(null);
   const typeTheAnswerEnabled = settings.data?.type_the_answer_enabled ?? false;
   const voiceAnswerEnabled = settings.data?.voice_answer_enabled ?? false;
   const confidenceEnabled = settings.data?.confidence_rating_enabled ?? false;
@@ -197,8 +201,9 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       }
       return next;
     });
-    // Reset the per-card confidence buffer so each card starts fresh.
+    // Reset the per-card confidence buffers so each card starts fresh.
     setConfidence(null);
+    setConfidencePost(null);
     // Reset the self-explanation gate for the next card.
     setSelfExplanationDone(false);
     advanceInStore();
@@ -230,14 +235,18 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       setPhase("submitting");
       setPendingRating(rating);
       // Only forward `confidence` when the toggle is on *and* the learner
-      // actually picked a value. Otherwise the backend keeps it NULL.
+      // actually picked a value. Otherwise the backend keeps it NULL. Same
+      // gate for the retrospective confidence (Vague 15).
       const confidenceForSubmit = confidenceEnabled && confidence !== null ? confidence : null;
+      const confidencePostForSubmit =
+        confidenceEnabled && confidencePost !== null ? confidencePost : null;
       submitReview.mutate(
         {
           cardId: current.card.id,
           rating,
           reviewTimeMs,
           confidence: confidenceForSubmit,
+          confidencePost: confidencePostForSubmit,
         },
         {
           onSuccess: () => {
@@ -267,6 +276,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
     [
       advanceToNext,
       confidence,
+      confidencePost,
       confidenceEnabled,
       current,
       phase,
@@ -491,16 +501,30 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
               onContinue={() => setSelfExplanationDone(true)}
             />
           ) : (
-            <ReviewControls
-              phase={phase}
-              cardId={current.card.id}
-              onFlip={handleFlip}
-              onRate={handleRate}
-              pendingRating={pendingRating}
-              confidenceEnabled={confidenceEnabled}
-              confidenceValue={confidence}
-              onConfidenceChange={setConfidence}
-            />
+            <div className="flex w-full max-w-2xl flex-col items-center gap-3">
+              {/* Vague 15 — two-step: once the answer is visible, capture the
+                  retrospective confidence (in addition to the prospective one
+                  shown inside ReviewControls). */}
+              {confidenceEnabled && phase === "answer" && (
+                <ConfidenceRating
+                  key={`conf-post-${current.card.id}`}
+                  variant="retrospective"
+                  value={confidencePost}
+                  onChange={setConfidencePost}
+                  disabled={false}
+                />
+              )}
+              <ReviewControls
+                phase={phase}
+                cardId={current.card.id}
+                onFlip={handleFlip}
+                onRate={handleRate}
+                pendingRating={pendingRating}
+                confidenceEnabled={confidenceEnabled}
+                confidenceValue={confidence}
+                onConfidenceChange={setConfidence}
+              />
+            </div>
           )}
         </div>
       )}
@@ -600,6 +624,10 @@ function getCardFront(cwn: CardWithNote): string {
   if (note.template === "refutation") {
     const misconception = typeof f.misconception === "string" ? f.misconception : "";
     return misconception ? `Vrai ou faux ? ${misconception}` : "";
+  }
+  // Vague 15 — worked example recto is the problem statement.
+  if (note.template === "worked_example") {
+    return typeof f.problem === "string" ? f.problem : "";
   }
   return typeof f.front === "string" ? f.front : "";
 }

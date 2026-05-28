@@ -8,7 +8,7 @@
 
 import { useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { BookOpen, Mic2, MoreVertical, Pencil, Play, Trash2 } from "lucide-react";
+import { BookOpen, Lock, Mic2, MoreVertical, Pencil, Play, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { DeckPodcastDialog } from "@/components/DeckPodcastDialog";
 import { EditDeckDialog } from "@/components/EditDeckDialog";
@@ -34,7 +34,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/use-toast";
-import { useDeckMastery, useDeckStats, useDeleteDeck } from "@/lib/queries";
+import {
+  useDeckMastery,
+  useDeckMasteryStatus,
+  useDeckStats,
+  useDecks,
+  useDeleteDeck,
+} from "@/lib/queries";
 import type { Deck, DeckMastery } from "@/lib/tauri";
 
 interface DeckCardProps {
@@ -90,6 +96,16 @@ export function DeckCard({ deck }: DeckCardProps) {
   const stats = useDeckStats(deck.id);
   const mastery = useDeckMastery(deck.id);
   const masteryLevel = mastery.data ? pickMasteryLevel(mastery.data) : null;
+  // Vague 15 — Bloom mastery gate. Only query when this deck has a prerequisite
+  // (an ungated deck is always unlocked, so we skip the round-trip).
+  const hasPrerequisite = deck.prerequisite_deck_id != null;
+  const masteryStatus = useDeckMasteryStatus(deck.id, { enabled: hasPrerequisite });
+  const locked = hasPrerequisite && masteryStatus.data ? !masteryStatus.data.unlocked : false;
+  // Resolve the prerequisite's display name from the cached deck list for a
+  // helpful tooltip ("Maîtrise d'abord {name}").
+  const allDecks = useDecks({ enabled: hasPrerequisite });
+  const prerequisiteName =
+    allDecks.data?.find((d) => d.id === deck.prerequisite_deck_id)?.name ?? "le deck prérequis";
   const [editOpen, setEditOpen] = useState(false);
   const [podcastOpen, setPodcastOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -168,14 +184,17 @@ export function DeckCard({ deck }: DeckCardProps) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
+                    disabled={locked}
+                    title={locked ? `Maîtrise d'abord ${prerequisiteName}` : undefined}
                     onSelect={() => {
+                      if (locked) return;
                       void navigate({
                         to: "/review/$deckId",
                         params: { deckId: deck.id },
                       });
                     }}
                   >
-                    <Play className="h-4 w-4" />
+                    {locked ? <Lock className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                     Étudier
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setEditOpen(true)}>
@@ -221,6 +240,16 @@ export function DeckCard({ deck }: DeckCardProps) {
                       title="Niveau de maîtrise dominant — basé sur la stabilité FSRS"
                     >
                       {masteryLevel.label}
+                    </Badge>
+                  )}
+                  {locked && (
+                    <Badge
+                      variant="outline"
+                      className="inline-flex items-center gap-1 border-amber-500/40 bg-amber-500/10 font-medium text-amber-700 dark:text-amber-300"
+                      title={`Maîtrise d'abord ${prerequisiteName} (≥90% de rétention)`}
+                    >
+                      <Lock className="h-3 w-3" />
+                      Verrouillé
                     </Badge>
                   )}
                 </>

@@ -30,6 +30,12 @@ pub struct Deck {
     /// card and the note editor defaults to the bidirectional template.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language_mode: Option<String>,
+    /// Vague 15 — Bloom mastery gating. When set, this deck stays "locked"
+    /// (its study button disabled) until the referenced prerequisite deck is
+    /// mastered (≥90 % retention over the last 30 days with ≥20 reviews).
+    /// `None` for an ungated deck. See [`DeckRepo::mastery_status`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prerequisite_deck_id: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -51,6 +57,10 @@ pub struct DeckPatch {
     /// distinguishes "leave alone" (`None`) from "set/clear to this value"
     /// (`Some(Some("en"))` / `Some(None)`).
     pub language_mode: Option<Option<String>>,
+    /// Vague 15 — set/clear the deck's mastery-gating prerequisite. Same
+    /// double-`Option` convention: `None` leaves it untouched, `Some(None)`
+    /// clears the gate, `Some(Some(id))` points it at another deck.
+    pub prerequisite_deck_id: Option<Option<i64>>,
 }
 
 /// Aggregated counts used by the deck dashboard.
@@ -91,6 +101,37 @@ impl DeckMastery {
     }
 }
 
+/// Vague 15 — Bloom mastery-learning gate status for one deck.
+///
+/// `mastered` is the criterion-referenced "≥90 %" rule (Bloom): the deck's
+/// reviews over the last 30 days must hit a retention rate `>= 0.9` over at
+/// least 20 reviews (a small floor so a single lucky review can't unlock a
+/// downstream deck). `unlocked` answers "may the learner study THIS deck?":
+/// `true` when there is no prerequisite, or when the prerequisite is itself
+/// mastered. The remaining fields let the UI render an informative lock.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct MasteryStatus {
+    /// Whether *this* deck meets the ≥90 % / ≥20-review mastery criterion.
+    pub mastered: bool,
+    /// Retention rate of this deck over the last 30 days, in `[0, 1]`.
+    pub retention_rate: f64,
+    /// Number of reviews counted toward `retention_rate` (last 30 days).
+    pub review_count: i64,
+    /// The prerequisite deck id, if any.
+    pub prerequisite_id: Option<i64>,
+    /// Whether the prerequisite (if any) is itself mastered. `false` when a
+    /// prerequisite exists but isn't mastered; `true` when none exists.
+    pub prerequisite_mastered: bool,
+    /// Whether the learner may study this deck now (no gate, or gate cleared).
+    pub unlocked: bool,
+}
+
+/// Mastery criterion constants (Bloom 1968 — 90 % mastery threshold).
+const MASTERY_RETENTION_THRESHOLD: f64 = 0.9;
+const MASTERY_MIN_REVIEWS: i64 = 20;
+/// Window over which retention is measured for the gate (seconds in 30 days).
+const MASTERY_WINDOW_SECS: i64 = 30 * 86_400;
+
 /// Thin repository — holds a borrow on the active connection.
 pub struct DeckRepo<'a> {
     conn: &'a Connection,
@@ -104,7 +145,7 @@ impl<'a> DeckRepo<'a> {
     /// All decks, alphabetical by name.
     pub fn list(&self) -> AppResult<Vec<Deck>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, description, color, desired_retention, scheduler_kind, language_mode, created_at, updated_at
+            "SELECT id, name, description, color, desired_retention, scheduler_kind, language_mode, prerequisite_deck_id, created_at, updated_at
              FROM decks
              ORDER BY name COLLATE NOCASE ASC",
         )?;
@@ -121,7 +162,7 @@ impl<'a> DeckRepo<'a> {
         let deck = self
             .conn
             .query_row(
-                "SELECT id, name, description, color, desired_retention, scheduler_kind, language_mode, created_at, updated_at
+                "SELECT id, name, description, color, desired_retention, scheduler_kind, language_mode, prerequisite_deck_id, created_at, updated_at
                  FROM decks WHERE id = ?1",
                 params![id],
                 row_to_deck,
@@ -138,6 +179,9 @@ impl<'a> DeckRepo<'a> {
     ///
     /// `language_mode` (Vague 10) is an optional ISO 639-1 code flagging the
     /// deck as language-learning; `None` keeps it an ordinary deck.
+    ///
+    /// `prerequisite_deck_id` (Vague 15) optionally gates this deck behind
+    /// another deck's mastery; `None` keeps it ungated.
     pub fn create(
         &self,
         name: &str,
@@ -146,6 +190,7 @@ impl<'a> DeckRepo<'a> {
         desired_retention: f64,
         scheduler_kind: Option<SchedulerKind>,
         language_mode: Option<&str>,
+        prerequisite_deck_id: Option<i64>,
     ) -> AppResult<Deck> {
         if name.trim().is_empty() {
             return Err(AppError::Validation("deck name must not be empty".into()));
@@ -158,9 +203,9 @@ impl<'a> DeckRepo<'a> {
         let kind = scheduler_kind.unwrap_or_default();
         let now = Utc::now().timestamp();
         self.conn.execute(
-            "INSERT INTO decks (name, description, color, desired_retention, scheduler_kind, language_mode, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
-            params![name, description, color, desired_retention, kind.as_str(), language_mode, now],
+            "INSERT INTO decks (name, description, color, desired_retention, scheduler_kind, language_mode, prerequisite_deck_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+            params![name, description, color, desired_retention, kind.as_str(), language_mode, prerequisite_deck_id, now],
         )?;
         let id = self.conn.last_insert_rowid();
         self.get(id)
@@ -223,6 +268,20 @@ impl<'a> DeckRepo<'a> {
             self.conn.execute(
                 "UPDATE decks SET language_mode = ?1, updated_at = ?2 WHERE id = ?3",
                 params![lang_opt.as_deref(), now, id],
+            )?;
+        }
+        if let Some(prereq_opt) = patch.prerequisite_deck_id {
+            // `Some(None)` clears the gate, `Some(Some(other_id))` sets it.
+            // Guard against self-referential gates (a deck can't require
+            // itself) — that would make it permanently locked.
+            if prereq_opt == Some(id) {
+                return Err(AppError::Validation(
+                    "a deck cannot be its own prerequisite".into(),
+                ));
+            }
+            self.conn.execute(
+                "UPDATE decks SET prerequisite_deck_id = ?1, updated_at = ?2 WHERE id = ?3",
+                params![prereq_opt, now, id],
             )?;
         }
         self.get(id)
@@ -344,6 +403,65 @@ impl<'a> DeckRepo<'a> {
             burned,
         })
     }
+
+    /// Vague 15 — Bloom mastery-gating status for `id`.
+    ///
+    /// Computes this deck's 30-day retention (rating ≥ 3 counts as correct,
+    /// matching the rest of the stats layer), decides whether it is mastered
+    /// (≥90 % over ≥20 reviews), then resolves the prerequisite chain one
+    /// level deep to answer "is this deck unlocked?". The gate is intentionally
+    /// shallow — a prerequisite's own prerequisite does not transitively lock
+    /// this deck (the learner unlocks decks one tier at a time).
+    pub fn mastery_status(&self, id: i64) -> AppResult<MasteryStatus> {
+        let deck = self.get(id)?;
+        let now = Utc::now().timestamp();
+
+        let (retention_rate, review_count) = self.deck_retention(id, now)?;
+        let mastered =
+            retention_rate >= MASTERY_RETENTION_THRESHOLD && review_count >= MASTERY_MIN_REVIEWS;
+
+        let prerequisite_id = deck.prerequisite_deck_id;
+        let prerequisite_mastered = match prerequisite_id {
+            None => true,
+            Some(prereq) => {
+                let (prereq_rate, prereq_count) = self.deck_retention(prereq, now)?;
+                prereq_rate >= MASTERY_RETENTION_THRESHOLD && prereq_count >= MASTERY_MIN_REVIEWS
+            }
+        };
+        let unlocked = prerequisite_id.is_none() || prerequisite_mastered;
+
+        Ok(MasteryStatus {
+            mastered,
+            retention_rate,
+            review_count,
+            prerequisite_id,
+            prerequisite_mastered,
+            unlocked,
+        })
+    }
+
+    /// Retention `(rate, count)` for a deck's reviews over the last 30 days.
+    /// `rate` is `correct / total` in `[0, 1]` (rating ≥ 3 = correct), `0.0`
+    /// when there are no reviews. Joins `reviews → cards` so a card moving
+    /// decks (not currently possible) wouldn't double-count.
+    fn deck_retention(&self, deck_id: i64, now: i64) -> AppResult<(f64, i64)> {
+        let since = now - MASTERY_WINDOW_SECS;
+        let (total, correct): (i64, i64) = self.conn.query_row(
+            "SELECT COUNT(*),
+                    COALESCE(SUM(CASE WHEN r.rating >= 3 THEN 1 ELSE 0 END), 0)
+             FROM reviews r
+             JOIN cards c ON c.id = r.card_id
+             WHERE c.deck_id = ?1 AND r.reviewed_at >= ?2",
+            params![deck_id, since],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let rate = if total > 0 {
+            correct as f64 / total as f64
+        } else {
+            0.0
+        };
+        Ok((rate, total))
+    }
 }
 
 fn row_to_deck(row: &Row<'_>) -> rusqlite::Result<Deck> {
@@ -363,7 +481,139 @@ fn row_to_deck(row: &Row<'_>) -> rusqlite::Result<Deck> {
         desired_retention: row.get(4)?,
         scheduler_kind,
         language_mode: row.get(6)?,
-        created_at: row.get(7)?,
-        updated_at: row.get(8)?,
+        prerequisite_deck_id: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::notes::NoteTemplate;
+    use crate::db::Database;
+    use serde_json::json;
+
+    /// Seed `count` reviews for the first card of `deck_id` at time `now`, all
+    /// with `rating` (≥3 = correct for retention). Creates a basic note (hence
+    /// a card) first.
+    fn seed_reviews(db: &Database, conn: &rusqlite::Connection, deck_id: i64, rating: i64, count: i64, now: i64) {
+        let note = db
+            .notes(conn)
+            .create(
+                deck_id,
+                NoteTemplate::Basic,
+                json!({ "front": "f", "back": "b" }),
+                vec![],
+                None,
+            )
+            .unwrap();
+        let card_id: i64 = conn
+            .query_row(
+                "SELECT id FROM cards WHERE note_id = ?1",
+                params![note.id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        for _ in 0..count {
+            conn.execute(
+                "INSERT INTO reviews (
+                    card_id, rating, state_before, state_after,
+                    stability_before, stability_after,
+                    difficulty_before, difficulty_after,
+                    elapsed_days, scheduled_days, review_time, reviewed_at
+                 ) VALUES (?1, ?2, 'review', 'review', 1.0, 1.0, 5.0, 5.0, 1, 1, 1000, ?3)",
+                params![card_id, rating, now],
+            )
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn mastery_status_locked_until_prerequisite_mastered() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let now = Utc::now().timestamp();
+
+        // Prerequisite deck "A" and gated deck "B" (B requires A).
+        let deck_a = db
+            .decks(&conn)
+            .create("A", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+        let deck_b = db
+            .decks(&conn)
+            .create("B", None, "#ef4444", 0.9, None, None, Some(deck_a.id))
+            .unwrap();
+
+        // Before any reviews: A not mastered, B locked.
+        let status_b = db.decks(&conn).mastery_status(deck_b.id).unwrap();
+        assert!(!status_b.unlocked, "B should be locked before A is mastered");
+        assert_eq!(status_b.prerequisite_id, Some(deck_a.id));
+        assert!(!status_b.prerequisite_mastered);
+
+        // Too few reviews (only 10, all correct) — still below the 20 floor.
+        seed_reviews(&db, &conn, deck_a.id, 4, 10, now);
+        let status_b = db.decks(&conn).mastery_status(deck_b.id).unwrap();
+        assert!(!status_b.unlocked, "10 reviews is below the 20-review floor");
+
+        // Now push A well past 20 reviews, all correct → retention 1.0 ≥ 0.9.
+        seed_reviews(&db, &conn, deck_a.id, 4, 15, now);
+        let status_a = db.decks(&conn).mastery_status(deck_a.id).unwrap();
+        assert!(status_a.mastered, "A should be mastered (25 correct reviews)");
+        assert!((status_a.retention_rate - 1.0).abs() < 1e-9);
+        assert_eq!(status_a.review_count, 25);
+
+        // B is now unlocked because its prerequisite A is mastered.
+        let status_b = db.decks(&conn).mastery_status(deck_b.id).unwrap();
+        assert!(status_b.unlocked, "B should unlock once A is mastered");
+        assert!(status_b.prerequisite_mastered);
+        // B itself has no reviews, so it is not yet mastered.
+        assert!(!status_b.mastered);
+    }
+
+    #[test]
+    fn mastery_status_low_retention_stays_locked() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let now = Utc::now().timestamp();
+
+        let deck_a = db
+            .decks(&conn)
+            .create("A", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+        let deck_b = db
+            .decks(&conn)
+            .create("B", None, "#ef4444", 0.9, None, None, Some(deck_a.id))
+            .unwrap();
+
+        // 25 reviews but all failures (rating 1) → retention 0.0 < 0.9.
+        seed_reviews(&db, &conn, deck_a.id, 1, 25, now);
+        let status_a = db.decks(&conn).mastery_status(deck_a.id).unwrap();
+        assert!(!status_a.mastered, "all-failure deck must not be mastered");
+        assert_eq!(status_a.review_count, 25);
+
+        let status_b = db.decks(&conn).mastery_status(deck_b.id).unwrap();
+        assert!(!status_b.unlocked, "B stays locked when A's retention is low");
+    }
+
+    #[test]
+    fn deck_cannot_be_its_own_prerequisite() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let deck = db
+            .decks(&conn)
+            .create("A", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+        let err = db
+            .decks(&conn)
+            .update(
+                deck.id,
+                DeckPatch {
+                    prerequisite_deck_id: Some(Some(deck.id)),
+                    ..Default::default()
+                },
+            )
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+    }
 }

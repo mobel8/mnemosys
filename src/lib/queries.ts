@@ -38,6 +38,7 @@ import {
   type GeneratedCard,
   type ImportResult,
   type JolPrediction,
+  type MasteryStatus,
   type NextStates,
   type Note,
   type NoteTemplate,
@@ -72,6 +73,7 @@ export const queryKeys = {
   deck: (id: number) => ["deck", id] as const,
   deckStats: (id: number) => ["deck-stats", id] as const,
   deckMastery: (id: number) => ["deck-mastery", id] as const,
+  deckMasteryStatus: (id: number) => ["deck-mastery-status", id] as const,
   cardsInDeck: (deckId: number, limit: number, offset: number) =>
     ["cards-in-deck", deckId, limit, offset] as const,
   frequencyCoverage: (deckId: number) => ["frequency-coverage", deckId] as const,
@@ -140,6 +142,19 @@ export function useDeckMastery(id: number, opts?: Partial<UseQueryOptions<DeckMa
   return useQuery<DeckMastery>({
     queryKey: queryKeys.deckMastery(id),
     queryFn: () => api.decks.mastery(id),
+    enabled: Number.isFinite(id),
+    ...opts,
+  });
+}
+
+/**
+ * Vague 15 — Bloom mastery-gate status for a deck (is it mastered, and is it
+ * unlocked given its prerequisite?). Drives the lock badge on the deck card.
+ */
+export function useDeckMasteryStatus(id: number, opts?: Partial<UseQueryOptions<MasteryStatus>>) {
+  return useQuery<MasteryStatus>({
+    queryKey: queryKeys.deckMasteryStatus(id),
+    queryFn: () => api.decks.masteryStatus(id),
     enabled: Number.isFinite(id),
     ...opts,
   });
@@ -287,6 +302,8 @@ export function useCreateDeck(
       schedulerKind?: SchedulerKind;
       /** Vague 10 — optional ISO 639-1 code flagging a language deck. */
       languageMode?: string | null;
+      /** Vague 15 — optional Bloom mastery-gate prerequisite deck id. */
+      prerequisiteDeckId?: number | null;
     }
   >,
 ) {
@@ -312,6 +329,9 @@ export function useUpdateDeck(
       qc.invalidateQueries({ queryKey: queryKeys.decks });
       qc.invalidateQueries({ queryKey: queryKeys.deck(variables.id) });
       qc.invalidateQueries({ queryKey: queryKeys.deckStats(variables.id) });
+      // A prerequisite change ripples to every deck's gate status, so
+      // invalidate the whole mastery-status family rather than one id.
+      qc.invalidateQueries({ queryKey: ["deck-mastery-status"] });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -424,6 +444,8 @@ export function useSubmitReview(
       reviewTimeMs: number;
       /** Optional 1..5 confidence (CBM). Omitted when the toggle is off. */
       confidence?: number | null;
+      /** Vague 15 — optional 1..5 retrospective confidence (post-answer). */
+      confidencePost?: number | null;
     }
   >,
 ) {
@@ -439,6 +461,9 @@ export function useSubmitReview(
       qc.invalidateQueries({ queryKey: ["retention-by-day"] });
       qc.invalidateQueries({ queryKey: ["deck-stats", data.card.deck_id] });
       qc.invalidateQueries({ queryKey: ["deck-mastery", data.card.deck_id] });
+      // A review shifts this deck's retention, which may unlock decks gated
+      // behind it — refresh the whole mastery-status family (Vague 15).
+      qc.invalidateQueries({ queryKey: ["deck-mastery-status"] });
       qc.invalidateQueries({ queryKey: queryKeys.nextStates(variables.cardId) });
       // Gamification side-effects.
       qc.invalidateQueries({ queryKey: queryKeys.userStats });

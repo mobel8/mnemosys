@@ -23,7 +23,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 import { LANGUAGE_OPTIONS } from "@/lib/languages";
-import { useUpdateDeck } from "@/lib/queries";
+import { useDecks, useUpdateDeck } from "@/lib/queries";
 import type { Deck, SchedulerKind } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +40,11 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
   const [retention, setRetention] = useState(deck.desired_retention);
   const [schedulerKind, setSchedulerKind] = useState<SchedulerKind>(deck.scheduler_kind);
   const [languageMode, setLanguageMode] = useState<string | null>(deck.language_mode);
+  // Vague 15 — Bloom mastery-gate prerequisite.
+  const [prerequisiteDeckId, setPrerequisiteDeckId] = useState<number | null>(
+    deck.prerequisite_deck_id,
+  );
+  const decks = useDecks({ enabled: open });
 
   // Reset local form whenever the deck changes or the dialog re-opens with
   // fresh data, so the user sees the current persisted values rather than
@@ -52,6 +57,7 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
       setRetention(deck.desired_retention);
       setSchedulerKind(deck.scheduler_kind);
       setLanguageMode(deck.language_mode);
+      setPrerequisiteDeckId(deck.prerequisite_deck_id);
     }
   }, [deck, open]);
 
@@ -88,6 +94,7 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
         desired_retention: retention,
         scheduler_kind: schedulerKind,
         language_mode: languageMode,
+        prerequisite_deck_id: prerequisiteDeckId,
       },
     });
   }
@@ -188,6 +195,31 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
             <p className="text-xs text-muted-foreground">
               Active le mode langue : carte « Phrase » bidirectionnelle et suivi de couverture
               lexicale.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-deck-prerequisite">Deck prérequis</Label>
+            <select
+              id="edit-deck-prerequisite"
+              value={prerequisiteDeckId ?? ""}
+              onChange={(e) =>
+                setPrerequisiteDeckId(e.target.value ? Number(e.target.value) : null)
+              }
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">Aucun</option>
+              {(decks.data ?? [])
+                .filter((d) => d.id !== deck.id)
+                .map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Mastery gating (Bloom) : ce deck reste verrouillé tant que le prérequis n'atteint pas
+              90% de rétention.
             </p>
           </div>
 

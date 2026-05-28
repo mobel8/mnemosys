@@ -90,7 +90,7 @@ fn import_creates_notes() {
     let deck_id = {
         let conn = db.lock();
         db.decks(&conn)
-            .create("Films", None, "#3b82f6", 0.9, None, None)
+            .create("Films", None, "#3b82f6", 0.9, None, None, None)
             .unwrap()
             .id
     };
@@ -137,7 +137,7 @@ fn import_cloze_mode_blanks_longest_word() {
     let deck_id = {
         let conn = db.lock();
         db.decks(&conn)
-            .create("Cloze", None, "#3b82f6", 0.9, None, None)
+            .create("Cloze", None, "#3b82f6", 0.9, None, None, None)
             .unwrap()
             .id
     };

@@ -273,7 +273,7 @@ fn convert_skips_decks_with_existing_names() {
     {
         let conn = db.lock();
         db.decks(&conn)
-            .create("Test Deck", None, "#3b82f6", 0.9, None, None)
+            .create("Test Deck", None, "#3b82f6", 0.9, None, None, None)
             .unwrap();
     }
 

@@ -22,7 +22,7 @@ fn fresh_db_with_deck() -> (Database, i64) {
     let conn = db.lock();
     let deck = db
         .decks(&conn)
-        .create("Default", None, "#3b82f6", 0.9, None, None)
+        .create("Default", None, "#3b82f6", 0.9, None, None, None)
         .expect("create deck");
     (db.clone(), deck.id)
 }
@@ -35,7 +35,7 @@ fn create_deck_returns_deck_with_id() {
     let conn = db.lock();
     let deck = db
         .decks(&conn)
-        .create("Spanish", Some("Vocab"), "#ff0000", 0.92, None, None)
+        .create("Spanish", Some("Vocab"), "#ff0000", 0.92, None, None, None)
         .expect("create deck");
     assert!(deck.id > 0);
     assert_eq!(deck.name, "Spanish");
@@ -49,9 +49,9 @@ fn list_decks_alphabetical() {
     let db = Database::for_test();
     let conn = db.lock();
     let repo = db.decks(&conn);
-    repo.create("Charlie", None, "#000000", 0.9, None, None).unwrap();
-    repo.create("alpha", None, "#000000", 0.9, None, None).unwrap();
-    repo.create("Bravo", None, "#000000", 0.9, None, None).unwrap();
+    repo.create("Charlie", None, "#000000", 0.9, None, None, None).unwrap();
+    repo.create("alpha", None, "#000000", 0.9, None, None, None).unwrap();
+    repo.create("Bravo", None, "#000000", 0.9, None, None, None).unwrap();
 
     let decks = repo.list().unwrap();
     let names: Vec<&str> = decks.iter().map(|d| d.name.as_str()).collect();
@@ -73,6 +73,7 @@ fn update_deck_partial() {
                 desired_retention: Some(0.85),
                 scheduler_kind: None,
                 language_mode: None,
+                prerequisite_deck_id: None,
             },
         )
         .expect("update");
@@ -317,6 +318,7 @@ fn insert_review_returns_review_with_id() {
                 scheduled_days: 1,
                 review_time: 4_500,
                 confidence: None,
+                confidence_post: None,
             },
             now,
         )
@@ -373,6 +375,7 @@ fn insert_review_persists_confidence_in_1_to_5() {
                 scheduled_days: 1,
                 review_time: 2_000,
                 confidence: Some(4),
+                confidence_post: None,
             },
             now,
         )
@@ -452,6 +455,7 @@ fn reset_card_clears_fsrs_state_and_preserves_reviews() {
                 scheduled_days: 5,
                 review_time: 1_500,
                 confidence: None,
+                confidence_post: None,
             },
             now,
         )
@@ -861,6 +865,7 @@ fn deck_scheduler_kind_persists() {
             0.9,
             Some(SchedulerKind::Sm2),
             None,
+            None,
         )
         .expect("create");
     assert_eq!(deck.scheduler_kind, SchedulerKind::Sm2);
@@ -935,11 +940,11 @@ fn fresh_db_with_two_decks_of_due_cards(cards_per_deck: usize) -> (Database, i64
         let conn = db.lock();
         let deck_a = db
             .decks(&conn)
-            .create("Alpha", None, "#3b82f6", 0.9, None, None)
+            .create("Alpha", None, "#3b82f6", 0.9, None, None, None)
             .unwrap();
         let deck_b = db
             .decks(&conn)
-            .create("Bravo", None, "#10b981", 0.9, None, None)
+            .create("Bravo", None, "#10b981", 0.9, None, None, None)
             .unwrap();
 
         for deck in [&deck_a, &deck_b] {
@@ -1114,6 +1119,7 @@ fn seed_card_with_review(db: &Database, deck_id: i64) -> (i64, i64) {
                 scheduled_days: 5,
                 review_time: 1_000,
                 confidence: None,
+                confidence_post: None,
             },
             1_700_000_000,
         )
@@ -1586,14 +1592,14 @@ fn deck_language_mode_persists() {
     // create with a language code
     let deck = db
         .decks(&conn)
-        .create("Japonais", None, "#3b82f6", 0.9, None, Some("ja"))
+        .create("Japonais", None, "#3b82f6", 0.9, None, Some("ja"), None)
         .expect("create language deck");
     assert_eq!(deck.language_mode.as_deref(), Some("ja"));
 
     // a plain deck defaults to None
     let plain = db
         .decks(&conn)
-        .create("Maths", None, "#3b82f6", 0.9, None, None)
+        .create("Maths", None, "#3b82f6", 0.9, None, None, None)
         .expect("create plain deck");
     assert_eq!(plain.language_mode, None);
 

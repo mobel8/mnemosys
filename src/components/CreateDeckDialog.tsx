@@ -22,7 +22,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 import { LANGUAGE_OPTIONS } from "@/lib/languages";
-import { useCreateDeck } from "@/lib/queries";
+import { useCreateDeck, useDecks } from "@/lib/queries";
 import type { SchedulerKind } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +49,9 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
   const [retention, setRetention] = useState(0.9);
   const [schedulerKind, setSchedulerKind] = useState<SchedulerKind>("fsrs6");
   const [languageMode, setLanguageMode] = useState<string | null>(null);
+  // Vague 15 — optional Bloom mastery-gate prerequisite.
+  const [prerequisiteDeckId, setPrerequisiteDeckId] = useState<number | null>(null);
+  const decks = useDecks();
 
   const createDeck = useCreateDeck({
     onSuccess: (deck) => {
@@ -72,6 +75,7 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
     setRetention(0.9);
     setSchedulerKind("fsrs6");
     setLanguageMode(null);
+    setPrerequisiteDeckId(null);
   }
 
   function handleSubmit(event: React.FormEvent) {
@@ -108,6 +112,7 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
       desiredRetention: retention,
       schedulerKind,
       languageMode,
+      prerequisiteDeckId,
     });
   }
 
@@ -214,6 +219,29 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
             <p className="text-xs text-muted-foreground">
               Active le mode langue : carte « Phrase » bidirectionnelle et suivi de couverture
               lexicale.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="deck-prerequisite">Deck prérequis</Label>
+            <select
+              id="deck-prerequisite"
+              value={prerequisiteDeckId ?? ""}
+              onChange={(e) =>
+                setPrerequisiteDeckId(e.target.value ? Number(e.target.value) : null)
+              }
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">Aucun</option>
+              {(decks.data ?? []).map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Mastery gating (Bloom) : ce deck reste verrouillé tant que le prérequis n'atteint pas
+              90% de rétention.
             </p>
           </div>
 

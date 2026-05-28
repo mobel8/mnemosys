@@ -108,7 +108,7 @@ mod tests {
         let conn = db.lock();
         let deck = db
             .decks(&conn)
-            .create("Default", None, "#3b82f6", 0.9, None, None)
+            .create("Default", None, "#3b82f6", 0.9, None, None, None)
             .unwrap();
         db.notes(&conn)
             .create(
@@ -143,6 +143,7 @@ mod tests {
                     scheduled_days: 5,
                     review_time: 1_000,
                     confidence: None,
+                    confidence_post: None,
                 },
                 1_700_000_000,
             )

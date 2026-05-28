@@ -194,6 +194,7 @@ pub fn apply_import(db: &Database, import: ExportFile) -> AppResult<ImportResult
             deck_data.desired_retention,
             None,
             None,
+            None,
         )?;
 
         let card_count_before: i64 = conn
@@ -264,7 +265,7 @@ mod tests {
         let conn = db.lock();
         let deck_a = db
             .decks(&conn)
-            .create("Spanish", Some("vocab"), "#3b82f6", 0.9, None, None)
+            .create("Spanish", Some("vocab"), "#3b82f6", 0.9, None, None, None)
             .unwrap();
         db.notes(&conn)
             .create(
@@ -287,7 +288,7 @@ mod tests {
 
         let deck_b = db
             .decks(&conn)
-            .create("Capitals", None, "#ef4444", 0.92, None, None)
+            .create("Capitals", None, "#ef4444", 0.92, None, None, None)
             .unwrap();
         db.notes(&conn)
             .create(
@@ -368,7 +369,7 @@ mod tests {
             let conn = dst_db.lock();
             dst_db
                 .decks(&conn)
-                .create("Spanish", None, "#3b82f6", 0.9, None, None)
+                .create("Spanish", None, "#3b82f6", 0.9, None, None, None)
                 .unwrap();
         }
 

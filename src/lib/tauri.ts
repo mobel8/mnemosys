@@ -28,7 +28,8 @@ export type NoteTemplate =
   | "sentence"
   | "bidirectional"
   | "illness_script"
-  | "refutation";
+  | "refutation"
+  | "worked_example";
 
 /**
  * Vague 10 — Zipf-bucket label for language-learning notes (Pareto 80/20
@@ -89,6 +90,19 @@ export interface RefutationFields {
   correct: string;
   explanation?: string;
 }
+
+/**
+ * Vague 15 — `fields` payload for `template === "worked_example"` notes
+ * (maths, Sweller/Renkl/Atkinson 2003 faded worked example). `problem` is the
+ * recto prompt; `steps` are revealed progressively on the verso before the
+ * final `answer`. `problem` and `answer` are required; `steps` must hold at
+ * least one non-empty entry.
+ */
+export interface WorkedExampleFields {
+  problem: string;
+  steps: string[];
+  answer: string;
+}
 /** Rating sent to `submit_review`: 1 = Again, 2 = Hard, 3 = Good, 4 = Easy. */
 export type Rating = 1 | 2 | 3 | 4;
 
@@ -106,6 +120,11 @@ export interface Deck {
    * deck detail page surfaces the frequency-coverage card.
    */
   language_mode: string | null;
+  /**
+   * Vague 15 — Bloom mastery gating. Id of the deck that must be mastered
+   * before this one unlocks, or `null` for an ungated deck.
+   */
+  prerequisite_deck_id: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -121,6 +140,28 @@ export interface DeckPatch {
   scheduler_kind?: SchedulerKind;
   /** Set the deck language (`null` clears it, `undefined` leaves it). */
   language_mode?: string | null;
+  /** Set the mastery-gate prerequisite (`null` clears it, `undefined` leaves it). */
+  prerequisite_deck_id?: number | null;
+}
+
+/**
+ * Vague 15 — Bloom mastery-learning gate status for one deck (mirrors the
+ * Rust `MasteryStatus`). `unlocked` answers "may the learner study this deck?"
+ * (no prerequisite, or prerequisite mastered). `mastered` is the ≥90 % /
+ * ≥20-review criterion applied to THIS deck.
+ */
+export interface MasteryStatus {
+  mastered: boolean;
+  /** Retention rate of this deck over the last 30 days, in [0, 1]. */
+  retention_rate: number;
+  /** Reviews counted toward `retention_rate` (last 30 days). */
+  review_count: number;
+  /** The prerequisite deck id, if any. */
+  prerequisite_id: number | null;
+  /** Whether the prerequisite (if any) is itself mastered; `true` when none. */
+  prerequisite_mastered: boolean;
+  /** Whether the learner may study this deck now. */
+  unlocked: boolean;
 }
 
 /**
@@ -665,6 +706,8 @@ export const api = {
       schedulerKind?: SchedulerKind;
       /** Vague 10 — ISO 639-1 code flagging a language deck; omit for none. */
       languageMode?: string | null;
+      /** Vague 15 — id of the deck that gates this one; omit for ungated. */
+      prerequisiteDeckId?: number | null;
     }) =>
       invoke<Deck>("create_deck", {
         name: data.name,
@@ -673,6 +716,7 @@ export const api = {
         desiredRetention: data.desiredRetention ?? null,
         schedulerKind: data.schedulerKind ?? null,
         languageMode: data.languageMode ?? null,
+        prerequisiteDeckId: data.prerequisiteDeckId ?? null,
       }),
     update: (id: number, patch: DeckPatch) => invoke<Deck>("update_deck", { id, patch }),
     delete: (id: number) => invoke<void>("delete_deck", { id }),
@@ -680,6 +724,8 @@ export const api = {
     count: () => invoke<number>("count_decks"),
     /** WaniKani-style mastery buckets (apprentice / guru / master / …). */
     mastery: (id: number) => invoke<DeckMastery>("get_deck_mastery", { id }),
+    /** Vague 15 — Bloom mastery-gate status (is this deck mastered / unlocked?). */
+    masteryStatus: (deckId: number) => invoke<MasteryStatus>("get_deck_mastery_status", { deckId }),
   },
   cards: {
     listInDeck: (deckId: number, limit: number, offset: number) =>
@@ -744,12 +790,19 @@ export const api = {
       rating: Rating;
       reviewTimeMs: number;
       confidence?: number | null;
+      /**
+       * Vague 15 — optional 1..5 *retrospective* confidence captured AFTER the
+       * answer is revealed (Bang & Fleming 2018). `null`/`undefined` when the
+       * two-step toggle is off this session.
+       */
+      confidencePost?: number | null;
     }) =>
       invoke<ReviewResult>("submit_review", {
         cardId: data.cardId,
         rating: data.rating,
         reviewTimeMs: data.reviewTimeMs,
         confidence: data.confidence ?? null,
+        confidencePost: data.confidencePost ?? null,
       }),
   },
   stats: {

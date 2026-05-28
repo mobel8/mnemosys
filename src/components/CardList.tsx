@@ -87,6 +87,8 @@ function templateLabel(template: NoteTemplate) {
       return "Médecine";
     case "refutation":
       return "Sciences";
+    case "worked_example":
+      return "Maths";
   }
 }
 
@@ -134,6 +136,10 @@ function noteFrontPreview(note: Note): string {
   if (note.template === "refutation") {
     const misconception = typeof fields.misconception === "string" ? fields.misconception : "";
     return misconception || "(vide)";
+  }
+  if (note.template === "worked_example") {
+    const problem = typeof fields.problem === "string" ? fields.problem : "";
+    return problem || "(vide)";
   }
   const front = typeof fields.front === "string" ? fields.front : "";
   return front || "(vide)";

@@ -28,7 +28,28 @@ interface ConfidenceRatingProps {
   value: number | null | undefined;
   onChange: (value: number) => void;
   disabled?: boolean;
+  /**
+   * Which capture moment this strip represents:
+   *   - `"prospective"` (default, v5) — before the flip (CBM, Gardner-Medwin).
+   *   - `"retrospective"` (v15) — after the answer is shown (Bang & Fleming
+   *     2018, two-step confidence). Only the labels change; the 1..5 scale and
+   *     `onChange` contract are identical.
+   */
+  variant?: "prospective" | "retrospective";
 }
+
+const VARIANT_COPY = {
+  prospective: {
+    legend: "Confiance avant rating (CBM)",
+    help: "Très peu confiant → Très confiant. Aide à mesurer la calibration de ta métacognition (Gardner-Medwin, UCL).",
+    testid: "confidence-rating",
+  },
+  retrospective: {
+    legend: "Maintenant que tu as vu la réponse, à quel point étais-tu sûr ?",
+    help: "Confiance rétrospective (Bang & Fleming 2018) : capte ta certitude une fois la réponse révélée.",
+    testid: "confidence-rating-post",
+  },
+} as const;
 
 interface LevelDef {
   level: number;
@@ -75,11 +96,17 @@ const LEVELS: readonly LevelDef[] = [
   },
 ];
 
-export function ConfidenceRating({ value, onChange, disabled = false }: ConfidenceRatingProps) {
+export function ConfidenceRating({
+  value,
+  onChange,
+  disabled = false,
+  variant = "prospective",
+}: ConfidenceRatingProps) {
+  const copy = VARIANT_COPY[variant];
   return (
-    <fieldset className="flex w-full max-w-md flex-col gap-2" data-testid="confidence-rating">
+    <fieldset className="flex w-full max-w-md flex-col gap-2" data-testid={copy.testid}>
       <legend className="text-xs uppercase tracking-wide text-muted-foreground">
-        Confiance avant rating (CBM)
+        {copy.legend}
       </legend>
       <div className="flex items-center gap-2">
         {LEVELS.map((lvl) => {
@@ -107,10 +134,7 @@ export function ConfidenceRating({ value, onChange, disabled = false }: Confiden
           );
         })}
       </div>
-      <p className="text-[11px] text-muted-foreground">
-        Très peu confiant&nbsp;→&nbsp;Très confiant. Aide à mesurer la calibration de ta
-        métacognition (Gardner-Medwin, UCL).
-      </p>
+      <p className="text-[11px] text-muted-foreground">{copy.help}</p>
     </fieldset>
   );
 }

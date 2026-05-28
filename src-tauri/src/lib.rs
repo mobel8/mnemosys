@@ -81,6 +81,7 @@ pub fn run() {
             commands::decks::get_deck_stats,
             commands::decks::count_decks,
             commands::decks::get_deck_mastery,
+            commands::decks::get_deck_mastery_status,
             // cards / notes
             commands::cards::list_cards_in_deck,
             commands::cards::search_notes,

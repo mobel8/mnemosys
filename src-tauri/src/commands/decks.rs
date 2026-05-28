@@ -7,7 +7,7 @@
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::db::{Deck, DeckMastery, DeckPatch, DeckStats};
+use crate::db::{Deck, DeckMastery, DeckPatch, DeckStats, MasteryStatus};
 use crate::error::AppResult;
 use crate::fsrs::DEFAULT_DESIRED_RETENTION;
 use crate::scheduler::SchedulerKind;
@@ -33,6 +33,7 @@ pub fn create_deck(
     desired_retention: Option<f64>,
     scheduler_kind: Option<SchedulerKind>,
     language_mode: Option<String>,
+    prerequisite_deck_id: Option<i64>,
 ) -> AppResult<Deck> {
     let retention = desired_retention.unwrap_or(DEFAULT_DESIRED_RETENTION as f64);
     let conn = state.db.lock();
@@ -43,6 +44,7 @@ pub fn create_deck(
         retention,
         scheduler_kind,
         language_mode.as_deref(),
+        prerequisite_deck_id,
     )
 }
 
@@ -78,4 +80,15 @@ pub fn count_decks(state: State<'_, AppState>) -> AppResult<i64> {
 pub fn get_deck_mastery(state: State<'_, AppState>, id: i64) -> AppResult<DeckMastery> {
     let conn = state.db.lock();
     state.db.decks(&conn).mastery(id)
+}
+
+/// Vague 15 — Bloom mastery-gating status: is this deck mastered, and is it
+/// unlocked (its prerequisite, if any, mastered)?
+#[tauri::command]
+pub fn get_deck_mastery_status(
+    state: State<'_, AppState>,
+    deck_id: i64,
+) -> AppResult<MasteryStatus> {
+    let conn = state.db.lock();
+    state.db.decks(&conn).mastery_status(deck_id)
 }

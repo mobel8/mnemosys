@@ -19,6 +19,9 @@
  *   - "refutation"     → misconception confrontation (Vague 14). Recto =
  *                        « Vrai ou faux ? {misconception} », verso = « FAUX.
  *                        {correct} » + optional explanation.
+ *   - "worked_example" → faded worked example (Vague 15). Recto = problem,
+ *                        verso reveals solution steps progressively (click
+ *                        « Étape suivante ») then the final answer.
  *
  * Animation: a horizontal flip via framer-motion. The whole front+back
  * payload is wrapped in a `motion.div` whose `rotateY` toggles between
@@ -30,6 +33,7 @@
  */
 
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { OcclusionReviewView } from "@/components/OcclusionReviewView";
 import { TtsButton } from "@/components/TtsButton";
 import {
@@ -38,6 +42,7 @@ import {
   type TypeAnswerVerdict,
   verdictFor,
 } from "@/components/TypeAnswer";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { VoiceAnswerButton } from "@/components/VoiceAnswerButton";
 import type { Note } from "@/lib/tauri";
@@ -226,6 +231,27 @@ function getIllnessSections(note: Note): IllnessSection[] {
   ).filter((s) => s.value.length > 0);
 }
 
+interface WorkedExampleFieldsLocal {
+  problem: string;
+  steps: string[];
+  answer: string;
+}
+
+/**
+ * Vague 15 — extract a worked-example note's problem, the non-empty solution
+ * steps (in order) and the final answer. Mirrors the Rust validation contract.
+ */
+function getWorkedExample(note: Note): WorkedExampleFieldsLocal {
+  const problem = strField(note, "problem");
+  const answer = strField(note, "answer");
+  const rawSteps = Array.isArray(note.fields.steps) ? note.fields.steps : [];
+  const steps = rawSteps
+    .filter((s): s is string => typeof s === "string")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  return { problem, steps, answer };
+}
+
 export function ReviewCard({
   note,
   phase,
@@ -242,7 +268,10 @@ export function ReviewCard({
   // standard flip card (no front/back string pair).
   const isIllness = note.template === "illness_script";
   const isRefutation = note.template === "refutation";
-  const isDisciplinary = isIllness || isRefutation;
+  const isWorkedExample = note.template === "worked_example";
+  // Disciplinary + maths templates all render a bespoke recto/verso inside the
+  // standard flip card (no front/back string pair).
+  const isDisciplinary = isIllness || isRefutation || isWorkedExample;
   const elaboration = getElaboration(note);
   // Vague 5 — interleaved mode taps into a synthetic `__deck_name` field
   // (injected by `<InterleavedSession />`) when an explicit prop is absent.
@@ -298,16 +327,21 @@ export function ReviewCard({
   const illnessSections = isIllness ? getIllnessSections(note) : [];
   const refutationCorrect = isRefutation ? strField(note, "correct") : "";
   const refutationExplanation = isRefutation ? strField(note, "explanation") : "";
+  const workedExample = isWorkedExample ? getWorkedExample(note) : null;
   const disciplinaryFront = isIllness
     ? `Décris le tableau de : ${strField(note, "condition")}`
     : isRefutation
       ? `Vrai ou faux ? ${strField(note, "misconception")}`
-      : "";
+      : isWorkedExample
+        ? (workedExample?.problem ?? "")
+        : "";
   const disciplinaryBackSpoken = isIllness
     ? illnessSections.map((s) => `${s.label}. ${s.value}`).join(" ")
     : isRefutation
       ? `Faux. ${refutationCorrect}${refutationExplanation ? `. ${refutationExplanation}` : ""}`
-      : "";
+      : isWorkedExample && workedExample
+        ? `${workedExample.steps.join(". ")}. Réponse : ${workedExample.answer}`
+        : "";
 
   return (
     <AnimatePresence mode="wait">
@@ -437,6 +471,13 @@ export function ReviewCard({
                       </p>
                     )}
                   </>
+                ) : isWorkedExample && workedExample ? (
+                  <WorkedExampleBack
+                    key={`we-${note.id}`}
+                    problem={workedExample.problem}
+                    steps={workedExample.steps}
+                    answer={workedExample.answer}
+                  />
                 ) : (
                   <>
                     <div className="whitespace-pre-wrap text-center text-lg text-muted-foreground">
@@ -498,6 +539,83 @@ function DeckBadge({ deckName }: { deckName: string }) {
     <span className="rounded-full border border-primary/30 bg-primary/5 px-3 py-0.5 text-xs font-medium text-primary">
       {deckName}
     </span>
+  );
+}
+
+/**
+ * Vague 15 — verso of a faded worked example. The problem is restated, then
+ * the solution steps reveal one at a time as the learner clicks « Étape
+ * suivante » (predicting each before unveiling it — the faded scaffolding of
+ * Sweller/Renkl/Atkinson 2003). « Tout afficher » jumps to the full solution
+ * including the final answer; the answer only shows once every step is out.
+ *
+ * Reveal state is local and reset whenever the note changes (the `key` on the
+ * call-site forces a remount, and the effect guards against stale counts when
+ * React reuses the instance).
+ */
+function WorkedExampleBack({
+  problem,
+  steps,
+  answer,
+}: {
+  problem: string;
+  steps: string[];
+  answer: string;
+}) {
+  const [revealed, setRevealed] = useState(0);
+
+  // Reset the reveal counter if the underlying steps change identity.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on content change only
+  useEffect(() => {
+    setRevealed(0);
+  }, [problem, answer, steps.length]);
+
+  const allRevealed = revealed >= steps.length;
+
+  return (
+    <div className="flex w-full flex-col gap-4" data-testid="worked-example-back">
+      <div className="whitespace-pre-wrap text-center text-base text-muted-foreground">
+        {problem}
+      </div>
+      <hr className="border-border" />
+      <ol className="space-y-2 text-left">
+        {steps.slice(0, revealed).map((step, i) => (
+          <li
+            // biome-ignore lint/suspicious/noArrayIndexKey: steps are positional and reorder-free
+            key={`step-${i}`}
+            className="flex gap-2 whitespace-pre-wrap text-base leading-relaxed"
+          >
+            <span className="shrink-0 font-semibold tabular-nums text-primary">{i + 1}.</span>
+            <span>{step}</span>
+          </li>
+        ))}
+      </ol>
+
+      {!allRevealed ? (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid="worked-example-next-step"
+            onClick={() => setRevealed((n) => Math.min(n + 1, steps.length))}
+          >
+            Étape suivante ({revealed}/{steps.length})
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setRevealed(steps.length)}>
+            Tout afficher
+          </Button>
+        </div>
+      ) : (
+        <div
+          className="whitespace-pre-wrap text-center text-2xl font-medium leading-relaxed"
+          data-testid="worked-example-answer"
+        >
+          <span className="text-base font-semibold text-primary">Réponse :</span>{" "}
+          {answer || <span className="text-muted-foreground italic">(réponse vide)</span>}
+        </div>
+      )}
+    </div>
   );
 }
 

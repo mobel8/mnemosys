@@ -13,6 +13,9 @@
  *   - `refutation` ("Sciences", Vague 14): misconception + correction (+
  *     optional explanation), generates one card confronting a false belief
  *     (Tippett 2010 meta)
+ *   - `worked_example` ("Maths", Vague 15): problem + ordered solution steps +
+ *     final answer, generates one card whose steps fade in progressively on
+ *     the verso (Sweller/Renkl/Atkinson 2003)
  *
  * Tags are entered as chips (Enter or comma to commit, backspace on empty
  * input removes the last). Keyboard shortcuts:
@@ -23,7 +26,7 @@
  * tag list but clears the fields and refocuses the first input.
  */
 
-import { FlaskConical, Languages, Stethoscope } from "lucide-react";
+import { FlaskConical, Languages, Plus, Sigma, Stethoscope, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { ClozePreview, uniqueClozeNumbers } from "@/components/ClozePreview";
 import { OcclusionEditor } from "@/components/OcclusionEditor";
@@ -70,6 +73,11 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
   const [misconception, setMisconception] = useState("");
   const [correct, setCorrect] = useState("");
   const [explanation, setExplanation] = useState("");
+  // Vague 15 — Maths ("worked_example") template state. `steps` always holds
+  // at least one (possibly empty) row so the dynamic list renders one input.
+  const [problem, setProblem] = useState("");
+  const [steps, setSteps] = useState<string[]>([""]);
+  const [answer, setAnswer] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
 
@@ -78,6 +86,7 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
   const sourceRef = useRef<HTMLInputElement | null>(null);
   const conditionRef = useRef<HTMLInputElement | null>(null);
   const misconceptionRef = useRef<HTMLTextAreaElement | null>(null);
+  const problemRef = useRef<HTMLTextAreaElement | null>(null);
 
   const createNote = useCreateNote();
 
@@ -97,8 +106,23 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
     setMisconception("");
     setCorrect("");
     setExplanation("");
+    setProblem("");
+    setSteps([""]);
+    setAnswer("");
     if (!keepTags) setTags([]);
     setTagInput("");
+  }
+
+  // --- Vague 15 — worked-example dynamic step list helpers ----------------
+  function updateStep(index: number, value: string) {
+    setSteps((prev) => prev.map((s, i) => (i === index ? value : s)));
+  }
+  function addStep() {
+    setSteps((prev) => [...prev, ""]);
+  }
+  function removeStep(index: number) {
+    // Keep at least one row so the list never collapses to nothing.
+    setSteps((prev) => (prev.length <= 1 ? [""] : prev.filter((_s, i) => i !== index)));
   }
 
   function handleTemplateChange(next: string) {
@@ -232,6 +256,28 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
           : { misconception: m, correct: c },
       };
     }
+    if (template === "worked_example") {
+      const p = problem.trim();
+      const a = answer.trim();
+      const cleanedSteps = steps.map((s) => s.trim()).filter((s) => s.length > 0);
+      if (p.length === 0 || a.length === 0) {
+        toast({
+          title: "Champs incomplets",
+          description: "L'énoncé du problème et la réponse finale sont obligatoires.",
+          variant: "destructive",
+        });
+        return { ok: false };
+      }
+      if (cleanedSteps.length === 0) {
+        toast({
+          title: "Étapes manquantes",
+          description: "Ajoute au moins une étape de résolution.",
+          variant: "destructive",
+        });
+        return { ok: false };
+      }
+      return { ok: true, fields: { problem: p, steps: cleanedSteps, answer: a } };
+    }
     // "occlusion" is handled by the dedicated editor (early return above),
     // so this branch should be unreachable.
     return { ok: false };
@@ -268,6 +314,7 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
               else if (template === "bidirectional") sourceRef.current?.focus();
               else if (template === "illness_script") conditionRef.current?.focus();
               else if (template === "refutation") misconceptionRef.current?.focus();
+              else if (template === "worked_example") problemRef.current?.focus();
               else frontRef.current?.focus();
             });
           } else {
@@ -339,6 +386,10 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
           <TabsTrigger value="refutation" className="gap-1.5">
             <FlaskConical className="h-3.5 w-3.5" />
             Sciences
+          </TabsTrigger>
+          <TabsTrigger value="worked_example" className="gap-1.5">
+            <Sigma className="h-3.5 w-3.5" />
+            Maths
           </TabsTrigger>
         </TabsList>
 
@@ -667,6 +718,98 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
                 {explanation.trim() && (
                   <p className="mt-1 text-muted-foreground">{explanation.trim()}</p>
                 )}
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="worked_example" className="space-y-4">
+          <p className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
+            Exemple résolu progressif (<em>faded worked example</em>, Sweller/Renkl/Atkinson 2003) :
+            l'énoncé s'affiche au recto ; au verso les étapes se révèlent une à une (l'apprenant
+            prédit chacune) avant la réponse finale.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="we-problem">Problème (énoncé)</Label>
+            <Textarea
+              id="we-problem"
+              ref={problemRef}
+              value={problem}
+              onChange={(e) => setProblem(e.target.value)}
+              onKeyDown={handleEditorKeyDown}
+              rows={3}
+              placeholder="Résoudre l'équation 2x + 3 = 11."
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Étapes de résolution</Label>
+            <div className="space-y-2">
+              {steps.map((step, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: rows are positional and reorder-free
+                <div key={`step-${index}`} className="flex items-start gap-2">
+                  <span className="mt-2.5 w-5 shrink-0 text-right text-xs font-medium tabular-nums text-muted-foreground">
+                    {index + 1}.
+                  </span>
+                  <Textarea
+                    value={step}
+                    onChange={(e) => updateStep(index, e.target.value)}
+                    onKeyDown={handleEditorKeyDown}
+                    rows={2}
+                    placeholder={
+                      index === 0 ? "Soustraire 3 des deux côtés : 2x = 8" : "Étape suivante…"
+                    }
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="mt-1 h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                    aria-label={`Retirer l'étape ${index + 1}`}
+                    onClick={() => removeStep(index)}
+                    disabled={steps.length <= 1}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addStep}>
+              <Plus className="h-3.5 w-3.5" />
+              Ajouter une étape
+            </Button>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="we-answer">Réponse finale</Label>
+            <Input
+              id="we-answer"
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              placeholder="x = 4"
+            />
+          </div>
+          {(problem.trim() || answer.trim()) && (
+            <div className="space-y-2">
+              <Label>Aperçu de la carte</Label>
+              <div className="rounded-md border p-3 text-sm">
+                <div className="text-xs font-medium text-muted-foreground">Recto</div>
+                <div className="mt-1">{problem.trim() || "…"}</div>
+                <div className="mt-2 text-xs font-medium text-muted-foreground">
+                  Verso (révélé progressivement)
+                </div>
+                <ol className="mt-1 list-decimal space-y-1 pl-5 text-muted-foreground">
+                  {steps
+                    .map((s) => s.trim())
+                    .filter((s) => s.length > 0)
+                    .map((s, i) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: preview rows are positional
+                      <li key={`preview-step-${i}`}>{s}</li>
+                    ))}
+                </ol>
+                <div className="mt-2">
+                  <span className="font-semibold text-foreground">Réponse :</span>{" "}
+                  {answer.trim() || "…"}
+                </div>
               </div>
             </div>
           )}

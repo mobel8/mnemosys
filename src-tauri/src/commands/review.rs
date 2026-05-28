@@ -110,18 +110,14 @@ pub fn submit_review(
     rating: u8,
     review_time_ms: u32,
     confidence: Option<u8>,
+    confidence_post: Option<u8>,
 ) -> AppResult<ReviewResultDTO> {
-    // Validate the optional confidence in [1, 5]. None is always fine —
-    // the toggle in Settings stays off by default.
-    let confidence_i64 = match confidence {
-        Some(v) if (1..=5).contains(&v) => Some(v as i64),
-        Some(other) => {
-            return Err(AppError::Validation(format!(
-                "confidence must be in [1, 5] (got {other})"
-            )));
-        }
-        None => None,
-    };
+    // Validate both optional confidences in [1, 5]. None is always fine —
+    // the toggle in Settings stays off by default. `confidence` is the
+    // prospective CBM rating (before the flip, v5); `confidence_post` is the
+    // retrospective rating (after the answer, v15 — Bang & Fleming 2018).
+    let confidence_i64 = validate_confidence(confidence, "confidence")?;
+    let confidence_post_i64 = validate_confidence(confidence_post, "confidence_post")?;
     let now = chrono::Utc::now().timestamp();
 
     let conn = state.db.lock();
@@ -166,6 +162,7 @@ pub fn submit_review(
             scheduled_days: outcome.scheduled_days,
             review_time: review_time_ms as i64,
             confidence: confidence_i64,
+            confidence_post: confidence_post_i64,
         },
         now,
     )?;
@@ -279,6 +276,19 @@ fn update_gamification(
 }
 
 // ---- helpers ---------------------------------------------------------------
+
+/// Validate an optional 1..=5 confidence value, surfacing a friendly
+/// `Validation` error (tagged with `field`) when it is out of range. `None`
+/// is always accepted (the rating is opt-in).
+fn validate_confidence(value: Option<u8>, field: &str) -> AppResult<Option<i64>> {
+    match value {
+        Some(v) if (1..=5).contains(&v) => Ok(Some(v as i64)),
+        Some(other) => Err(AppError::Validation(format!(
+            "{field} must be in [1, 5] (got {other})"
+        ))),
+        None => Ok(None),
+    }
+}
 
 /// Translate a [`scheduler::RatingPreview`] (algorithm-agnostic) into the
 /// existing [`NextStatesDTO`] shape the frontend already understands.

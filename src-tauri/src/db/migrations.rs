@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 12;
+pub const CURRENT_VERSION: i32 = 13;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -211,6 +211,23 @@ const SCHEMA_V11: &str = include_str!("schema_v11.sql");
 /// `remote_id` and `frequency_band` included — is copied across verbatim.
 const SCHEMA_V12: &str = include_str!("schema_v12.sql");
 
+/// v13 — Vague 15: maths worked-example template + mastery gating + two-step
+/// retrospective confidence. A single migration carrying three coupled
+/// changes:
+///   1. Extend the `notes.template` CHECK constraint with `'worked_example'`
+///      (maths, Sweller/Renkl/Atkinson 2003 — one card with progressively
+///      revealed solution steps). Follows the SQLite 12-step recipe (drop
+///      FTS5, rebuild `notes`, recreate FTS5 + triggers, rebuild the index)
+///      so the new CHECK lands without leaving the FTS index inconsistent;
+///      `remote_id` and `frequency_band` are copied verbatim.
+///   2. Add a nullable `prerequisite_deck_id INTEGER REFERENCES decks(id)`
+///      column to `decks` (Bloom mastery learning — a deck unlocks once its
+///      prerequisite hits ≥90 % retention over 30 days with ≥20 reviews).
+///   3. Add a nullable `confidence_post INTEGER` column to `reviews`
+///      (Bang & Fleming 2018 — retrospective confidence captured AFTER the
+///      answer, complementing the prospective `confidence` column from v5).
+const SCHEMA_V13: &str = include_str!("schema_v13.sql");
+
 /// v7 — Pluggable schedulers (Vague 4): per-deck algorithm choice.
 ///
 /// Adds a `scheduler_kind` column to `decks` storing one of `'fsrs6'`
@@ -341,6 +358,12 @@ pub fn run(conn: &Connection) -> AppResult<()> {
     // `illness_script` + `refutation`.
     if current < 12 {
         apply_migration(conn, 12, SCHEMA_V12)?;
+    }
+
+    // v13 — Vague 15: `worked_example` template CHECK rebuild +
+    // `prerequisite_deck_id` on decks + `confidence_post` on reviews.
+    if current < 13 {
+        apply_migration(conn, 13, SCHEMA_V13)?;
     }
 
     Ok(())

@@ -31,6 +31,10 @@ pub struct Review {
     /// Optional 1..=5 metacognitive confidence captured BEFORE the FSRS
     /// rating. `None` whenever the toggle is off or the row predates v5.
     pub confidence: Option<i64>,
+    /// Optional 1..=5 *retrospective* confidence captured AFTER the answer is
+    /// revealed (Vague 15, Bang & Fleming 2018 — two-step confidence). `None`
+    /// whenever the toggle is off or the row predates v13.
+    pub confidence_post: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -50,6 +54,10 @@ pub struct NewReview {
     /// command layer before reaching this struct.
     #[serde(default)]
     pub confidence: Option<i64>,
+    /// See [`Review::confidence_post`]. Validation of `[1, 5]` happens at the
+    /// command layer before reaching this struct.
+    #[serde(default)]
+    pub confidence_post: Option<i64>,
 }
 
 /// Per-day aggregate used by the stats dashboard.
@@ -84,8 +92,8 @@ impl<'a> ReviewRepo<'a> {
                 stability_before, stability_after,
                 difficulty_before, difficulty_after,
                 elapsed_days, scheduled_days, review_time, reviewed_at,
-                confidence
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                confidence, confidence_post
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 r.card_id,
                 r.rating,
@@ -100,6 +108,7 @@ impl<'a> ReviewRepo<'a> {
                 r.review_time,
                 reviewed_at,
                 r.confidence,
+                r.confidence_post,
             ],
         )?;
         let id = self.conn.last_insert_rowid();
@@ -112,7 +121,7 @@ impl<'a> ReviewRepo<'a> {
                     stability_before, stability_after,
                     difficulty_before, difficulty_after,
                     elapsed_days, scheduled_days, review_time, reviewed_at,
-                    confidence
+                    confidence, confidence_post
              FROM reviews WHERE id = ?1",
             params![id],
             row_to_review,
@@ -126,7 +135,7 @@ impl<'a> ReviewRepo<'a> {
                     stability_before, stability_after,
                     difficulty_before, difficulty_after,
                     elapsed_days, scheduled_days, review_time, reviewed_at,
-                    confidence
+                    confidence, confidence_post
              FROM reviews
              WHERE card_id = ?1
              ORDER BY reviewed_at ASC",
@@ -215,6 +224,7 @@ fn row_to_review(row: &Row<'_>) -> rusqlite::Result<AppResult<Review>> {
     let review_time: i64 = row.get(11)?;
     let reviewed_at: i64 = row.get(12)?;
     let confidence: Option<i64> = row.get(13)?;
+    let confidence_post: Option<i64> = row.get(14)?;
 
     let parsed: AppResult<Review> = (|| {
         Ok(Review {
@@ -232,8 +242,130 @@ fn row_to_review(row: &Row<'_>) -> rusqlite::Result<AppResult<Review>> {
             review_time,
             reviewed_at,
             confidence,
+            confidence_post,
         })
     })();
 
     Ok(parsed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::notes::NoteTemplate;
+    use crate::db::Database;
+    use serde_json::json;
+
+    /// Vague 15 — a review captures BOTH the prospective `confidence` (v5) and
+    /// the retrospective `confidence_post` (v15), and they round-trip intact.
+    #[test]
+    fn review_persists_both_confidence_values() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let deck = db
+            .decks(&conn)
+            .create("D", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+        let note = db
+            .notes(&conn)
+            .create(
+                deck.id,
+                NoteTemplate::Basic,
+                json!({ "front": "f", "back": "b" }),
+                vec![],
+                None,
+            )
+            .unwrap();
+        let card_id: i64 = conn
+            .query_row(
+                "SELECT id FROM cards WHERE note_id = ?1",
+                params![note.id],
+                |r| r.get(0),
+            )
+            .unwrap();
+
+        let inserted = db
+            .reviews(&conn)
+            .insert(
+                NewReview {
+                    card_id,
+                    rating: 3,
+                    state_before: CardState::New,
+                    state_after: CardState::Review,
+                    stability_before: None,
+                    stability_after: 5.0,
+                    difficulty_before: None,
+                    difficulty_after: 5.0,
+                    elapsed_days: 0,
+                    scheduled_days: 5,
+                    review_time: 1_000,
+                    confidence: Some(2),
+                    confidence_post: Some(4),
+                },
+                1_700_000_000,
+            )
+            .unwrap();
+
+        assert_eq!(inserted.confidence, Some(2));
+        assert_eq!(inserted.confidence_post, Some(4));
+
+        // Re-read via list_for_card to prove the SELECT path also carries it.
+        let fetched = db.reviews(&conn).list_for_card(card_id).unwrap();
+        assert_eq!(fetched.len(), 1);
+        assert_eq!(fetched[0].confidence, Some(2));
+        assert_eq!(fetched[0].confidence_post, Some(4));
+    }
+
+    /// A review with neither confidence value keeps both NULL (backwards-compat
+    /// with sessions where both toggles are off).
+    #[test]
+    fn review_without_confidence_is_null() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let deck = db
+            .decks(&conn)
+            .create("D", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+        let note = db
+            .notes(&conn)
+            .create(
+                deck.id,
+                NoteTemplate::Basic,
+                json!({ "front": "f", "back": "b" }),
+                vec![],
+                None,
+            )
+            .unwrap();
+        let card_id: i64 = conn
+            .query_row(
+                "SELECT id FROM cards WHERE note_id = ?1",
+                params![note.id],
+                |r| r.get(0),
+            )
+            .unwrap();
+
+        let inserted = db
+            .reviews(&conn)
+            .insert(
+                NewReview {
+                    card_id,
+                    rating: 3,
+                    state_before: CardState::New,
+                    state_after: CardState::Review,
+                    stability_before: None,
+                    stability_after: 5.0,
+                    difficulty_before: None,
+                    difficulty_after: 5.0,
+                    elapsed_days: 0,
+                    scheduled_days: 5,
+                    review_time: 1_000,
+                    confidence: None,
+                    confidence_post: None,
+                },
+                1_700_000_000,
+            )
+            .unwrap();
+        assert!(inserted.confidence.is_none());
+        assert!(inserted.confidence_post.is_none());
+    }
 }

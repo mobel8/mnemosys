@@ -247,6 +247,7 @@ mod tests {
                             scheduled_days: 2,
                             review_time: 3_000,
                             confidence: None,
+                            confidence_post: None,
                         },
                         reviewed_at,
                     )

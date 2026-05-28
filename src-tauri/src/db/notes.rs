@@ -30,6 +30,13 @@
 //!                        recto = « Vrai ou faux ? {misconception} », verso =
 //!                        « FAUX. {correct} » + explanation. `misconception`
 //!                        and `correct` are both required.
+//! - `worked_example` → `{ "problem": "...", "steps": ["...", "..."],
+//!                        "answer": "..." }` (Vague 15, maths — Sweller/Renkl/
+//!                        Atkinson 2003 faded worked example). One card: recto =
+//!                        the problem, verso reveals the solution `steps` one by
+//!                        one (the learner predicts each), then the final
+//!                        `answer`. `problem` and `answer` are required and the
+//!                        `steps` array must hold at least one non-empty string.
 //!
 //! Vague 10 also introduces an optional `frequency_band` column on every
 //! note (independent of `template`): one of `top_100`, `top_1k`, `top_5k`,
@@ -63,6 +70,10 @@ pub enum NoteTemplate {
     /// Vague 14 — refutation card (sciences, Tippett 2010 meta). One card
     /// confronting a misconception with the correct statement + explanation.
     Refutation,
+    /// Vague 15 — faded worked example (maths, Sweller/Renkl/Atkinson 2003).
+    /// One card: recto = problem, verso reveals solution steps progressively
+    /// then the final answer.
+    WorkedExample,
 }
 
 impl NoteTemplate {
@@ -76,6 +87,7 @@ impl NoteTemplate {
             NoteTemplate::Bidirectional => "bidirectional",
             NoteTemplate::IllnessScript => "illness_script",
             NoteTemplate::Refutation => "refutation",
+            NoteTemplate::WorkedExample => "worked_example",
         }
     }
 }
@@ -93,6 +105,7 @@ impl FromStr for NoteTemplate {
             "bidirectional" => Ok(NoteTemplate::Bidirectional),
             "illness_script" => Ok(NoteTemplate::IllnessScript),
             "refutation" => Ok(NoteTemplate::Refutation),
+            "worked_example" => Ok(NoteTemplate::WorkedExample),
             other => Err(AppError::Database(format!(
                 "invalid note template '{}'",
                 other
@@ -200,6 +213,7 @@ impl<'a> NoteRepo<'a> {
     /// - `Bidirectional` → 2 cards (ord=0 source→target, ord=1 target→source).
     /// - `IllnessScript` → 1 card (ord=0 condition→clinical sections).
     /// - `Refutation`    → 1 card (ord=0 misconception→correction).
+    /// - `WorkedExample` → 1 card (ord=0 problem→steps→answer).
     ///
     /// `frequency_band` is optional (Vague 10). When `Some`, the value must
     /// be one of `top_100`, `top_1k`, `top_5k`, `top_10k`, `beyond` —
@@ -626,6 +640,49 @@ fn validate_fields(template: NoteTemplate, fields: &serde_json::Value) -> AppRes
                 }
             }
         }
+        NoteTemplate::WorkedExample => {
+            // The problem statement (recto) and the final answer are both
+            // required and non-blank — the card is meaningless without either.
+            for key in ["problem", "answer"] {
+                let v = obj
+                    .get(key)
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        AppError::Validation(format!("missing string field '{}'", key))
+                    })?;
+                if v.trim().is_empty() {
+                    return Err(AppError::Validation(format!(
+                        "field '{}' must not be empty",
+                        key
+                    )));
+                }
+            }
+            // `steps` is the faded scaffolding — an array of strings with at
+            // least one non-empty entry. Each entry must itself be a string.
+            let steps = obj
+                .get("steps")
+                .and_then(|v| v.as_array())
+                .ok_or_else(|| {
+                    AppError::Validation("worked example requires a 'steps' array".into())
+                })?;
+            let non_empty_steps = steps
+                .iter()
+                .filter(|s| s.as_str().map(|t| !t.trim().is_empty()).unwrap_or(false))
+                .count();
+            if non_empty_steps == 0 {
+                return Err(AppError::Validation(
+                    "worked example 'steps' must contain at least one non-empty step".into(),
+                ));
+            }
+            for (idx, step) in steps.iter().enumerate() {
+                if !step.is_string() {
+                    return Err(AppError::Validation(format!(
+                        "step #{} must be a string",
+                        idx
+                    )));
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -671,6 +728,8 @@ fn ords_for_template(
         // Vague 14 — disciplinary templates, one card each.
         NoteTemplate::IllnessScript => Ok(vec![0]),
         NoteTemplate::Refutation => Ok(vec![0]),
+        // Vague 15 — maths worked example, one card.
+        NoteTemplate::WorkedExample => Ok(vec![0]),
     }
 }
 
@@ -737,7 +796,7 @@ mod tests {
         let conn = db.lock();
         let deck = db
             .decks(&conn)
-            .create("Bio", None, "#3b82f6", 0.9, None, None)
+            .create("Bio", None, "#3b82f6", 0.9, None, None, None)
             .unwrap();
 
         let fields = json!({
@@ -785,7 +844,7 @@ mod tests {
     fn occlusion_rejects_empty_masks() {
         let db = Database::for_test();
         let conn = db.lock();
-        let deck = db.decks(&conn).create("X", None, "#3b82f6", 0.9, None, None).unwrap();
+        let deck = db.decks(&conn).create("X", None, "#3b82f6", 0.9, None, None, None).unwrap();
 
         let err = db
             .notes(&conn)
@@ -809,7 +868,7 @@ mod tests {
     fn occlusion_rejects_missing_image_path() {
         let db = Database::for_test();
         let conn = db.lock();
-        let deck = db.decks(&conn).create("Y", None, "#3b82f6", 0.9, None, None).unwrap();
+        let deck = db.decks(&conn).create("Y", None, "#3b82f6", 0.9, None, None, None).unwrap();
 
         let err = db
             .notes(&conn)
@@ -819,6 +878,87 @@ mod tests {
                 json!({
                     "masks": [{ "x": 1.0, "y": 1.0, "width": 10.0, "height": 10.0 }]
                 }),
+                vec![],
+                None,
+            )
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+    }
+
+    #[test]
+    fn create_worked_example_creates_1_card() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let deck = db
+            .decks(&conn)
+            .create("Maths", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+
+        let fields = json!({
+            "problem": "Résoudre 2x + 3 = 11",
+            "steps": ["Soustraire 3 : 2x = 8", "Diviser par 2 : x = 4"],
+            "answer": "x = 4"
+        });
+
+        let note = db
+            .notes(&conn)
+            .create(deck.id, NoteTemplate::WorkedExample, fields, vec![], None)
+            .expect("worked example note creation");
+        assert_eq!(note.template, NoteTemplate::WorkedExample);
+
+        // Exactly one card with ord 0.
+        let card_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM cards WHERE note_id = ?1",
+                rusqlite::params![note.id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(card_count, 1);
+    }
+
+    #[test]
+    fn worked_example_requires_problem_and_answer() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let deck = db
+            .decks(&conn)
+            .create("Maths", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+
+        // Missing `answer`.
+        let err = db
+            .notes(&conn)
+            .create(
+                deck.id,
+                NoteTemplate::WorkedExample,
+                json!({ "problem": "2x = 4", "steps": ["x = 2"] }),
+                vec![],
+                None,
+            )
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+
+        // Empty `problem`.
+        let err = db
+            .notes(&conn)
+            .create(
+                deck.id,
+                NoteTemplate::WorkedExample,
+                json!({ "problem": "  ", "steps": ["x = 2"], "answer": "x = 2" }),
+                vec![],
+                None,
+            )
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+
+        // No non-empty steps.
+        let err = db
+            .notes(&conn)
+            .create(
+                deck.id,
+                NoteTemplate::WorkedExample,
+                json!({ "problem": "2x = 4", "steps": ["", "  "], "answer": "x = 2" }),
                 vec![],
                 None,
             )
