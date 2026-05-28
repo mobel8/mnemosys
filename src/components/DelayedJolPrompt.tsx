@@ -22,8 +22,6 @@ import { Slider } from "@/components/ui/slider";
 import { usePendingJols, useRecordJol, useSettingsQuery } from "@/lib/queries";
 import { useReviewSession } from "@/lib/stores/review";
 
-const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 min
-
 function noteFront(fields: Record<string, unknown>): string {
   if (typeof fields.front === "string") return fields.front;
   if (typeof fields.text === "string") {
@@ -39,23 +37,19 @@ export function DelayedJolPrompt() {
   const sessionDeckId = useReviewSession((s) => s.deckId);
   const sessionActive = sessionDeckId !== null;
 
-  const [tick, setTick] = useState(0);
+  // `usePendingJols` already polls every 5 min via its own `refetchInterval`
+  // (see queries.ts). We keep the default, stable query key here so each poll
+  // refreshes the same cache entry instead of spawning an orphan entry per
+  // tick. The query is disabled mid-session so the prompt never interrupts an
+  // active review.
   const { data: pending } = usePendingJols(minAge, 5, {
     enabled: enabled && !sessionActive,
-    // Trigger a refetch on each poll tick.
-    queryKey: ["pending-jols", minAge, tick] as const,
   });
 
   const recordJol = useRecordJol();
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
   const [prob, setProb] = useState(0.7);
-
-  useEffect(() => {
-    if (!enabled) return;
-    const id = setInterval(() => setTick((t) => t + 1), POLL_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [enabled]);
 
   useEffect(() => {
     if (!enabled || sessionActive) return;

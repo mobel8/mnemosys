@@ -309,8 +309,6 @@ impl<'a> PalaceRepo<'a> {
 
         // Apply the new ordinals inside a transaction so a mid-loop error
         // never leaves half the rows reordered.
-        let savepoint = self.conn.prepare("SAVEPOINT reorder_loci")?;
-        drop(savepoint);
         self.conn.execute_batch("SAVEPOINT reorder_loci")?;
         for (idx, locus_id) in new_order.iter().enumerate() {
             let new_ord = (idx as i64) + 1;

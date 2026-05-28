@@ -293,17 +293,13 @@ function ReviewSessionInterleavedShell({
   onQuit: () => void;
   deckLookup: Record<number, string>;
 }) {
-  // We can't currently pass `deckName` directly to `<ReviewCard />` from
-  // here because `ReviewSession` owns the loop. The cheapest tweak is to
-  // augment each note's `fields` with a synthetic `__deckName` key the
-  // review card reads. To keep the surface small we instead use a global
-  // lookup map exposed via window — wait, that's gross. We just hand the
-  // map down through a context-free prop on a wrapping component that
-  // renders ReviewSession with the augmented queue.
-  //
-  // Simpler: tag every card's parent note with `__deck_name` via a shallow
-  // clone of the queue, then the review card reads `note.fields.__deck_name`
-  // if present. This stays additive and never touches the persisted DB.
+  // `ReviewSession` owns the review loop and doesn't expose a per-card
+  // `deckName` prop, so we can't pass the originating deck directly to
+  // `<ReviewCard />`. Instead we tag each card's parent note with a synthetic
+  // `__deck_name` field via a shallow clone of the queue; `ReviewCard` reads
+  // `note.fields.__deck_name` when present to render its deck badge. This stays
+  // additive, keeps the prop surface unchanged, and never touches the
+  // persisted DB (the clone is in-memory only).
   const taggedCards: CardWithNote[] = useMemo(
     () =>
       cards.map((c) => ({
@@ -319,10 +315,10 @@ function ReviewSessionInterleavedShell({
     [cards, deckLookup],
   );
 
-  // We expose the quit handler through window-level navigation in
-  // ReviewSession; falling back to that. Pass `deckId = -1` so the
-  // single-deck "back to deck" link in the summary fallbacks to home if
-  // the user uses it instead of the explicit quit button.
+  // Pass `deckId = -1` as a synthetic « no canonical deck » sentinel: every
+  // navigation in `ReviewSession` (quit, edit, summary) detects the negative
+  // id and routes back to the interleaved entry point instead of a concrete
+  // `/decks/$deckId` page that wouldn't exist for a mixed queue.
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b px-6 py-2 text-xs text-muted-foreground">

@@ -496,3 +496,210 @@ fn row_to_card(row: &Row<'_>) -> rusqlite::Result<Card> {
         updated_at: row.get(15)?,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::notes::NoteTemplate;
+    use crate::db::Database;
+    use serde_json::json;
+
+    /// A fixed "now" so the date math in these tests is deterministic.
+    const NOW: i64 = 1_700_000_000;
+    const DAY: i64 = 86_400;
+
+    /// Create a deck + a basic note (which auto-mints exactly one card) and
+    /// return the freshly-created card id. Keeps each test's setup to one line.
+    fn seed_card(db: &Database, conn: &Connection, deck_name: &str) -> i64 {
+        let deck = db
+            .decks(conn)
+            .create(deck_name, None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+        let note = db
+            .notes(conn)
+            .create(
+                deck.id,
+                NoteTemplate::Basic,
+                json!({ "front": "f", "back": "b" }),
+                vec![],
+                None,
+            )
+            .unwrap();
+        conn.query_row(
+            "SELECT id FROM cards WHERE note_id = ?1",
+            params![note.id],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+
+    /// Return the `deck_id` of a card row (so we can drive the interleaved test
+    /// without threading the deck ids through the helper).
+    fn deck_of(conn: &Connection, card_id: i64) -> i64 {
+        conn.query_row(
+            "SELECT deck_id FROM cards WHERE id = ?1",
+            params![card_id],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn update_after_review_persists_scheduling_fields() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let card_id = seed_card(&db, &conn, "D");
+        let cards = db.cards(&conn);
+
+        // A brand-new card has no scheduling yet.
+        let before = cards.get(card_id).unwrap();
+        assert_eq!(before.state, CardState::New);
+        assert_eq!(before.reps, 0);
+        assert_eq!(before.lapses, 0);
+        assert!(before.next_review.is_none());
+
+        let updated = cards
+            .update_after_review(card_id, CardState::Review, 12.5, 5.0, 4, NOW)
+            .unwrap();
+
+        assert_eq!(updated.state, CardState::Review);
+        assert_eq!(updated.stability, Some(12.5));
+        assert_eq!(updated.difficulty, Some(5.0));
+        assert_eq!(updated.scheduled_days, 4);
+        assert_eq!(updated.reps, 1, "reps increment on every review");
+        assert_eq!(updated.lapses, 0, "a non-relearning review never lapses");
+        assert_eq!(updated.last_review, Some(NOW));
+        assert_eq!(
+            updated.next_review,
+            Some(NOW + 4 * DAY),
+            "next_review = reviewed_at + scheduled_days * 86400"
+        );
+    }
+
+    #[test]
+    fn update_after_review_increments_lapses_on_relearning() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let card_id = seed_card(&db, &conn, "D");
+        let cards = db.cards(&conn);
+
+        // First a successful review, then a forget → Relearning bumps lapses.
+        cards
+            .update_after_review(card_id, CardState::Review, 10.0, 5.0, 6, NOW)
+            .unwrap();
+        let relearned = cards
+            .update_after_review(card_id, CardState::Relearning, 1.0, 7.0, 0, NOW + DAY)
+            .unwrap();
+
+        assert_eq!(relearned.state, CardState::Relearning);
+        assert_eq!(relearned.reps, 2);
+        assert_eq!(relearned.lapses, 1, "Relearning transition records a lapse");
+    }
+
+    #[test]
+    fn due_cards_returns_only_past_due_unsuspended() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let deck = db
+            .decks(&conn)
+            .create("D", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+        let cards = db.cards(&conn);
+
+        // Three cards: one due in the past, one due in the future, one due-but-
+        // suspended. Only the first should surface.
+        let mk = |front: &str| -> i64 {
+            let note = db
+                .notes(&conn)
+                .create(
+                    deck.id,
+                    NoteTemplate::Basic,
+                    json!({ "front": front, "back": "b" }),
+                    vec![],
+                    None,
+                )
+                .unwrap();
+            conn.query_row(
+                "SELECT id FROM cards WHERE note_id = ?1",
+                params![note.id],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+
+        let due_id = mk("due");
+        let future_id = mk("future");
+        let suspended_id = mk("suspended");
+
+        // `due` was reviewed 10 days ago with a 1-day interval → past due.
+        cards
+            .update_after_review(due_id, CardState::Review, 5.0, 5.0, 1, NOW - 10 * DAY)
+            .unwrap();
+        // `future` reviewed now with a 30-day interval → not due yet.
+        cards
+            .update_after_review(future_id, CardState::Review, 30.0, 5.0, 30, NOW)
+            .unwrap();
+        // `suspended` is past due but suspended → must be excluded.
+        cards
+            .update_after_review(suspended_id, CardState::Review, 5.0, 5.0, 1, NOW - 10 * DAY)
+            .unwrap();
+        cards.suspend(suspended_id, true).unwrap();
+
+        let due = cards.due_cards(Some(deck.id), NOW, 50).unwrap();
+        let ids: Vec<i64> = due.iter().map(|c| c.card.id).collect();
+        assert_eq!(ids, vec![due_id], "only the past-due, unsuspended card is returned");
+
+        // The count helper must agree with the list.
+        assert_eq!(cards.due_cards_count(Some(deck.id), NOW).unwrap(), 1);
+    }
+
+    #[test]
+    fn due_cards_interleaved_pulls_from_every_deck_and_caps_limit() {
+        let db = Database::for_test();
+        let conn = db.lock();
+
+        // Two decks, two past-due cards each.
+        let a1 = seed_card(&db, &conn, "A");
+        let a2 = seed_card(&db, &conn, "A2");
+        let deck_a = deck_of(&conn, a1);
+        // Force both "A" cards onto the same deck so we genuinely test a
+        // multi-card single deck alongside a second deck.
+        conn.execute(
+            "UPDATE cards SET deck_id = ?1 WHERE id = ?2",
+            params![deck_a, a2],
+        )
+        .unwrap();
+
+        let b1 = seed_card(&db, &conn, "B");
+        let deck_b = deck_of(&conn, b1);
+
+        let cards = db.cards(&conn);
+        for id in [a1, a2, b1] {
+            cards
+                .update_after_review(id, CardState::Review, 5.0, 5.0, 1, NOW - 5 * DAY)
+                .unwrap();
+        }
+
+        // All three are due across the two decks.
+        let all = cards
+            .due_cards_interleaved(&[deck_a, deck_b], NOW, 50)
+            .unwrap();
+        assert_eq!(all.len(), 3, "every past-due card across both decks is pulled");
+        let decks_seen: std::collections::HashSet<i64> =
+            all.iter().map(|c| c.card.deck_id).collect();
+        assert!(decks_seen.contains(&deck_a) && decks_seen.contains(&deck_b));
+
+        // The limit truncates the (shuffled) queue.
+        let capped = cards
+            .due_cards_interleaved(&[deck_a, deck_b], NOW, 2)
+            .unwrap();
+        assert_eq!(capped.len(), 2, "limit caps the returned queue");
+
+        // Empty inputs short-circuit to an empty queue (no panic, no SQL).
+        assert!(cards.due_cards_interleaved(&[], NOW, 10).unwrap().is_empty());
+        assert!(cards
+            .due_cards_interleaved(&[deck_a], NOW, 0)
+            .unwrap()
+            .is_empty());
+    }
+}

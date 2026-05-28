@@ -106,9 +106,16 @@ export function ReviewSummary({
 
           <div className="flex flex-col items-center gap-2 pt-2 sm:flex-row sm:justify-center">
             <Button asChild variant="outline">
-              <Link to="/decks/$deckId" params={{ deckId }}>
-                Retour au deck
-              </Link>
+              {/* `deckId < 0` is the interleaved-session sentinel: a mixed
+                  queue has no canonical deck, so route back to the interleaved
+                  entry point instead of a non-existent `/decks/-1`. */}
+              {deckId < 0 ? (
+                <Link to="/review-interleaved">Retour au mode entrelacé</Link>
+              ) : (
+                <Link to="/decks/$deckId" params={{ deckId }}>
+                  Retour au deck
+                </Link>
+              )}
             </Button>
             {remainingDue > 0 && onContinue && (
               <Button onClick={onContinue}>

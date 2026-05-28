@@ -133,6 +133,15 @@ export function CyclicSighing({ open, onClose, durationSeconds = 300 }: CyclicSi
     [audioEnabled],
   );
 
+  // Keep the latest `playBeep` in a ref so the breathing-cycle effect below can
+  // call it without listing it as a dependency. Otherwise toggling the sound
+  // switch would re-create `playBeep`, restart the effect, and reset the cycle
+  // mid-session (the phase timer + cycle counter would jump back to the start).
+  const playBeepRef = useRef(playBeep);
+  useEffect(() => {
+    playBeepRef.current = playBeep;
+  }, [playBeep]);
+
   // Drive the phase cycle. Each timeout schedules the *next* one so a long
   // hold like `exhale` (4s) gets its full slice before flipping.
   useEffect(() => {
@@ -150,7 +159,7 @@ export function CyclicSighing({ open, onClose, durationSeconds = 300 }: CyclicSi
         if (next === "inhale1") {
           setCycleCount((n) => n + 1);
         }
-        playBeep(next);
+        playBeepRef.current(next);
         schedule();
       }, duration);
     }
@@ -162,7 +171,7 @@ export function CyclicSighing({ open, onClose, durationSeconds = 300 }: CyclicSi
         phaseTimerRef.current = null;
       }
     };
-  }, [open, completed, playBeep]);
+  }, [open, completed]);
 
   // Global countdown.
   useEffect(() => {

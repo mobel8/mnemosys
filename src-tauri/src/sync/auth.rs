@@ -11,12 +11,30 @@
 //! Authentication is exercised end-to-end the moment Session 4 wires a
 //! staging project.
 
+use std::time::Duration;
+
 use chrono::Utc;
 use serde::Deserialize;
 
 use crate::error::{AppError, AppResult};
 
 use super::SyncSession;
+
+/// Network timeout for every Supabase auth call. Without it a stalled
+/// connection (captive portal, dropped Wi-Fi) would hang the request — and the
+/// command awaiting it — indefinitely. Matches the cap used by the other HTTP
+/// clients in this crate (sync, TTS, AI).
+const AUTH_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Build a timeout-bounded `reqwest` client for the auth endpoints. Construction
+/// can only fail if the TLS backend can't initialise, which we surface as a
+/// clear error rather than panicking.
+fn build_http_client() -> AppResult<reqwest::Client> {
+    reqwest::Client::builder()
+        .timeout(AUTH_TIMEOUT)
+        .build()
+        .map_err(|e| AppError::Other(format!("build auth http client: {}", e)))
+}
 
 /// Minimal config snapshot needed to dial Supabase. Built from `AppSettings`
 /// by the calling Tauri command — keeps `auth.rs` free of Tauri imports.
@@ -94,7 +112,7 @@ pub async fn login(
         "password": password,
     });
 
-    let client = reqwest::Client::new();
+    let client = build_http_client()?;
     let resp = client
         .post(&endpoint)
         .header("apikey", &config.anon_key)
@@ -135,7 +153,7 @@ pub async fn refresh(config: &SupabaseConfig, refresh_token: &str) -> AppResult<
     let endpoint = format!("{}/auth/v1/token?grant_type=refresh_token", config.url);
     let body = serde_json::json!({ "refresh_token": refresh_token });
 
-    let client = reqwest::Client::new();
+    let client = build_http_client()?;
     let resp = client
         .post(&endpoint)
         .header("apikey", &config.anon_key)
@@ -175,7 +193,11 @@ pub async fn refresh(config: &SupabaseConfig, refresh_token: &str) -> AppResult<
 /// failure just means the JWT remains valid until its natural expiry.
 pub async fn logout(config: &SupabaseConfig, access_token: &str) -> AppResult<()> {
     let endpoint = format!("{}/auth/v1/logout", config.url);
-    let client = reqwest::Client::new();
+    // Best-effort: if the client can't even be built, the local session is
+    // wiped by the caller regardless, so we don't surface the error.
+    let Ok(client) = build_http_client() else {
+        return Ok(());
+    };
     let _ = client
         .post(&endpoint)
         .header("apikey", &config.anon_key)

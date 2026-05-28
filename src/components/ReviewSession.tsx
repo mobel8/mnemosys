@@ -18,7 +18,6 @@
  *   - Space      : flip (question phase only)
  *   - 1, 2, 3, 4 : rating (answer phase only)
  *   - s          : suspend current card and skip
- *   - e          : edit current card (opens the note editor)
  *   - Esc        : quit (with confirm in the progress bar)
  *   - ?          : show shortcut help
  *
@@ -48,6 +47,8 @@ import { ReviewControls } from "@/components/ReviewControls";
 import { ReviewProgress } from "@/components/ReviewProgress";
 import { type ReviewedLog, ReviewSummary } from "@/components/ReviewSummary";
 import { SelfExplanationPrompt } from "@/components/SelfExplanationPrompt";
+import { SketchCanvas } from "@/components/SketchCanvas";
+import type { TypeAnswerVerdict } from "@/components/TypeAnswer";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -57,9 +58,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Toast, ToastDescription, ToastTitle } from "@/components/ui/toast";
-import { useSettingsQuery, useSubmitReview, useSuspendCard, useTodayWellness } from "@/lib/queries";
+import {
+  useSaveSketch,
+  useSettingsQuery,
+  useSubmitReview,
+  useSuspendCard,
+  useTodayWellness,
+} from "@/lib/queries";
 import { useReviewSession } from "@/lib/stores/review";
-import type { CardWithNote, Rating, WellnessLog } from "@/lib/tauri";
+import type { CardWithNote, Rating, TTSVoice, WellnessLog } from "@/lib/tauri";
 
 type Phase = "question" | "answer" | "submitting" | "done";
 
@@ -79,6 +86,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   const navigate = useNavigate();
   const submitReview = useSubmitReview();
   const suspendCard = useSuspendCard();
+  const saveSketch = useSaveSketch();
   const settings = useSettingsQuery();
 
   // Snapshot the queue once; the parent route only renders us when due
@@ -101,9 +109,23 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   // Vague 15 — per-card retrospective confidence (captured AFTER the flip).
   // Reset on every card transition like the prospective buffer.
   const [confidencePost, setConfidencePost] = useState<number | null>(null);
+  // Vague 7 — latest sketch PNG data-URL for the current card (kept in a ref so
+  // each stroke doesn't re-render the session). Reset on every card transition.
+  const sketchDataRef = useRef<string | null>(null);
+  // Vague 8 — most recent type/voice answer outcome for the current card. Used
+  // to surface the similarity score + suggest (not auto-apply) a rating. Reset
+  // on every card transition.
+  const [typedAnswer, setTypedAnswer] = useState<{
+    score: number;
+    verdict: TypeAnswerVerdict;
+  } | null>(null);
   const typeTheAnswerEnabled = settings.data?.type_the_answer_enabled ?? false;
   const voiceAnswerEnabled = settings.data?.voice_answer_enabled ?? false;
   const confidenceEnabled = settings.data?.confidence_rating_enabled ?? false;
+  // Vague 7 — sketch-before-flip (Wammes et al. 2016). When on, basic /
+  // basic_reverse / sentence cards show a drawing canvas during the question
+  // phase; the captured PNG is attached to the review on submit.
+  const sketchBeforeFlipEnabled = settings.data?.sketch_before_flip_enabled ?? false;
   const preQuestioningEnabled = settings.data?.pre_questioning_enabled ?? false;
   // --- Vague 12 — cognitive features --------------------------------------
   const pretestModeEnabled = settings.data?.pretest_mode_enabled ?? false;
@@ -116,6 +138,13 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   // `handsFreeActive` toggles the alternative UI for the current session only.
   const handsFreeEnabled = settings.data?.hands_free_enabled ?? false;
   const [handsFreeActive, setHandsFreeActive] = useState(false);
+  // Narrow the persisted `tts_voice` (a free-form `string | null`) to the
+  // `TTSVoice` union HandsFreeReview expects, falling back to `undefined` (the
+  // component then uses its own default) for unset or unknown values.
+  const ttsVoice = useMemo(
+    () => narrowTtsVoice(settings.data?.tts_voice),
+    [settings.data?.tts_voice],
+  );
   // Per-card pretest gate: which card index has already shown (or skipped)
   // its pretest prompt. Reset implicitly because we key on the index.
   const [pretestDoneForIndex, setPretestDoneForIndex] = useState<number | null>(null);
@@ -215,6 +244,9 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
     // Reset the per-card confidence buffers so each card starts fresh.
     setConfidence(null);
     setConfidencePost(null);
+    // Reset the per-card sketch + typed-answer buffers (Vague 7 / Vague 8).
+    sketchDataRef.current = null;
+    setTypedAnswer(null);
     // Reset the self-explanation gate for the next card.
     setSelfExplanationDone(false);
     advanceInStore();
@@ -251,16 +283,20 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       const confidenceForSubmit = confidenceEnabled && confidence !== null ? confidence : null;
       const confidencePostForSubmit =
         confidenceEnabled && confidencePost !== null ? confidencePost : null;
+      // Vague 7 — snapshot the sketch + card id *before* the async hop so the
+      // per-card buffer reset in `advanceToNext` can't race the save.
+      const cardId = current.card.id;
+      const sketchData = sketchBeforeFlipEnabled ? sketchDataRef.current : null;
       submitReview.mutate(
         {
-          cardId: current.card.id,
+          cardId,
           rating,
           reviewTimeMs,
           confidence: confidenceForSubmit,
           confidencePost: confidencePostForSubmit,
         },
         {
-          onSuccess: () => {
+          onSuccess: (result) => {
             setReviewed((log) => [
               ...log,
               {
@@ -269,6 +305,23 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
                 correct: rating >= 3,
               },
             ]);
+            // Vague 7 — attach the captured drawing to this exact review. The
+            // sketch is best-effort: a failure must never block the queue, so
+            // we swallow it (the review itself is already persisted).
+            if (sketchData) {
+              saveSketch.mutate(
+                { reviewId: result.review_id, cardId, sketchData },
+                {
+                  onError: (err) => {
+                    pushToast({
+                      title: "Croquis non enregistré",
+                      description: err.message,
+                      variant: "destructive",
+                    });
+                  },
+                },
+              );
+            }
             setPendingRating(null);
             advanceToNext();
           },
@@ -293,9 +346,34 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       phase,
       pushToast,
       submitReview,
+      saveSketch,
+      sketchBeforeFlipEnabled,
       selfExplanationEnabled,
       selfExplanationDone,
     ],
+  );
+
+  // Vague 8 — record a type/voice answer outcome. We surface the similarity
+  // score and suggest a rating but never auto-grade: FSRS stays under the
+  // learner's control (a self-rated « Again » on a typo is still valid signal).
+  const handleTypedAnswer = useCallback(
+    (_typed: string, score: number, verdict: TypeAnswerVerdict) => {
+      setTypedAnswer({ score, verdict });
+      const pct = Math.round(score * 100);
+      pushToast({
+        title:
+          verdict === "excellent"
+            ? `Réponse exacte (${pct}%)`
+            : verdict === "close"
+              ? `Presque (${pct}%)`
+              : `Réponse éloignée (${pct}%)`,
+        description:
+          verdict === "incorrect"
+            ? "Compare avec la bonne réponse, puis note honnêtement."
+            : "Vérifie la réponse, puis choisis ta note.",
+      });
+    },
+    [pushToast],
   );
 
   // Vague 23 — hands-free grade handler. HandsFreeReview owns its own cursor
@@ -329,6 +407,13 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   );
 
   const handleQuit = useCallback(() => {
+    // `deckId < 0` is the interleaved-session sentinel (see InterleavedSession).
+    // A mixed queue has no canonical deck, so route back to the interleaved
+    // entry point rather than a non-existent `/decks/-1`.
+    if (deckId < 0) {
+      navigate({ to: "/review-interleaved" });
+      return;
+    }
     navigate({ to: "/decks/$deckId", params: { deckId } });
   }, [deckId, navigate]);
 
@@ -376,18 +461,12 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
     );
   }, [cards.length, current, currentIndex, markShown, phase, pushToast, suspendCard]);
 
-  const handleEdit = useCallback(() => {
-    if (!current) return;
-    // Edit deep-link lands on the same editor route; the editor (B2 territory)
-    // will eventually wire up a `validateSearch` and pick the card id from
-    // the URL. Until then we just navigate to the editor with the card id
-    // appended manually so the future schema can read it via
-    // `window.location.search`.
-    navigate({
-      to: "/decks/$deckId/new-card",
-      params: { deckId },
-    });
-  }, [current, deckId, navigate]);
+  // NOTE: there is intentionally no "edit current card" hotkey. The only
+  // editor route (`/decks/$deckId/new-card`) creates a *blank* note — it has
+  // no `validateSearch` to load an existing card, and `<NoteEditor>` exposes
+  // no edit-by-id mode. Wiring `E` to that route would drop the learner on an
+  // empty form that silently discards the card they meant to fix, which is
+  // worse than no shortcut. Re-introduce `E` once inline card editing exists.
 
   // ---- Hotkeys -----------------------------------------------------------
   // react-hotkeys-hook v5 — `enableOnFormTags` defaults to false (good: we
@@ -435,7 +514,6 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   );
   useHotkeys("escape", () => handleQuit(), { enabled: phase !== "done" });
   useHotkeys("s", () => handleSuspend(), { enabled: phase !== "done" && phase !== "submitting" });
-  useHotkeys("e", () => handleEdit(), { enabled: phase !== "done" && phase !== "submitting" });
   useHotkeys("shift+slash", () => setHelpOpen((v) => !v));
 
   const totalForBar = cards.length;
@@ -503,6 +581,18 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
     !selfExplanationDone &&
     current.card.id % 5 === 0;
 
+  // --- Vague 7 — sketch-before-flip gate ----------------------------------
+  // Offer the drawing canvas during the question phase only, and only for
+  // templates with a free-form prompt to draw (basic / basic_reverse /
+  // sentence). Cloze / occlusion / disciplinary templates already demand
+  // retrieval through their own UI, so a sketch box there would be noise.
+  const sketchableTemplate =
+    current.note.template === "basic" ||
+    current.note.template === "basic_reverse" ||
+    current.note.template === "sentence";
+  const showSketch =
+    sketchBeforeFlipEnabled && phase === "question" && sketchableTemplate && !showPretest;
+
   // --- Vague 23 — hands-free mode -----------------------------------------
   // When active, an audio/voice loop replaces the classic flip/rate UI for the
   // remainder of the session. It drives its own cursor over the snapshot from
@@ -522,6 +612,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
         <HandsFreeReview
           cards={cards.slice(currentIndex)}
           language="fr"
+          voice={ttsVoice}
           onSubmit={handleHandsFreeSubmit}
           onExit={() => setHandsFreeActive(false)}
           onDone={() => {
@@ -581,7 +672,21 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
             cardOrd={current.card.card_ord}
             typeTheAnswerEnabled={typeTheAnswerEnabled}
             voiceAnswerEnabled={voiceAnswerEnabled}
+            onTypedAnswer={handleTypedAnswer}
           />
+          {/* Vague 7 — draw the answer before flipping (Wammes et al. 2016).
+              The canvas captures its PNG into `sketchDataRef` on each stroke;
+              `handleRate` attaches the latest snapshot to the review. */}
+          {showSketch && (
+            <div className="w-full max-w-2xl">
+              <SketchCanvas
+                key={`sketch-${current.card.id}`}
+                onExport={(url) => {
+                  sketchDataRef.current = url;
+                }}
+              />
+            </div>
+          )}
           {showSelfExplanation ? (
             <SelfExplanationPrompt
               key={`self-expl-${current.card.id}`}
@@ -589,6 +694,22 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
             />
           ) : (
             <div className="flex w-full max-w-2xl flex-col items-center gap-3">
+              {/* Vague 8 — surface the type/voice answer score + a suggested
+                  rating once the answer is visible. Purely advisory: the
+                  learner still picks the rating. */}
+              {typedAnswer && phase === "answer" && (
+                <div
+                  className="flex flex-col items-center gap-0.5 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-sm"
+                  data-testid="typed-answer-hint"
+                >
+                  <span className="font-medium text-primary">
+                    Similarité : {Math.round(typedAnswer.score * 100)}%
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Suggestion : {ratingSuggestion(typedAnswer.verdict)}
+                  </span>
+                </div>
+              )}
               {/* Vague 15 — two-step: once the answer is visible, capture the
                   retrospective confidence (in addition to the prospective one
                   shown inside ReviewControls). */}
@@ -635,7 +756,6 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
             <Shortcut keys="Espace" label="Afficher la réponse" />
             <Shortcut keys="1 / 2 / 3 / 4" label="Noter Again / Hard / Good / Easy" />
             <Shortcut keys="S" label="Suspendre la carte" />
-            <Shortcut keys="E" label="Éditer la carte" />
             <Shortcut keys="?" label="Afficher cette aide" />
             <Shortcut keys="Échap" label="Quitter la session" />
           </ul>
@@ -685,6 +805,44 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       )}
     </div>
   );
+}
+
+/** Valid OpenAI/Piper TTS voices — kept in sync with the `TTSVoice` union. */
+const TTS_VOICES: readonly TTSVoice[] = [
+  "alloy",
+  "echo",
+  "fable",
+  "onyx",
+  "nova",
+  "shimmer",
+  "coral",
+  "sage",
+];
+
+/**
+ * Narrow a persisted `tts_voice` string to the `TTSVoice` union. Returns
+ * `undefined` for `null`/unset or any unrecognised value so callers can fall
+ * back to their own default rather than forwarding an invalid voice id.
+ */
+function narrowTtsVoice(value: string | null | undefined): TTSVoice | undefined {
+  return value != null && (TTS_VOICES as readonly string[]).includes(value)
+    ? (value as TTSVoice)
+    : undefined;
+}
+
+/**
+ * Vague 8 — map a type/voice answer verdict to a human-readable rating
+ * suggestion. Advisory only: the learner still presses the rating button.
+ */
+function ratingSuggestion(verdict: TypeAnswerVerdict): string {
+  switch (verdict) {
+    case "excellent":
+      return "Easy / Good (4 ou 3)";
+    case "close":
+      return "Good / Hard (3 ou 2)";
+    default:
+      return "Again (1)";
+  }
 }
 
 /**

@@ -136,3 +136,51 @@ impl WhisperClient {
         Ok(parsed.text)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An empty API key must short-circuit to `NoApiKey` *before* any network
+    /// I/O, so the command layer can surface a clear "configure your key"
+    /// message offline. Mirrors the contract `commands/whisper.rs` relies on.
+    #[tokio::test]
+    async fn transcribe_returns_no_api_key_when_empty() {
+        let client = WhisperClient::new(String::new());
+        let err = client
+            .transcribe(vec![0u8; 16], "audio/webm", None)
+            .await
+            .expect_err("empty key must short-circuit before any network call");
+        assert!(matches!(err, WhisperError::NoApiKey));
+    }
+
+    /// Audio over the 25 MB cap is rejected client-side (again, no network)
+    /// rather than waiting for the API to return a 4xx. The error carries the
+    /// offending byte count for the message.
+    #[tokio::test]
+    async fn transcribe_rejects_oversized_audio() {
+        let client = WhisperClient::new("sk-test".to_string());
+        let too_big = MAX_AUDIO_BYTES + 1;
+        let err = client
+            .transcribe(vec![0u8; too_big], "audio/webm", None)
+            .await
+            .expect_err("audio above the cap must be rejected locally");
+        match err {
+            WhisperError::TooLarge(n) => assert_eq!(n, too_big),
+            other => panic!("expected TooLarge, got {other:?}"),
+        }
+    }
+
+    /// The key-check runs before the size-check, so an empty key wins even when
+    /// the payload is also oversized — proves the guards are ordered such that
+    /// a misconfigured client never allocates work it can't use.
+    #[tokio::test]
+    async fn transcribe_key_check_precedes_size_check() {
+        let client = WhisperClient::new(String::new());
+        let err = client
+            .transcribe(vec![0u8; MAX_AUDIO_BYTES + 1], "audio/wav", None)
+            .await
+            .expect_err("missing key must be reported first");
+        assert!(matches!(err, WhisperError::NoApiKey));
+    }
+}
