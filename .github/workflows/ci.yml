@@ -35,7 +35,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # pnpm 11.3.0 (pinned via package.json packageManager) requires
+          # Node >= 22.13 — Node 20 makes pnpm crash at install.
+          node-version: "22"
 
       - name: Setup pnpm
         # No `version:` — action-setup reads `packageManager` from
@@ -116,7 +118,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # pnpm 11.3.0 (pinned via package.json packageManager) requires
+          # Node >= 22.13 — Node 20 makes pnpm crash at install.
+          node-version: "22"
 
       - name: Setup pnpm
         # No `version:` — action-setup reads `packageManager` from
