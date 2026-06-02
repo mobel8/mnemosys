@@ -19,6 +19,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
@@ -180,18 +187,21 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
 
           <div className="space-y-2">
             <Label htmlFor="edit-deck-language">Langue du deck</Label>
-            <select
-              id="edit-deck-language"
-              value={languageMode ?? ""}
-              onChange={(e) => setLanguageMode(e.target.value || null)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            <Select
+              value={languageMode ?? "none"}
+              onValueChange={(v) => setLanguageMode(v === "none" ? null : v)}
             >
-              {LANGUAGE_OPTIONS.map((opt) => (
-                <option key={opt.code ?? "none"} value={opt.code ?? ""}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id="edit-deck-language">
+                <SelectValue placeholder="Choisir une langue" />
+              </SelectTrigger>
+              <SelectContent>
+                {LANGUAGE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.code ?? "none"} value={opt.code ?? "none"}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-xs text-muted-foreground">
               Active le mode langue : carte « Phrase » bidirectionnelle et suivi de couverture
               lexicale.
@@ -200,23 +210,24 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
 
           <div className="space-y-2">
             <Label htmlFor="edit-deck-prerequisite">Deck prérequis</Label>
-            <select
-              id="edit-deck-prerequisite"
-              value={prerequisiteDeckId ?? ""}
-              onChange={(e) =>
-                setPrerequisiteDeckId(e.target.value ? Number(e.target.value) : null)
-              }
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            <Select
+              value={prerequisiteDeckId != null ? String(prerequisiteDeckId) : "none"}
+              onValueChange={(v) => setPrerequisiteDeckId(v === "none" ? null : Number(v))}
             >
-              <option value="">Aucun</option>
-              {(decks.data ?? [])
-                .filter((d) => d.id !== deck.id)
-                .map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-            </select>
+              <SelectTrigger id="edit-deck-prerequisite">
+                <SelectValue placeholder="Aucun" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Aucun</SelectItem>
+                {(decks.data ?? [])
+                  .filter((d) => d.id !== deck.id)
+                  .map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
             <p className="text-xs text-muted-foreground">
               Mastery gating (Bloom) : ce deck reste verrouillé tant que le prérequis n'atteint pas
               90% de rétention.

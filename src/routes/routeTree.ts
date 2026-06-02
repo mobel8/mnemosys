@@ -17,6 +17,7 @@
 import { Route as rootRoute } from "./__root";
 import { Route as achievementsRoute } from "./achievements";
 import { Route as aiGenerateRoute } from "./ai-generate";
+import { Route as captureRoute } from "./capture";
 import { Route as decksDeckIdRoute } from "./decks.$deckId";
 import { Route as decksDeckIdNewCardRoute } from "./decks.$deckId.new-card";
 import { Route as gestureRoute } from "./gesture";
@@ -28,12 +29,14 @@ import { Route as palacesRoute } from "./palaces";
 import { Route as palacesPalaceIdRoute } from "./palaces.$palaceId";
 import { Route as palacesPalaceIdReviewRoute } from "./palaces.$palaceId.review";
 import { Route as plannerRoute } from "./planner";
+import { Route as pronunciationRoute } from "./pronunciation";
 import { Route as readingRoute } from "./reading";
 import { Route as reviewDeckIdRoute } from "./review.$deckId";
 import { Route as reviewInterleavedRoute } from "./review-interleaved";
 import { Route as settingsRoute } from "./settings";
 import { Route as shadowingRoute } from "./shadowing";
 import { Route as statsRoute } from "./stats";
+import { Route as vocabularyRoute } from "./vocabulary";
 
 export const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -42,6 +45,9 @@ export const routeTree = rootRoute.addChildren([
   reviewDeckIdRoute,
   reviewInterleavedRoute,
   aiGenerateRoute,
+  captureRoute,
+  vocabularyRoute,
+  pronunciationRoute,
   palacesRoute,
   palacesPalaceIdRoute,
   palacesPalaceIdReviewRoute,

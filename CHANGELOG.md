@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.9.0] — Refonte design « Studio Moderne » + apprentissage des langues (2026-06-02)
+
+Refonte visuelle premium de toute l'application (système de design verrouillé,
+documenté dans `design.md`) et quatre nouvelles fonctionnalités tournées vers
+la mémorisation des langues.
+
+### Design — « Studio Moderne » (modern-minimal, light + dark)
+- Système de tokens OKLCH complet dans `src/styles/globals.css` : accent
+  indigo-violet câblé (`--primary`/`--accent`/`--ring`), papier chaud (clair) /
+  ardoise-indigo (sombre), ombres douces tokenisées, palette de graphes,
+  échelle de marque `--brand-50…900`.
+- Typographie auto-hébergée (offline) : **Space Grotesk** (titres) + **Inter**
+  (corps) + **JetBrains Mono** (chiffres) via `@fontsource-variable/*`.
+- `ui/select.tsx` (Radix) ajouté ; tous les `<select>`/checkboxes natifs
+  remplacés par des primitives stylées. États vides/chargement premium
+  (skeletons). Coquille refaite : logo dégradé, navigation groupée, fil
+  d'Ariane + libellés 100 % en français.
+
+### Capture → cartes (OCR hors-ligne)
+- Nouvelle page `/capture` : coller (Ctrl+V), déposer ou choisir une image →
+  reconnaissance de texte **hors-ligne** (tesseract.js, assets bundlés, zéro
+  réseau) → génération de cartes Cloze ou Recto/Verso.
+
+### Apprentissage des langues
+- **Dictionnaire inline** : survol d'un mot en Lecture → définition, IPA et
+  traduction française (mini-dictionnaire embarqué).
+- **Vocabulaire par fréquence** (`/vocabulary`) : génération de decks à partir
+  des mots anglais les plus fréquents, traductions auto pour les mots courants.
+- **Prononciation** (`/pronunciation`) : drills de paires minimales anglaises
+  (écoute et identifie) avec TTS et repli sur la voix du système.
+
+### Qualité
+- tsc, Biome (156 fichiers), Vitest (191/191) verts ; build de release
+  (deb / rpm / AppImage) produit.
+
 ## [0.8.0] — Vagues 20-23 (2026-05-27)
 
 Dernière salve : algorithmes SRS supplémentaires, planification

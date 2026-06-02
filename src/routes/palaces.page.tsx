@@ -61,11 +61,11 @@ export default function PalacesIndexPage() {
     <div className="space-y-6 p-6">
       <header className="flex items-start justify-between gap-2">
         <div>
-          <h2 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <Compass className="h-6 w-6" /> Memory Palaces
-          </h2>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold">
+            <Compass className="h-6 w-6 text-brand-500" /> Memory Palaces
+          </h1>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-            Place tes cartes sur des « loci » à l'intérieur d'un palace 3D et réviseles en mode
+            Place tes cartes sur des « loci » à l'intérieur d'un palace 3D et révise-les en mode
             parcours. Inspiré de Krokos et al. 2019 (+8.8 % de rappel en VR vs liste plate) et des
             cellules de lieu (Nobel 2014, O'Keefe / Moser).
           </p>
@@ -78,7 +78,12 @@ export default function PalacesIndexPage() {
       <CreatePalaceDialog open={dialogOpen} onOpenChange={setDialogOpen} />
 
       {palaces.isLoading ? (
-        <p className="text-sm text-muted-foreground">Chargement…</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholders, order is stable
+            <div key={i} className="h-[88px] animate-pulse rounded-xl bg-muted" />
+          ))}
+        </div>
       ) : palaces.data && palaces.data.length > 0 ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {palaces.data.map((p) => (
@@ -87,9 +92,20 @@ export default function PalacesIndexPage() {
         </div>
       ) : (
         <Card>
-          <CardContent className="flex flex-col items-center gap-3 p-8 text-center text-sm text-muted-foreground">
-            <MapPin className="h-6 w-6" />
-            Aucun palace pour l'instant — crée ton premier pour épingler des cartes en 3D.
+          <CardContent className="flex flex-col items-center gap-3 p-10 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-500">
+              <MapPin className="h-6 w-6" aria-hidden />
+            </div>
+            <h3 className="font-display text-lg font-semibold tracking-tight">
+              Aucun palace pour l'instant
+            </h3>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Crée ton premier palace pour épingler des cartes dans un espace 3D et les réviser en
+              parcours.
+            </p>
+            <Button onClick={() => setDialogOpen(true)} className="mt-1 gap-2">
+              <Plus className="h-4 w-4" /> Nouveau palace
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -280,10 +296,10 @@ function EditPalaceDialog({
                   key={t.id}
                   type="button"
                   onClick={() => setTemplate(t.id)}
-                  className={`rounded-md border p-2 text-left text-xs transition-colors ${
+                  className={`rounded-lg border p-2 text-left text-xs outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
                     template === t.id
-                      ? "border-primary bg-primary/10"
-                      : "border-border hover:bg-accent/40"
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-border hover:border-accent hover:bg-accent"
                   }`}
                 >
                   <p className="font-medium">{t.label}</p>
@@ -385,10 +401,10 @@ function CreatePalaceDialog({
                   key={t.id}
                   type="button"
                   onClick={() => setTemplate(t.id)}
-                  className={`rounded-md border p-2 text-left text-xs transition-colors ${
+                  className={`rounded-lg border p-2 text-left text-xs outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
                     template === t.id
-                      ? "border-primary bg-primary/10"
-                      : "border-border hover:bg-accent/40"
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-border hover:border-accent hover:bg-accent"
                   }`}
                 >
                   <p className="font-medium">{t.label}</p>

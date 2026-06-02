@@ -1,70 +1,157 @@
+/* Hallmark · genre: modern-minimal · theme: custom "Studio Moderne"
+ * paper: warm-white / deep slate-indigo · accent: indigo-violet oklch(0.55 0.19 275)
+ * display: Space Grotesk · body: Inter · mono: JetBrains Mono · radius: 0.75rem
+ * pre-emit critique: P5 H5 E5 S5 R4 V5
+ *
+ * Locked design system for the whole app — every colour/font references a named
+ * token. Light + dark are full peers. See design.md at repo root. */
+
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
 
+/* ── Static design tokens (don't change between light/dark) ─────────────── */
 @theme {
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    "Inter Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-display:
+    "Space Grotesk Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono:
-    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono",
-    "Courier New", monospace;
+    "JetBrains Mono Variable", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco,
+    Consolas, "Liberation Mono", "Courier New", monospace;
 
-  --radius: 0.5rem;
+  --radius: 0.75rem;
 
-  /* Brand-ish palette — fine-tuned later by Polish agent */
-  --color-brand-50: oklch(0.97 0.02 270);
-  --color-brand-500: oklch(0.62 0.18 270);
-  --color-brand-700: oklch(0.46 0.18 270);
+  /* Premium soft, layered shadows (indigo-tinted, low opacity). Matter mostly
+     in light mode; on dark, borders carry elevation. */
+  --shadow-xs: 0 1px 2px oklch(0.32 0.04 275 / 0.05);
+  --shadow-sm: 0 1px 2px oklch(0.32 0.04 275 / 0.06), 0 1px 1px oklch(0.32 0.04 275 / 0.04);
+  --shadow-md:
+    0 2px 4px oklch(0.32 0.04 275 / 0.05), 0 6px 16px oklch(0.32 0.04 275 / 0.08);
+  --shadow-lg:
+    0 1px 3px oklch(0.32 0.04 275 / 0.05), 0 10px 28px oklch(0.32 0.04 275 / 0.12);
+  --shadow-xl:
+    0 2px 6px oklch(0.32 0.04 275 / 0.06), 0 24px 56px oklch(0.30 0.05 275 / 0.16);
+  /* Brand glow — used sparingly on primary CTAs / active accents. */
+  --shadow-glow: 0 0 0 1px oklch(0.55 0.19 275 / 0.18), 0 8px 28px oklch(0.55 0.19 275 / 0.22);
+
+  /* Motion — three named easings + a duration ramp. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.64, 0, 0.78, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 150ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
 }
 
+/* ── Runtime palette (light = default, dark = .dark) ───────────────────── */
 @layer base {
   :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
+    /* Surfaces */
+    --background: oklch(0.985 0.004 100); /* warm paper canvas */
+    --foreground: oklch(0.22 0.02 275); /* near-black, faint indigo undertone */
+    --card: oklch(1 0 0); /* pure white — lifts above canvas */
+    --card-foreground: oklch(0.22 0.02 275);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.985 0 0);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --radius: 0.5rem;
+    --popover-foreground: oklch(0.22 0.02 275);
+
+    /* Brand / actions */
+    --primary: oklch(0.55 0.19 275); /* indigo-violet */
+    --primary-foreground: oklch(0.99 0.01 275);
+    --secondary: oklch(0.965 0.005 100);
+    --secondary-foreground: oklch(0.31 0.02 275);
+
+    /* Neutral fills + tinted hover/active accent */
+    --muted: oklch(0.965 0.005 100);
+    --muted-foreground: oklch(0.505 0.016 275);
+    --accent: oklch(0.955 0.018 275); /* faint indigo wash (hover/active bg) */
+    --accent-foreground: oklch(0.45 0.18 278); /* brand indigo (active text/icon) */
+
+    /* Status */
+    --destructive: oklch(0.585 0.218 25);
+    --destructive-foreground: oklch(0.99 0.01 25);
+    --success: oklch(0.62 0.15 150);
+    --success-foreground: oklch(0.99 0.01 150);
+    --warning: oklch(0.74 0.15 75);
+    --warning-foreground: oklch(0.26 0.05 75);
+
+    /* Lines */
+    --border: oklch(0.91 0.006 100);
+    --input: oklch(0.9 0.006 100);
+    --ring: oklch(0.55 0.19 275);
+
+    /* Brand scale (halos, gradients, decorative) */
+    --brand-50: oklch(0.97 0.018 275);
+    --brand-100: oklch(0.94 0.04 275);
+    --brand-200: oklch(0.88 0.07 275);
+    --brand-300: oklch(0.78 0.11 276);
+    --brand-400: oklch(0.66 0.16 276);
+    --brand-500: oklch(0.55 0.19 275);
+    --brand-600: oklch(0.48 0.19 276);
+    --brand-700: oklch(0.41 0.17 278);
+    --brand-800: oklch(0.34 0.14 280);
+    --brand-900: oklch(0.27 0.1 282);
+
+    /* Chart palette — harmonious multi-hue anchored on indigo */
+    --chart-1: oklch(0.55 0.19 275);
+    --chart-2: oklch(0.66 0.14 200);
+    --chart-3: oklch(0.7 0.15 150);
+    --chart-4: oklch(0.76 0.14 75);
+    --chart-5: oklch(0.62 0.2 350);
+
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.396 0.141 25.723);
-    --destructive-foreground: oklch(0.985 0 0);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --background: oklch(0.17 0.012 265); /* deep slate-indigo night */
+    --foreground: oklch(0.96 0.01 275);
+    --card: oklch(0.207 0.014 265); /* lifted surface */
+    --card-foreground: oklch(0.96 0.01 275);
+    --popover: oklch(0.215 0.015 265);
+    --popover-foreground: oklch(0.96 0.01 275);
+
+    --primary: oklch(0.66 0.18 282); /* brighter indigo — pops on dark */
+    --primary-foreground: oklch(0.16 0.02 282);
+    --secondary: oklch(0.262 0.016 265);
+    --secondary-foreground: oklch(0.96 0.01 275);
+
+    --muted: oklch(0.262 0.016 265);
+    --muted-foreground: oklch(0.715 0.02 275);
+    --accent: oklch(0.3 0.035 278); /* indigo-tinted dark hover/active fill */
+    --accent-foreground: oklch(0.85 0.1 282); /* light indigo (active text/icon) */
+
+    --destructive: oklch(0.64 0.2 25);
+    --destructive-foreground: oklch(0.99 0.01 25);
+    --success: oklch(0.7 0.15 150);
+    --success-foreground: oklch(0.16 0.03 150);
+    --warning: oklch(0.79 0.14 75);
+    --warning-foreground: oklch(0.2 0.04 75);
+
+    --border: oklch(1 0 0 / 9%);
+    --input: oklch(1 0 0 / 13%);
+    --ring: oklch(0.66 0.18 282);
+
+    --brand-50: oklch(0.3 0.08 280);
+    --brand-100: oklch(0.36 0.11 280);
+    --brand-200: oklch(0.44 0.15 280);
+    --brand-300: oklch(0.54 0.18 281);
+    --brand-400: oklch(0.62 0.19 282);
+    --brand-500: oklch(0.66 0.18 282);
+    --brand-600: oklch(0.72 0.16 282);
+    --brand-700: oklch(0.79 0.13 282);
+    --brand-800: oklch(0.86 0.09 282);
+    --brand-900: oklch(0.92 0.05 282);
+
+    --chart-1: oklch(0.68 0.17 282);
+    --chart-2: oklch(0.72 0.13 200);
+    --chart-3: oklch(0.74 0.14 150);
+    --chart-4: oklch(0.8 0.13 75);
+    --chart-5: oklch(0.7 0.18 350);
   }
 }
 
+/* ── Expose runtime vars as Tailwind utilities (responds to light/dark) ── */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -82,29 +169,142 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
 }
 
+/* ── Base layer ────────────────────────────────────────────────────────── */
 @layer base {
   * {
     border-color: var(--color-border);
   }
+
+  :root {
+    color-scheme: light;
+  }
+  .dark {
+    color-scheme: dark;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
   html,
   body,
   #root {
     height: 100%;
+  }
+
+  /* Display face on real headings — tight, confident. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+  h1 {
+    letter-spacing: -0.03em;
+  }
+
+  /* Tabular figures for numeric/mono contexts. */
+  .font-mono {
+    font-feature-settings: "tnum", "zero";
+  }
+
+  /* Branded text selection. */
+  ::selection {
+    background-color: oklch(0.55 0.19 275 / 0.22);
+  }
+
+  /* Native form controls inherit the brand accent (safety net — prefer the
+     styled Radix primitives in ui/ over native controls). */
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="range"],
+  progress {
+    accent-color: var(--color-primary);
+  }
+
+  /* Refined focus ring everywhere (instant, never animated). */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  /* Slim, unobtrusive scrollbars that match the surface. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--color-border);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-muted-foreground);
+  }
+}
+
+/* ── Utilities ─────────────────────────────────────────────────────────── */
+@layer utilities {
+  /* Subtle brand wash for hero / empty-state backdrops. */
+  .bg-brand-radial {
+    background-image: radial-gradient(
+      120% 120% at 50% 0%,
+      oklch(0.55 0.19 275 / 0.07) 0%,
+      transparent 60%
+    );
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }

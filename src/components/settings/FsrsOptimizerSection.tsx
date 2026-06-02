@@ -69,7 +69,7 @@ export function FsrsOptimizerSection() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <FlaskConical className="h-5 w-5" />
+          <FlaskConical className="h-5 w-5 text-brand-500" />
           Optimiseur FSRS
         </CardTitle>
         <CardDescription>
@@ -80,7 +80,19 @@ export function FsrsOptimizerSection() {
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Chargement de l'historique…</p>
+          <div
+            className="space-y-3"
+            role="status"
+            aria-busy="true"
+            aria-label="Chargement de l'historique"
+          >
+            <div className="flex items-center justify-between">
+              <div className="h-4 w-36 animate-pulse rounded-lg bg-muted" />
+              <div className="h-4 w-20 animate-pulse rounded-lg bg-muted" />
+            </div>
+            <div className="h-2 w-full animate-pulse rounded-full bg-muted" />
+            <div className="h-4 w-3/4 animate-pulse rounded-lg bg-muted" />
+          </div>
         ) : !canOptimize ? (
           <section className="space-y-3">
             <div className="space-y-1.5">
@@ -114,7 +126,7 @@ export function FsrsOptimizerSection() {
         ) : (
           <section className="space-y-4">
             <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4">
-              <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-500" />
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
               <div className="space-y-1 text-sm">
                 <p className="font-medium">
                   {formatCount(total)} reviews disponibles — suffisant pour calibrer.
@@ -124,13 +136,11 @@ export function FsrsOptimizerSection() {
                 </p>
               </div>
             </div>
-            <div className="flex items-start gap-3 rounded-lg border border-amber-500/60 bg-amber-50 p-4 dark:bg-amber-950/30">
-              <TriangleAlert className="mt-0.5 h-5 w-5 text-amber-600 dark:text-amber-400" />
+            <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4">
+              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
               <div className="space-y-1 text-sm">
-                <p className="font-medium text-amber-900 dark:text-amber-100">
-                  Recalibrage des 21 paramètres FSRS
-                </p>
-                <p className="text-amber-800/90 dark:text-amber-200/90">
+                <p className="font-medium text-foreground">Recalibrage des 21 paramètres FSRS</p>
+                <p className="text-muted-foreground">
                   Calibrer recalcule les 21 paramètres FSRS à partir de ton historique. Tes
                   prochaines révisions utiliseront ces nouveaux paramètres, et les intervalles
                   affichés dans la file due peuvent évoluer.

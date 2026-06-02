@@ -32,6 +32,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
+import { lookupLocal } from "@/lib/dictionary";
 import {
   useCreateCardsFromWords,
   useDecks,
@@ -118,15 +119,15 @@ function nextStatus(current: WordStatusKind): WordStatusKind {
   }
 }
 
-/** Tailwind classes for each status' word pill. */
+/** Token-based classes for each status' word pill (design.md voice). */
 function statusClasses(status: WordStatusKind): string {
   switch (status) {
     case "new":
-      return "bg-blue-200/70 text-blue-950 hover:bg-blue-300/70 dark:bg-blue-500/30 dark:text-blue-50";
+      return "bg-primary/10 text-foreground hover:bg-primary/20 dark:bg-primary/25 dark:hover:bg-primary/35";
     case "learning":
-      return "bg-amber-200/80 text-amber-950 hover:bg-amber-300/80 dark:bg-amber-500/30 dark:text-amber-50";
+      return "bg-warning/25 text-foreground hover:bg-warning/40";
     case "known":
-      return "bg-transparent text-foreground hover:bg-muted";
+      return "bg-transparent text-muted-foreground hover:bg-muted";
   }
 }
 
@@ -146,6 +147,8 @@ export function ReadingImport() {
   const [deckId, setDeckId] = useState<number | null>(null);
   /** Optimistic per-word status overrides (word → status). */
   const [overrides, setOverrides] = useState<Record<string, WordStatusKind>>({});
+  /** Hovered word → inline dictionary popover (definition + IPA + translation). */
+  const [hover, setHover] = useState<{ word: string; x: number; y: number } | null>(null);
 
   const textInputId = useId();
   const langSelectId = useId();
@@ -305,8 +308,8 @@ export function ReadingImport() {
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as LanguageValue)}
                 className={cn(
-                  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm",
-                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  "flex h-9 w-full rounded-lg border border-input bg-card px-3 py-1.5 text-sm shadow-xs transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 )}
               >
                 {LANGUAGES.map((opt) => (
@@ -323,8 +326,8 @@ export function ReadingImport() {
                 value={deckId ?? ""}
                 onChange={(e) => setDeckId(e.target.value === "" ? null : Number(e.target.value))}
                 className={cn(
-                  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm",
-                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  "flex h-9 w-full rounded-lg border border-input bg-card px-3 py-1.5 text-sm shadow-xs transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 )}
               >
                 <option value="">— Choisir un deck —</option>
@@ -392,6 +395,15 @@ export function ReadingImport() {
                     key={token.key}
                     type="button"
                     onClick={() => handleWordClick(token.normalized)}
+                    onMouseEnter={(e) => {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      setHover({
+                        word: token.normalized,
+                        x: r.left + r.width / 2,
+                        y: r.top,
+                      });
+                    }}
+                    onMouseLeave={() => setHover(null)}
                     className={cn(
                       "cursor-pointer rounded px-0.5 transition-colors",
                       statusClasses(statusOf(token.normalized)),
@@ -408,6 +420,27 @@ export function ReadingImport() {
                 ),
               )}
             </p>
+
+            {/* Inline dictionary on hover (definition + IPA + FR translation) */}
+            {hover &&
+              (() => {
+                const entry = lookupLocal(hover.word);
+                if (!entry) return null;
+                return (
+                  <div
+                    className="pointer-events-none fixed z-50 w-max max-w-xs -translate-x-1/2 -translate-y-full rounded-lg border bg-popover px-3 py-2 text-popover-foreground shadow-lg"
+                    style={{ left: hover.x, top: hover.y - 8 }}
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-display font-semibold">{entry.word}</span>
+                      <span className="font-mono text-xs text-muted-foreground">{entry.ipa}</span>
+                    </div>
+                    <div className="mt-0.5 text-sm text-muted-foreground">
+                      <span className="text-accent-foreground">{entry.pos}</span> · {entry.fr}
+                    </div>
+                  </div>
+                );
+              })()}
 
             {/* Create cards action */}
             <div className="flex flex-wrap items-center gap-2 border-t pt-4">

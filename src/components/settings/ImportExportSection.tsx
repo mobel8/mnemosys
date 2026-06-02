@@ -21,7 +21,7 @@
  */
 
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { Captions, Download, FileArchive, Loader2, Upload } from "lucide-react";
+import { Captions, ChevronDown, Download, FileArchive, Loader2, Upload } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,8 +36,12 @@ import {
 } from "@/lib/queries";
 import type { SubtitleMode } from "@/lib/tauri";
 
+// Native <select> kept here (not the Radix primitive) because the locked unit
+// tests drive it via `user.selectOptions` / `getByRole("option")`, which only
+// work on a real <select>. Styled to mirror `ui/select.tsx`'s trigger voice so
+// it reads as part of the same design system.
 const SELECT_CLASS =
-  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+  "flex h-9 w-full cursor-pointer appearance-none rounded-lg border border-input bg-card px-3 py-2 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
 
 /**
  * Build the default filename used by the save dialog — easy for the user
@@ -264,29 +268,48 @@ export function ImportExportSection() {
           </div>
 
           {decksQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Chargement des decks…</p>
+            <div
+              className="space-y-1.5 rounded-lg border bg-muted/30 p-3"
+              role="status"
+              aria-busy="true"
+              aria-label="Chargement des decks"
+            >
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex items-center gap-3 px-2 py-1.5">
+                  <div className="h-4 w-4 shrink-0 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-3 shrink-0 animate-pulse rounded-full bg-muted" />
+                  <div className="h-4 w-32 animate-pulse rounded-lg bg-muted" />
+                </div>
+              ))}
+            </div>
           ) : decks.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Aucun deck à exporter pour le moment.</p>
+            <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/30 px-6 py-8 text-center">
+              <FileArchive className="h-7 w-7 text-brand-500" />
+              <p className="font-display text-sm font-semibold tracking-tight">Aucun deck</p>
+              <p className="text-xs text-muted-foreground">
+                Crée ou importe un deck pour pouvoir l'exporter.
+              </p>
+            </div>
           ) : (
-            <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-md border bg-muted/30 p-3">
+            <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-lg border bg-muted/30 p-3">
               {decks.map((deck) => {
                 const checked = selectedIds.has(deck.id);
                 return (
                   <Label
                     key={deck.id}
                     htmlFor={`io-deck-${deck.id}`}
-                    className="flex cursor-pointer items-center gap-3 rounded px-2 py-1.5 hover:bg-background"
+                    className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-background"
                   >
                     <input
                       id={`io-deck-${deck.id}`}
                       type="checkbox"
-                      className="h-4 w-4 rounded border-input accent-primary"
+                      className="h-4 w-4 rounded border-input accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       checked={checked}
                       onChange={() => toggleDeck(deck.id)}
                     />
                     <span
                       aria-hidden="true"
-                      className="inline-block h-3 w-3 rounded-full"
+                      className="inline-block h-3 w-3 shrink-0 rounded-full"
                       style={{ background: deck.color }}
                     />
                     <span className="truncate text-sm">{deck.name}</span>
@@ -377,37 +400,43 @@ export function ImportExportSection() {
               <Label htmlFor="io-subs-deck" className="text-xs">
                 Deck cible
               </Label>
-              <select
-                id="io-subs-deck"
-                className={SELECT_CLASS}
-                value={subsDeckId ?? ""}
-                onChange={(e) => setSubsDeckId(e.target.value ? Number(e.target.value) : null)}
-                disabled={decks.length === 0}
-              >
-                {decks.length === 0 ? (
-                  <option value="">Aucun deck disponible</option>
-                ) : (
-                  decks.map((deck) => (
-                    <option key={deck.id} value={deck.id}>
-                      {deck.name}
-                    </option>
-                  ))
-                )}
-              </select>
+              <div className="relative">
+                <select
+                  id="io-subs-deck"
+                  className={SELECT_CLASS}
+                  value={subsDeckId ?? ""}
+                  onChange={(e) => setSubsDeckId(e.target.value ? Number(e.target.value) : null)}
+                  disabled={decks.length === 0}
+                >
+                  {decks.length === 0 ? (
+                    <option value="">Aucun deck disponible</option>
+                  ) : (
+                    decks.map((deck) => (
+                      <option key={deck.id} value={deck.id}>
+                        {deck.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60" />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="io-subs-mode" className="text-xs">
                 Mode
               </Label>
-              <select
-                id="io-subs-mode"
-                className={SELECT_CLASS}
-                value={subsMode}
-                onChange={(e) => setSubsMode(e.target.value as SubtitleMode)}
-              >
-                <option value="sentence">Phrase basique (recto / verso)</option>
-                <option value="cloze">Cloze auto (mot le plus long)</option>
-              </select>
+              <div className="relative">
+                <select
+                  id="io-subs-mode"
+                  className={SELECT_CLASS}
+                  value={subsMode}
+                  onChange={(e) => setSubsMode(e.target.value as SubtitleMode)}
+                >
+                  <option value="sentence">Phrase basique (recto / verso)</option>
+                  <option value="cloze">Cloze auto (mot le plus long)</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60" />
+              </div>
             </div>
           </div>
           <Button

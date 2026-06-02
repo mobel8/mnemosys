@@ -16,6 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/use-toast";
@@ -279,18 +286,18 @@ export function IntegrationsSection() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="tts-voice">Voix par défaut</Label>
-              <select
-                id="tts-voice"
-                value={voice}
-                onChange={(e) => setVoice(e.target.value as TTSVoice)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                {VOICES.map((v) => (
-                  <option key={v.value} value={v.value}>
-                    {v.label}
-                  </option>
-                ))}
-              </select>
+              <Select value={voice} onValueChange={(v) => setVoice(v as TTSVoice)}>
+                <SelectTrigger id="tts-voice">
+                  <SelectValue placeholder="Choisir une voix" />
+                </SelectTrigger>
+                <SelectContent>
+                  {VOICES.map((v) => (
+                    <SelectItem key={v.value} value={v.value}>
+                      {v.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="tts-speed">

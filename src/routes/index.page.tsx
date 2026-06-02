@@ -10,7 +10,7 @@ import { CreateDeckDialog } from "@/components/CreateDeckDialog";
 import { DeckGrid } from "@/components/DeckGrid";
 import { FirstRunWizard, isFirstRunPending } from "@/components/FirstRunWizard";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { toast } from "@/components/ui/use-toast";
 import { useDecks, useLoadDemo, useTodayStats } from "@/lib/queries";
 
@@ -53,7 +53,7 @@ export default function IndexPage() {
     <div className="space-y-8 p-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Mes decks</h1>
+          <h1 className="font-display text-3xl tracking-tight">Mes decks</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {deckList.length === 0
               ? "Crée ton premier deck pour commencer."
@@ -72,20 +72,21 @@ export default function IndexPage() {
         </h2>
         <div className="grid gap-4 sm:grid-cols-3">
           <StatCard
-            label="Reviews dues"
-            value={today.isLoading ? "—" : String(today.data?.due_now ?? 0)}
+            label="Révisions dues"
+            value={String(today.data?.due_now ?? 0)}
+            loading={today.isLoading}
             icon={ClipboardList}
           />
           <StatCard
             label="Nouvelles"
-            value={today.isLoading ? "—" : String(today.data?.new_cards_today ?? 0)}
+            value={String(today.data?.new_cards_today ?? 0)}
+            loading={today.isLoading}
             icon={Sparkles}
           />
           <StatCard
             label="Rétention"
-            value={
-              today.isLoading ? "—" : `${Math.round((today.data?.retention_today ?? 0) * 100)}%`
-            }
+            value={`${Math.round((today.data?.retention_today ?? 0) * 100)}%`}
+            loading={today.isLoading}
             icon={TrendingUp}
           />
         </div>
@@ -93,13 +94,17 @@ export default function IndexPage() {
 
       <section aria-label="Decks">
         {decks.isLoading ? (
-          <div className="rounded-md border p-8 text-center text-sm text-muted-foreground">
-            Chargement des decks…
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {["s1", "s2", "s3", "s4", "s5", "s6"].map((key) => (
+              <DeckCardSkeleton key={key} />
+            ))}
           </div>
         ) : decks.error ? (
-          <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-            Erreur : {decks.error.message}
-          </div>
+          <Card className="border-destructive/40 bg-destructive/5">
+            <CardContent className="p-4 text-sm text-destructive">
+              Erreur : {decks.error.message}
+            </CardContent>
+          </Card>
         ) : isEmpty ? (
           <EmptyState
             onCreate={() => setCreateOpen(true)}
@@ -120,20 +125,47 @@ export default function IndexPage() {
 function StatCard({
   label,
   value,
+  loading,
   icon: Icon,
 }: {
   label: string;
   value: string;
+  loading?: boolean;
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardDescription>{label}</CardDescription>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+          <Icon className="h-4 w-4" />
+        </span>
       </CardHeader>
       <CardContent>
-        <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
+        {loading ? (
+          <div className="h-8 w-16 animate-pulse rounded-lg bg-muted" />
+        ) : (
+          <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight">{value}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Skeleton placeholder mirroring a `<DeckCard>` while the deck list loads. */
+function DeckCardSkeleton() {
+  return (
+    <Card className="overflow-hidden">
+      <CardContent className="space-y-3 p-5">
+        <div className="space-y-2">
+          <div className="h-5 w-2/3 animate-pulse rounded-lg bg-muted" />
+          <div className="h-4 w-full animate-pulse rounded-lg bg-muted" />
+        </div>
+        <div className="flex gap-1.5 pt-1">
+          <div className="h-5 w-14 animate-pulse rounded-full bg-muted" />
+          <div className="h-5 w-12 animate-pulse rounded-full bg-muted" />
+          <div className="h-5 w-16 animate-pulse rounded-full bg-muted" />
+        </div>
       </CardContent>
     </Card>
   );
@@ -151,11 +183,11 @@ function EmptyState({
   return (
     <Card className="border-dashed">
       <CardContent className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-          <BookOpen className="h-7 w-7 text-muted-foreground" />
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-500">
+          <BookOpen className="h-7 w-7" />
         </div>
-        <div className="space-y-1">
-          <p className="text-lg font-semibold">Aucun deck pour l'instant</p>
+        <div className="space-y-1.5">
+          <p className="font-display text-xl tracking-tight">Aucun deck pour l'instant</p>
           <p className="max-w-sm text-sm text-muted-foreground">
             Crée ton premier deck ou charge les decks de démo pour explorer Mnemosys.
           </p>

@@ -15,11 +15,13 @@
 import { Link } from "@tanstack/react-router";
 import confetti from "canvas-confetti";
 import { motion } from "framer-motion";
+import { PartyPopper } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatElapsed } from "@/lib/format";
 import type { Rating } from "@/lib/tauri";
+import { cn } from "@/lib/utils";
 
 export interface ReviewedLog {
   rating: Rating;
@@ -93,15 +95,18 @@ export function ReviewSummary({
     >
       <Card className="w-full max-w-xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Session terminée</CardTitle>
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-50 text-brand-500">
+            <PartyPopper className="h-7 w-7" aria-hidden />
+          </div>
+          <CardTitle className="mt-3 font-display text-2xl">Session terminée</CardTitle>
           <CardDescription>Beau travail — voici ton récap.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <Stat label="Cartes" value={total.toString()} />
-            <Stat label="Précision" value={`${accuracy}%`} />
+            <Stat label="Précision" value={`${accuracy}%`} accent="success" />
             <Stat label="Durée" value={formatElapsed(durationMs)} />
-            <Stat label="Mémorisées" value={`+${learnedNew}`} />
+            <Stat label="Mémorisées" value={`+${learnedNew}`} accent="brand" />
           </div>
 
           <div className="flex flex-col items-center gap-2 pt-2 sm:flex-row sm:justify-center">
@@ -130,11 +135,28 @@ export function ReviewSummary({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  /** Optional semantic tint for the figure (kept literal for purge). */
+  accent?: "success" | "brand";
+}) {
   return (
-    <div className="rounded-lg border bg-card/40 p-3 text-center">
+    <div className="rounded-lg border bg-muted/40 p-3 text-center">
       <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+      <div
+        className={cn(
+          "mt-1 font-display text-2xl font-semibold tabular-nums",
+          accent === "success" && "text-success",
+          accent === "brand" && "text-brand-500",
+        )}
+      >
+        {value}
+      </div>
     </div>
   );
 }

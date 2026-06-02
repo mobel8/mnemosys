@@ -392,7 +392,7 @@ export function ReviewSettingsSection() {
               }
             />
           </div>
-          <div className="flex items-center justify-between gap-4 rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+          <div className="flex items-center justify-between gap-4 rounded-md border border-warning/30 bg-warning/5 px-4 py-3">
             <div className="space-y-0.5">
               <Label htmlFor="focus-guard-toggle" className="text-sm">
                 Focus Guard (webcam)

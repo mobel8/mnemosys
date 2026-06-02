@@ -238,17 +238,17 @@ export function GestureTimer({ className }: GestureTimerProps) {
           onClick={startLadder}
           data-testid="preset-ladder"
         >
-          Ladder
+          Série
         </Button>
       </div>
 
       {/* Timer + counters. */}
-      <div className="flex items-center justify-between rounded-md border bg-muted/30 px-4 py-3">
+      <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-4 py-3">
         <div className="flex flex-col">
           <span
             className={cn(
-              "tabular-nums text-4xl font-semibold transition-colors",
-              remaining <= 5 && running ? "text-red-600 dark:text-red-400" : "",
+              "font-display text-4xl font-semibold tabular-nums tracking-tight transition-colors",
+              remaining <= 5 && running ? "text-destructive" : "",
             )}
             data-testid="time-remaining"
           >
@@ -260,11 +260,14 @@ export function GestureTimer({ className }: GestureTimerProps) {
             </span>
           )}
         </div>
-        <div className="text-right text-sm text-muted-foreground">
+        <div className="space-y-0.5 text-right text-sm text-muted-foreground">
           <div data-testid="poses-done">
-            Poses : <span className="font-medium text-foreground">{posesDone}</span>
+            Poses :{" "}
+            <span className="font-mono font-medium tabular-nums text-foreground">{posesDone}</span>
           </div>
-          <div>Durée : {formatMmSs(poseDuration)}</div>
+          <div>
+            Durée : <span className="font-mono tabular-nums">{formatMmSs(poseDuration)}</span>
+          </div>
         </div>
       </div>
 
@@ -272,7 +275,7 @@ export function GestureTimer({ className }: GestureTimerProps) {
           gives a clean canvas for the next pose. */}
       <div
         className={cn(
-          "rounded-md transition-all",
+          "rounded-xl transition-all duration-200",
           flash ? "ring-4 ring-primary ring-offset-2" : "ring-0",
         )}
         data-testid="canvas-frame"

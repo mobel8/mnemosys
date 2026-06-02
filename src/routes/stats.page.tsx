@@ -20,6 +20,7 @@
  */
 
 import { Link } from "@tanstack/react-router";
+import { BarChart3 } from "lucide-react";
 import { useState } from "react";
 import { CalibrationDashboard } from "@/components/CalibrationDashboard";
 import { ConceptMastery } from "@/components/stats/ConceptMastery";
@@ -52,7 +53,7 @@ export default function StatsPage() {
     <div className="space-y-6 p-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Statistiques</h2>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">Statistiques</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Vue d'ensemble de ton activité et de tes performances de mémorisation.
           </p>
@@ -85,11 +86,19 @@ export default function StatsPage() {
 function NoDataCallout() {
   return (
     <Card className="border-dashed">
-      <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
-        <p className="text-sm text-muted-foreground">
-          Pas encore assez de données. Commence une session de review pour voir tes statistiques
-          prendre vie.
-        </p>
+      <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-500">
+          <BarChart3 className="h-7 w-7" />
+        </span>
+        <div className="space-y-1.5">
+          <h3 className="font-display text-lg font-semibold tracking-tight">
+            Pas encore de statistiques
+          </h3>
+          <p className="mx-auto max-w-sm text-sm text-muted-foreground">
+            Commence une session de révision pour voir ton activité et tes performances de
+            mémorisation prendre vie.
+          </p>
+        </div>
         <Button asChild>
           <Link to="/">Voir les decks</Link>
         </Button>

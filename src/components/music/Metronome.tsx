@@ -19,6 +19,15 @@
 import { Pause, Play } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { getAudioContextCtor, playTone } from "@/lib/audio";
 import { cn } from "@/lib/utils";
 
@@ -190,11 +199,14 @@ export function Metronome({ className }: MetronomeProps) {
         })}
       </div>
 
-      <div className="flex items-center justify-center gap-4">
-        <span className="tabular-nums text-4xl font-semibold" data-testid="bpm-value">
+      <div className="flex items-baseline justify-center gap-2">
+        <span
+          className="font-display text-5xl font-semibold tabular-nums tracking-tight"
+          data-testid="bpm-value"
+        >
           {bpm}
         </span>
-        <span className="text-sm text-muted-foreground">BPM</span>
+        <span className="font-mono text-sm uppercase tracking-wide text-muted-foreground">BPM</span>
       </div>
 
       {/* BPM control — a native range so the loop reads a fresh value without
@@ -205,7 +217,7 @@ export function Metronome({ className }: MetronomeProps) {
           className="flex items-center justify-between text-sm text-muted-foreground"
         >
           <span>Tempo</span>
-          <span>
+          <span className="font-mono tabular-nums">
             {MIN_BPM}–{MAX_BPM}
           </span>
         </label>
@@ -223,40 +235,47 @@ export function Metronome({ className }: MetronomeProps) {
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="metronome-signature" className="text-sm text-muted-foreground">
+        <Label htmlFor="metronome-signature" className="text-muted-foreground">
           Signature
-        </label>
-        <select
-          id="metronome-signature"
+        </Label>
+        <Select
           value={signature}
-          onChange={(e) => {
-            setSignature(e.target.value as Signature);
+          onValueChange={(v) => {
+            setSignature(v as Signature);
             beatInBarRef.current = 0;
           }}
-          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          data-testid="signature-select"
         >
-          {SIGNATURES.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.value}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            id="metronome-signature"
+            aria-label="Signature"
+            data-testid="signature-select"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SIGNATURES.map((s) => (
+              <SelectItem key={s.value} value={s.value}>
+                {s.value}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Tempo ramp — progressive deliberate practice. */}
-      <div className="space-y-3 rounded-md border bg-muted/30 p-3">
-        <label htmlFor="ramp-toggle" className="flex items-center justify-between text-sm">
-          <span className="font-medium">Tempo ramp (+{rampStep} BPM)</span>
-          <input
+      <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
+        <div className="flex items-center justify-between text-sm">
+          <Label htmlFor="ramp-toggle" className="font-medium">
+            Montée de tempo (+{rampStep} BPM)
+          </Label>
+          <Switch
             id="ramp-toggle"
-            type="checkbox"
             checked={rampEnabled}
-            onChange={(e) => setRampEnabled(e.target.checked)}
-            className="h-4 w-4 accent-primary"
+            onCheckedChange={setRampEnabled}
+            aria-label="Activer le tempo ramp"
             data-testid="ramp-toggle"
           />
-        </label>
+        </div>
         {rampEnabled && (
           <label
             htmlFor="ramp-bars"
@@ -271,7 +290,7 @@ export function Metronome({ className }: MetronomeProps) {
                 max={32}
                 value={rampBars}
                 onChange={(e) => setRampBars(Math.max(1, Number(e.target.value) || 1))}
-                className="h-8 w-16 rounded-md border border-input bg-transparent px-2 text-right text-sm"
+                className="h-8 w-16 rounded-lg border border-input bg-card px-2 text-right font-mono text-sm tabular-nums shadow-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 data-testid="ramp-bars"
               />
               <span>mesures</span>

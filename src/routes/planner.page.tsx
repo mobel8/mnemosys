@@ -15,6 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/use-toast";
 import {
@@ -197,9 +204,9 @@ export default function PlannerPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       <header>
-        <h2 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <CalendarClock className="h-6 w-6" /> Planning
-        </h2>
+        <h1 className="flex items-center gap-2 font-display text-2xl font-semibold tracking-tight">
+          <CalendarClock className="h-6 w-6 text-brand-500" /> Planning
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Les intentions d'implémentation (« si X alors Y ») doublent la probabilité de passage à
           l'action (Gollwitzer 1999, d=0.65). Choisis un déclencheur concret et l'action de révision
@@ -218,17 +225,19 @@ export default function PlannerPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label htmlFor="trigger-type">Quand je…</Label>
-                <select
-                  id="trigger-type"
-                  aria-label="Type de déclencheur"
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                <Select
                   value={triggerType}
-                  onChange={(e) => onTriggerTypeChange(e.target.value as PlanTriggerType)}
+                  onValueChange={(v) => onTriggerTypeChange(v as PlanTriggerType)}
                 >
-                  <option value="time">{TRIGGER_LABELS.time}</option>
-                  <option value="place">{TRIGGER_LABELS.place}</option>
-                  <option value="after_habit">{TRIGGER_LABELS.after_habit}</option>
-                </select>
+                  <SelectTrigger id="trigger-type" aria-label="Type de déclencheur">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="time">{TRIGGER_LABELS.time}</SelectItem>
+                    <SelectItem value="place">{TRIGGER_LABELS.place}</SelectItem>
+                    <SelectItem value="after_habit">{TRIGGER_LABELS.after_habit}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-1">
@@ -263,20 +272,22 @@ export default function PlannerPage() {
 
             <div className="space-y-1">
               <Label htmlFor="deck">Deck (optionnel)</Label>
-              <select
-                id="deck"
-                aria-label="Deck associé"
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                value={deckId ?? ""}
-                onChange={(e) => setDeckId(e.target.value === "" ? null : Number(e.target.value))}
+              <Select
+                value={deckId === null ? "none" : String(deckId)}
+                onValueChange={(v) => setDeckId(v === "none" ? null : Number(v))}
               >
-                <option value="">— Aucun —</option>
-                {(decks.data ?? []).map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="deck" aria-label="Deck associé">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Aucun —</SelectItem>
+                  {(decks.data ?? []).map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <fieldset className="space-y-1">
@@ -326,20 +337,45 @@ export default function PlannerPage() {
       </Card>
 
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-muted-foreground">Mes intentions</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">
+          Mes intentions
+        </h3>
         {plans.isLoading ? (
-          <p className="text-sm text-muted-foreground">Chargement…</p>
+          <ul className="space-y-2">
+            {[0, 1, 2].map((i) => (
+              <li
+                key={`plan-skeleton-${i}`}
+                className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm"
+              >
+                <div className="h-4 w-4 shrink-0 animate-pulse rounded-full bg-muted" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-3.5 w-2/3 animate-pulse rounded-lg bg-muted" />
+                  <div className="h-3 w-1/3 animate-pulse rounded-lg bg-muted" />
+                </div>
+                <div className="h-5 w-9 shrink-0 animate-pulse rounded-full bg-muted" />
+              </li>
+            ))}
+          </ul>
         ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Aucune intention pour l'instant. Crée-en une ci-dessus.
-          </p>
+          <Card className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-500">
+              <CalendarClock className="h-7 w-7" />
+            </div>
+            <p className="font-display text-lg font-semibold tracking-tight">
+              Aucune intention pour l'instant
+            </p>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Associe un déclencheur concret à une action de révision dans le formulaire ci-dessus
+              pour passer plus souvent à l'action.
+            </p>
+          </Card>
         ) : (
           <ul className="space-y-2">
             {rows.map((plan) => (
               <li
                 key={plan.id}
-                className={`flex items-center gap-3 rounded-md border bg-card/40 p-3 ${
-                  editingId === plan.id ? "ring-1 ring-primary" : ""
+                className={`flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm transition-shadow hover:shadow-md ${
+                  editingId === plan.id ? "ring-2 ring-ring" : ""
                 }`}
               >
                 {plan.trigger_type === "time" ? (

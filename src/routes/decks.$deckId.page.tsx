@@ -14,7 +14,7 @@
  */
 
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
-import { Pencil, Play, Plus } from "lucide-react";
+import { AlertTriangle, Pencil, Play, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CardList } from "@/components/CardList";
 import { EditDeckDialog } from "@/components/EditDeckDialog";
@@ -25,8 +25,12 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { languageLabel } from "@/lib/languages";
 import { useDeck, useDeckStats } from "@/lib/queries";
+import { cn } from "@/lib/utils";
 
 const routeApi = getRouteApi("/decks/$deckId");
+
+/** Stable keys for the four stat-card skeletons shown while the deck loads. */
+const STAT_SKELETON_KEYS = ["total", "due", "new", "learning"] as const;
 
 export default function DeckDetailPage() {
   const { deckId } = routeApi.useParams();
@@ -45,17 +49,58 @@ export default function DeckDetailPage() {
   }, [searchInput]);
 
   if (deck.isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">Chargement du deck…</div>;
+    return (
+      <div role="status" aria-busy="true" aria-label="Chargement du deck" className="space-y-6 p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-1 h-10 w-2 animate-pulse rounded-full bg-muted" />
+            <div className="space-y-2">
+              <div className="h-7 w-56 animate-pulse rounded-lg bg-muted" />
+              <div className="h-4 w-80 animate-pulse rounded-lg bg-muted" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <div className="h-9 w-28 animate-pulse rounded-lg bg-muted" />
+            <div className="h-9 w-36 animate-pulse rounded-lg bg-muted" />
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {STAT_SKELETON_KEYS.map((key) => (
+            <Card key={key}>
+              <CardHeader className="pb-2">
+                <div className="h-4 w-24 animate-pulse rounded-lg bg-muted" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 w-16 animate-pulse rounded-lg bg-muted" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="h-48 animate-pulse rounded-xl bg-muted" />
+      </div>
+    );
   }
   if (deck.error || !deck.data) {
     return (
       <div className="p-6">
-        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-          Impossible de charger ce deck : {deck.error?.message ?? "inconnu"}
-        </div>
-        <Button variant="outline" onClick={() => navigate({ to: "/" })} className="mt-4">
-          Retour à l'accueil
-        </Button>
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="flex items-start gap-3 p-6">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <p className="font-display font-semibold text-destructive">
+                  Impossible de charger ce deck
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {deck.error?.message ?? "Erreur inconnue."}
+                </p>
+              </div>
+              <Button variant="outline" onClick={() => navigate({ to: "/" })}>
+                Retour à l'accueil
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -72,12 +117,15 @@ export default function DeckDetailPage() {
             style={{ background: d.color }}
           />
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{d.name}</h1>
+            <h1 className="font-display text-2xl font-semibold tracking-tight">{d.name}</h1>
             {d.description && (
               <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{d.description}</p>
             )}
             <p className="mt-1 text-xs text-muted-foreground">
-              Rétention cible : {Math.round(d.desired_retention * 100)}%
+              Rétention cible :{" "}
+              <span className="font-mono tabular-nums">
+                {Math.round(d.desired_retention * 100)}%
+              </span>
               {d.language_mode && <> · Langue : {languageLabel(d.language_mode)}</>}
             </p>
           </div>
@@ -166,13 +214,18 @@ export default function DeckDetailPage() {
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
+  const empty = value === "—";
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardDescription>{label}</CardDescription>
       </CardHeader>
       <CardContent>
-        <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
+        <CardTitle
+          className={cn("font-display text-3xl tabular-nums", empty && "text-muted-foreground")}
+        >
+          {value}
+        </CardTitle>
       </CardContent>
     </Card>
   );

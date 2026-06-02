@@ -40,10 +40,10 @@ export function ThemeSection() {
                 <label
                   key={opt.value}
                   className={cn(
-                    "relative flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 p-4 transition-colors",
+                    "relative flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 p-4 transition-[color,background-color,border-color,box-shadow] duration-150 ease-out",
                     selected
-                      ? "border-primary bg-primary/5 text-foreground"
-                      : "border-input hover:border-muted-foreground/50 hover:bg-accent",
+                      ? "border-primary bg-accent text-accent-foreground shadow-sm"
+                      : "border-input text-muted-foreground hover:border-primary/40 hover:bg-accent/50 hover:text-foreground",
                   )}
                 >
                   <input
@@ -56,7 +56,7 @@ export function ThemeSection() {
                     }}
                     className="sr-only"
                   />
-                  <Icon className="h-5 w-5" />
+                  <Icon className={cn("h-5 w-5", selected && "text-brand-500")} />
                   <span className="text-sm font-medium">{opt.label}</span>
                 </label>
               );

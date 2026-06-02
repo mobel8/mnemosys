@@ -7,12 +7,21 @@
  * re-queries through TanStack Query (`useTagGraph`), which caches per deck.
  */
 
-import { Loader2 } from "lucide-react";
+import { Network } from "lucide-react";
 import { useMemo, useState } from "react";
 import { KnowledgeGraph } from "@/components/KnowledgeGraph";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useDecks, useTagGraph } from "@/lib/queries";
+
+const ALL_DECKS = "all";
 
 export default function GraphPage() {
   const decksQuery = useDecks();
@@ -26,8 +35,10 @@ export default function GraphPage() {
     <div className="space-y-6 p-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Graphe de connaissances</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="flex items-center gap-2 text-2xl font-semibold">
+            <Network className="h-6 w-6 text-brand-500" /> Graphe de connaissances
+          </h1>
+          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
             Les liens entre tes cartes via leurs tags partagés. Survole un tag pour mettre en
             évidence ses connexions.
           </p>
@@ -36,26 +47,35 @@ export default function GraphPage() {
           <Label htmlFor="graph-deck" className="text-xs">
             Portée
           </Label>
-          <select
-            id="graph-deck"
-            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:w-56"
-            value={deckId ?? ""}
-            onChange={(e) => setDeckId(e.target.value ? Number(e.target.value) : null)}
+          <Select
+            value={deckId === null ? ALL_DECKS : String(deckId)}
+            onValueChange={(value) => setDeckId(value === ALL_DECKS ? null : Number(value))}
           >
-            <option value="">Tous les decks</option>
-            {decks.map((deck) => (
-              <option key={deck.id} value={deck.id}>
-                {deck.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="graph-deck" className="sm:w-56">
+              <SelectValue placeholder="Tous les decks" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_DECKS}>Tous les decks</SelectItem>
+              {decks.map((deck) => (
+                <SelectItem key={deck.id} value={String(deck.id)}>
+                  {deck.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </header>
 
       {graphQuery.isLoading ? (
         <Card>
-          <CardContent className="flex h-[420px] items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <CardContent className="space-y-4 p-6">
+            <div className="h-[372px] animate-pulse rounded-lg bg-muted" />
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholders, order is stable
+                <div key={i} className="h-6 w-20 animate-pulse rounded-full bg-muted" />
+              ))}
+            </div>
           </CardContent>
         </Card>
       ) : graphQuery.isError ? (

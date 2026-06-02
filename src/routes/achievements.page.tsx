@@ -8,6 +8,7 @@
  * the child components.
  */
 
+import { Trophy } from "lucide-react";
 import { Achievements } from "@/components/Achievements";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAchievements, useUserStats } from "@/lib/queries";
@@ -25,8 +26,10 @@ export default function AchievementsPage() {
   return (
     <div className="space-y-6 p-6">
       <header>
-        <h2 className="text-2xl font-semibold tracking-tight">Succès</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="flex items-center gap-2 text-2xl font-semibold">
+          <Trophy className="h-6 w-6 text-brand-500" /> Succès
+        </h1>
+        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
           Une vitrine de tes étapes franchies. Chaque badge se débloque une fois et reste acquis —
           aucune pénalité, aucun classement.
         </p>
@@ -53,7 +56,7 @@ interface KpiTileProps {
 
 function KpiTile({ label, value }: KpiTileProps) {
   return (
-    <div className="rounded-md border bg-card/50 p-3">
+    <div className="rounded-lg border bg-muted/40 p-3">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="mt-1 font-mono text-xl font-semibold tabular-nums">{value}</div>
     </div>

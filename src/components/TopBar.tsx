@@ -15,27 +15,48 @@ interface Crumb {
   to?: string;
 }
 
+// Human-readable French label per top-level route segment. Keeps the
+// breadcrumb in sync with the sidebar labels for every destination.
+const TOP_LABELS: Record<string, string> = {
+  "review-interleaved": "Révision entrelacée",
+  "ai-generate": "Génération IA",
+  capture: "Capture → cartes",
+  reading: "Lecture",
+  shadowing: "Shadowing",
+  vocabulary: "Vocabulaire",
+  pronunciation: "Prononciation",
+  palaces: "Palais de mémoire",
+  mnemonics: "Mnémotechnique",
+  music: "Musique",
+  gesture: "Dessin",
+  stats: "Statistiques",
+  graph: "Graphe",
+  achievements: "Succès",
+  planner: "Planning",
+  settings: "Paramètres",
+};
+
 function buildCrumbs(pathname: string, deckName?: string): Crumb[] {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length === 0) {
-    return [{ label: "Home" }];
+    return [{ label: "Accueil" }];
   }
-  const crumbs: Crumb[] = [{ label: "Home", to: "/" }];
+  const crumbs: Crumb[] = [{ label: "Accueil", to: "/" }];
   const [first, second, third] = segments;
   if (first === "decks" && second) {
     crumbs.push({ label: deckName ?? `Deck #${second}`, to: `/decks/${second}` });
     if (third === "new-card") {
-      crumbs.push({ label: "New card" });
+      crumbs.push({ label: "Nouvelle carte" });
     }
   } else if (first === "review" && second) {
     crumbs.push({ label: deckName ?? `Deck #${second}`, to: `/decks/${second}` });
-    crumbs.push({ label: "Review" });
-  } else if (first === "stats") {
-    crumbs.push({ label: "Stats" });
-  } else if (first === "achievements") {
-    crumbs.push({ label: "Succès" });
-  } else if (first === "settings") {
-    crumbs.push({ label: "Settings" });
+    crumbs.push({ label: "Révision" });
+  } else if (first === "palaces" && second) {
+    crumbs.push({ label: "Palais de mémoire", to: "/palaces" });
+    crumbs.push({ label: third === "review" ? "Révision" : "Éditeur 3D" });
+  } else {
+    const label = first ? TOP_LABELS[first] : undefined;
+    if (label) crumbs.push({ label });
   }
   return crumbs;
 }
@@ -85,12 +106,12 @@ export function TopBar() {
           {activeDeckId ? (
             <Link to="/decks/$deckId/new-card" params={{ deckId: activeDeckId }}>
               <Plus className="h-4 w-4" />
-              Add card
+              Nouvelle carte
             </Link>
           ) : (
             <Link to="/">
               <Plus className="h-4 w-4" />
-              Add card
+              Nouvelle carte
             </Link>
           )}
         </Button>

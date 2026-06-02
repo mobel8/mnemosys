@@ -1,6 +1,6 @@
 [package]
 name = "mnemosys"
-version = "0.8.0"
+version = "0.9.0"
 description = "Next-gen spaced repetition (SRS) desktop app."
 authors = ["Mnemosys Team"]
 edition = "2021"

@@ -19,9 +19,9 @@ export default function MusicPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-6">
       <header>
-        <h2 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <Music2 className="h-6 w-6" /> Musique
-        </h2>
+        <h1 className="flex items-center gap-2 font-display text-2xl font-semibold tracking-tight">
+          <Music2 className="h-6 w-6 text-brand-500" /> Musique
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Pratique délibérée : garde le tempo au métronome et affûte ton oreille.
         </p>
@@ -33,7 +33,7 @@ export default function MusicPage() {
             Métronome
           </TabsTrigger>
           <TabsTrigger value="ear" data-testid="tab-ear">
-            Ear training
+            Oreille
           </TabsTrigger>
         </TabsList>
 
@@ -55,7 +55,7 @@ export default function MusicPage() {
         <TabsContent value="ear">
           <Card>
             <CardHeader>
-              <CardTitle>Ear training</CardTitle>
+              <CardTitle>Entraînement de l'oreille</CardTitle>
               <CardDescription>
                 Devine la note ou l'intervalle joué. Le score de la session s'accumule.
               </CardDescription>

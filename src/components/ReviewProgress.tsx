@@ -76,10 +76,10 @@ export function ReviewProgress({
       </div>
 
       <div className="flex h-12 items-center justify-between gap-4 px-4">
-        <div className="w-32 text-xs text-muted-foreground tabular-nums">
-          {formatElapsed(elapsedMs)} écoulées
+        <div className="w-32 text-xs text-muted-foreground">
+          <span className="font-mono tabular-nums">{formatElapsed(elapsedMs)}</span> écoulées
         </div>
-        <div className="flex-1 text-center text-sm font-medium tabular-nums">
+        <div className="flex-1 text-center font-mono text-sm font-medium tabular-nums">
           {current} <span className="text-muted-foreground">/</span> {total}
         </div>
         <div className="flex w-32 items-center justify-end gap-2">

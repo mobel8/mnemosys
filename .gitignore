@@ -42,6 +42,10 @@ playwright-report/
 test-results/
 playwright/.cache/
 
+# Audit / screenshot artifacts (design review — not part of the app)
+screenshots/
+.audit/
+
 # Local env
 .env
 .env.local

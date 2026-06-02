@@ -7,6 +7,9 @@
 # exits 0, and never rewrites this file:
 #   - esbuild → true  : its postinstall fetches the platform binary `vite build` needs.
 #   - core-js → false : its postinstall only prints a funding banner; skip it.
+#   - tesseract.js → false : postinstall is just `opencollective-postinstall`
+#       (a funding banner); the OCR engine itself needs no build step.
 allowBuilds:
   esbuild: true
   core-js: false
+  tesseract.js: false

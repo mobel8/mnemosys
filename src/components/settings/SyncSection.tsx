@@ -170,7 +170,7 @@ export function SyncSection() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Cloud className="h-5 w-5" />
+          <Cloud className="h-5 w-5 text-brand-500" />
           Synchronisation cloud
         </CardTitle>
         <CardDescription>
@@ -227,7 +227,18 @@ export function SyncSection() {
 
         {/* ---- Status-driven content ---- */}
         {!status ? (
-          <p className="text-sm text-muted-foreground">Chargement du statut…</p>
+          <div
+            className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4"
+            role="status"
+            aria-busy="true"
+            aria-label="Chargement du statut"
+          >
+            <div className="mt-0.5 h-5 w-5 shrink-0 animate-pulse rounded-full bg-muted" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-40 animate-pulse rounded-lg bg-muted" />
+              <div className="h-3 w-3/4 animate-pulse rounded-lg bg-muted" />
+            </div>
+          </div>
         ) : !status.configured ? (
           <div className="flex items-start gap-3 rounded-lg border border-dashed bg-muted/30 p-4">
             <CloudOff className="mt-0.5 h-5 w-5 text-muted-foreground" />

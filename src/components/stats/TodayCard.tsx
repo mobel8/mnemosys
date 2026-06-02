@@ -24,9 +24,11 @@ interface TodayCardProps {
 type StatColor = "default" | "red" | "amber" | "green";
 
 const COLOR_CLASSES: Record<StatColor, { icon: string; value: string }> = {
-  default: { icon: "text-muted-foreground", value: "text-foreground" },
+  default: { icon: "text-brand-500", value: "text-foreground" },
+  // `red`/`green` keep Tailwind's status palette so the traffic-light reads
+  // instantly; both carry chroma (not zero-chroma grey) per the design system.
   red: { icon: "text-red-500", value: "text-red-600 dark:text-red-400" },
-  amber: { icon: "text-amber-500", value: "text-amber-600 dark:text-amber-400" },
+  amber: { icon: "text-warning", value: "text-amber-600 dark:text-amber-400" },
   green: { icon: "text-green-500", value: "text-green-600 dark:text-green-400" },
 };
 
@@ -51,7 +53,7 @@ export function TodayCard({ data, isLoading }: TodayCardProps) {
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <StatTile
         icon={CheckCircle2}
-        label="Reviews faites"
+        label="Révisions faites"
         value={isLoading ? "—" : String(reviews)}
         color="default"
         testid="today-reviews-done"
@@ -92,11 +94,14 @@ interface StatTileProps {
 function StatTile({ icon: Icon, label, value, color, testid }: StatTileProps) {
   const colors = COLOR_CLASSES[color];
   return (
-    <Card data-testid={testid} className="overflow-hidden">
+    <Card data-testid={testid} className="overflow-hidden hover:shadow-md">
       <CardContent className="flex flex-col items-center gap-2 p-4 pt-5 text-center">
         <Icon className={cn("h-6 w-6", colors.icon)} />
         <span
-          className={cn("text-3xl font-bold leading-none tabular-nums", colors.value)}
+          className={cn(
+            "font-display text-3xl font-semibold leading-none tabular-nums",
+            colors.value,
+          )}
           data-testid={testid ? `${testid}-value` : undefined}
         >
           {value}

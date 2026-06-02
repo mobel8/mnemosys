@@ -139,10 +139,12 @@ export function MajorSystemHelper() {
                   <div
                     // biome-ignore lint/suspicious/noArrayIndexKey: derived positional list (digit sequence); position IS the identity
                     key={`${b.digit}-${i}`}
-                    className="flex flex-col items-center rounded-md border bg-card/40 px-3 py-1.5"
+                    className="flex flex-col items-center rounded-lg border bg-muted/40 px-3 py-1.5"
                   >
-                    <span className="text-lg font-semibold">{b.digit}</span>
-                    <span className="text-xs text-muted-foreground">{b.consonants}</span>
+                    <span className="font-display text-lg font-semibold tabular-nums">
+                      {b.digit}
+                    </span>
+                    <span className="font-mono text-xs text-muted-foreground">{b.consonants}</span>
                   </div>
                 ))}
               </div>
@@ -153,16 +155,21 @@ export function MajorSystemHelper() {
                 </span>
               </p>
               {suggestion && (
-                <p className="flex items-center gap-2 rounded-md bg-accent/40 p-2 text-sm">
-                  <Lightbulb className="h-4 w-4 shrink-0" />
+                <p className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 p-2.5 text-sm">
+                  <Lightbulb className="h-4 w-4 shrink-0 text-warning" />
                   Mot-exemple : <span className="font-medium">{suggestion}</span>
                 </p>
               )}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Saisis des chiffres pour voir le mapping.
-            </p>
+            <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed bg-muted/30 px-6 py-8 text-center">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-50 text-brand-500">
+                <Lightbulb className="h-5 w-5" />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Saisis des chiffres pour voir leur décomposition en sons consonnes.
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -175,7 +182,9 @@ export function MajorSystemHelper() {
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-2">
             {MAJOR_DIGITS.map((d) => (
               <div key={d.digit} className="flex items-baseline gap-2 text-sm">
-                <span className="w-5 font-semibold">{d.digit}</span>
+                <span className="w-5 font-display font-semibold tabular-nums text-brand-500">
+                  {d.digit}
+                </span>
                 <span className="font-mono">{d.consonants}</span>
                 <span className="truncate text-xs text-muted-foreground">{d.mnemonic}</span>
               </div>

@@ -63,7 +63,23 @@ export function FrequencyCoverageCard({ deckId }: FrequencyCoverageCardProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoading || !coverage ? (
-          <p className="text-sm text-muted-foreground">Chargement…</p>
+          <div
+            role="status"
+            aria-busy="true"
+            aria-label="Chargement de la couverture"
+            className="space-y-4"
+          >
+            <div className="h-3 w-full animate-pulse rounded-full bg-muted" />
+            <ul className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+              {FREQUENCY_BAND_ORDER.map((band) => (
+                <li key={band.key} className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-sm bg-muted" />
+                  <span className="h-3.5 w-16 animate-pulse rounded bg-muted" />
+                  <span className="ml-auto h-3.5 w-6 animate-pulse rounded bg-muted" />
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : total === 0 ? (
           <p className="text-sm text-muted-foreground">Aucune note dans ce deck pour l'instant.</p>
         ) : tagged === 0 ? (

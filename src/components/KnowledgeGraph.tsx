@@ -16,6 +16,7 @@
  * The SVG uses a fixed `viewBox` and scales responsively to its container.
  */
 
+import { Network } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { TagGraph } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
@@ -168,13 +169,25 @@ function computeLayout(graph: TagGraph): LayoutResult {
   return { nodes, adjacency };
 }
 
-/** Map a tag string to a stable hue so clusters are visually distinguishable. */
+/**
+ * Map a tag string to a stable color drawn from the design system's chart
+ * palette (`--color-chart-1…5`). Referencing the named tokens keeps the graph
+ * on-theme in both light and dark and avoids raw hsl()/hex values.
+ */
+const CHART_TOKENS = [
+  "var(--color-chart-1)",
+  "var(--color-chart-2)",
+  "var(--color-chart-3)",
+  "var(--color-chart-4)",
+  "var(--color-chart-5)",
+] as const;
+
 function tagColor(tag: string): string {
   let hash = 0;
   for (let i = 0; i < tag.length; i++) {
     hash = (hash * 31 + tag.charCodeAt(i)) % 360;
   }
-  return `hsl(${hash}, 65%, 55%)`;
+  return CHART_TOKENS[hash % CHART_TOKENS.length] ?? CHART_TOKENS[0];
 }
 
 export interface KnowledgeGraphProps {
@@ -196,13 +209,17 @@ export function KnowledgeGraph({ graph, className }: KnowledgeGraphProps) {
     return (
       <div
         className={cn(
-          "flex h-[420px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-center",
+          "flex h-[420px] flex-col items-center justify-center gap-3 rounded-xl border bg-card px-6 text-center shadow-sm",
           className,
         )}
         data-testid="knowledge-graph-empty"
       >
-        <p className="text-sm text-muted-foreground">
-          Aucun tag à afficher. Ajoute des tags à tes cartes pour voir leurs liens.
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-500">
+          <Network className="h-6 w-6" aria-hidden />
+        </div>
+        <h3 className="font-display text-lg font-semibold tracking-tight">Aucun tag à afficher</h3>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          Ajoute des tags à tes cartes pour révéler les liens qui les relient ici.
         </p>
       </div>
     );
@@ -219,7 +236,7 @@ export function KnowledgeGraph({ graph, className }: KnowledgeGraphProps) {
   }
 
   return (
-    <div className={cn("w-full overflow-hidden rounded-lg border bg-card", className)}>
+    <div className={cn("w-full overflow-hidden rounded-xl border bg-card shadow-sm", className)}>
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="h-auto w-full"
@@ -276,7 +293,7 @@ export function KnowledgeGraph({ graph, className }: KnowledgeGraphProps) {
                   r={node.r}
                   fill={tagColor(node.tag)}
                   fillOpacity={active ? 0.85 : 0.2}
-                  stroke="white"
+                  className="stroke-card"
                   strokeWidth={1.5}
                   strokeOpacity={active ? 0.8 : 0.2}
                 />
@@ -291,7 +308,7 @@ export function KnowledgeGraph({ graph, className }: KnowledgeGraphProps) {
                 <text
                   textAnchor="middle"
                   dy={4}
-                  className="fill-white text-[11px] font-semibold"
+                  className="fill-primary-foreground font-mono text-[11px] font-semibold tabular-nums"
                   opacity={active ? 1 : 0.4}
                   pointerEvents="none"
                 >

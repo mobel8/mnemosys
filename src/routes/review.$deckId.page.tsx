@@ -15,7 +15,7 @@
  */
 
 import { getRouteApi, Link } from "@tanstack/react-router";
-import { Loader2, PartyPopper } from "lucide-react";
+import { PartyPopper } from "lucide-react";
 import { ReviewSession } from "@/components/ReviewSession";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,20 +28,13 @@ export default function ReviewPage() {
   const due = useDueCards(deckId, 200);
 
   if (due.isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center p-6">
-        <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span className="text-sm">Chargement de la file…</span>
-        </div>
-      </div>
-    );
+    return <ReviewLoadingSkeleton />;
   }
 
   if (due.error) {
     return (
       <div className="flex h-full items-center justify-center p-6">
-        <Card className="max-w-md">
+        <Card className="w-full max-w-md border-destructive/40">
           <CardHeader>
             <CardTitle>Impossible de charger les cartes</CardTitle>
             <CardDescription>{due.error.message}</CardDescription>
@@ -66,12 +59,12 @@ export default function ReviewPage() {
   if (cards.length === 0) {
     return (
       <div className="flex h-full items-center justify-center p-6">
-        <Card className="max-w-md text-center">
+        <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <PartyPopper className="h-6 w-6" />
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-50 text-brand-500">
+              <PartyPopper className="h-7 w-7" />
             </div>
-            <CardTitle className="mt-3">Tu es à jour !</CardTitle>
+            <CardTitle className="mt-3 font-display text-xl">Tu es à jour !</CardTitle>
             <CardDescription>
               Aucune carte due pour ce deck. Reviens plus tard ou ajoute-en des nouvelles.
             </CardDescription>
@@ -94,4 +87,34 @@ export default function ReviewPage() {
   }
 
   return <ReviewSession deckId={deckId} cards={cards} />;
+}
+
+/**
+ * Loading state for the due queue. Mirrors the session layout — a slim
+ * progress rail on top, then a centred card-sized placeholder and a rating
+ * row — with `bg-muted animate-pulse` skeletons rather than a bare spinner,
+ * so the shift to real content is barely perceptible (design.md).
+ */
+function ReviewLoadingSkeleton() {
+  return (
+    <div
+      className="flex h-full min-h-0 flex-col"
+      role="status"
+      aria-busy="true"
+      aria-label="Chargement de la file"
+    >
+      <div className="border-b bg-background/95">
+        <div className="h-1.5 w-full bg-secondary" />
+        <div className="flex h-12 items-center justify-between gap-4 px-4">
+          <div className="h-3 w-24 animate-pulse rounded-lg bg-muted" />
+          <div className="h-3 w-12 animate-pulse rounded-lg bg-muted" />
+          <div className="h-3 w-16 animate-pulse rounded-lg bg-muted" />
+        </div>
+      </div>
+      <div className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-8">
+        <div className="h-[280px] w-full max-w-2xl animate-pulse rounded-xl bg-muted" />
+        <div className="h-11 w-[280px] animate-pulse rounded-lg bg-muted" />
+      </div>
+    </div>
+  );
 }

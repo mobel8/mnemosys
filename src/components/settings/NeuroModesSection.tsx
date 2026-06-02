@@ -17,6 +17,13 @@ import { CHRONOTYPE_INFO, type Chronotype, ChronotypeQuiz } from "@/components/C
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/use-toast";
@@ -316,20 +323,26 @@ export function NeuroModesSection() {
             Baddeley 1975). Généré localement, volume bas.
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              id="ambient-select"
-              data-testid="ambient-select"
+            <Select
               value={draft.ambient_sound}
-              onChange={(e) => handleAmbientChange(e.target.value as AmbientKind)}
+              onValueChange={(v) => handleAmbientChange(v as AmbientKind)}
               disabled={save.isPending}
-              className="flex h-9 min-w-[12rem] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
-              {AMBIENT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                id="ambient-select"
+                data-testid="ambient-select"
+                className="min-w-[12rem]"
+              >
+                <SelectValue placeholder="Choisir une ambiance" />
+              </SelectTrigger>
+              <SelectContent>
+                {AMBIENT_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               type="button"
               variant="outline"

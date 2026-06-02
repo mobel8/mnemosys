@@ -14,16 +14,19 @@
 import { useNavigate } from "@tanstack/react-router";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
+  AlertTriangle,
   Brush,
   ChevronLeft,
   ChevronRight,
   ImagePlus,
+  Layers,
   Lightbulb,
   Loader2,
   MoreHorizontal,
   PauseCircle,
   PlayCircle,
   RotateCcw,
+  SearchX,
   Trash2,
 } from "lucide-react";
 import { memo, useMemo, useState } from "react";
@@ -59,6 +62,9 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 25;
 const SEARCH_LIMIT = 50;
+
+/** Stable keys for the placeholder skeleton rows/tiles (avoids index keys). */
+const SKELETON_KEYS = ["s1", "s2", "s3", "s4", "s5", "s6"] as const;
 
 /**
  * Vague 13 — minimum FSRS `lapses` before a card is deemed « difficult »
@@ -107,6 +113,20 @@ function stateBadgeVariant(state: CardState): "default" | "secondary" | "outline
       return "outline";
     case "relearning":
       return "destructive";
+  }
+}
+
+/** French display label for an FSRS card state (the value stays `CardState`). */
+function stateLabel(state: CardState): string {
+  switch (state) {
+    case "new":
+      return "Nouvelle";
+    case "learning":
+      return "Apprentissage";
+    case "review":
+      return "Révision";
+    case "relearning":
+      return "Réapprentissage";
   }
 }
 
@@ -214,19 +234,46 @@ export function CardList({ deckId, searchQuery }: CardListProps) {
   return (
     <div className="space-y-3">
       {isLoading ? (
-        <div className="rounded-md border p-8 text-center text-sm text-muted-foreground">
-          Chargement…
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+          <div className="divide-y">
+            {SKELETON_KEYS.map((key) => (
+              <div key={key} className="flex items-center gap-4 px-4 py-3.5">
+                <div className="h-4 flex-1 animate-pulse rounded-lg bg-muted" />
+                <div className="hidden h-5 w-20 animate-pulse rounded-full bg-muted md:block" />
+                <div className="h-5 w-16 animate-pulse rounded-full bg-muted" />
+                <div className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
+              </div>
+            ))}
+          </div>
         </div>
       ) : isError ? (
-        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-          Erreur : {isError.message}
+        <div className="flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm shadow-sm">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+          <div>
+            <p className="font-medium text-destructive">Impossible de charger les cartes</p>
+            <p className="mt-0.5 text-muted-foreground">{isError.message}</p>
+          </div>
         </div>
       ) : rows.length === 0 ? (
-        <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-          {searching ? "Aucune note ne correspond à ta recherche." : "Aucune carte dans ce deck."}
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border bg-card px-6 py-14 text-center shadow-sm">
+          {searching ? (
+            <SearchX className="h-9 w-9 text-brand-500" />
+          ) : (
+            <Layers className="h-9 w-9 text-brand-500" />
+          )}
+          <div className="space-y-1">
+            <p className="font-display text-lg font-semibold">
+              {searching ? "Aucun résultat" : "Aucune carte dans ce deck"}
+            </p>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              {searching
+                ? "Aucune note ne correspond à ta recherche. Essaie d'autres mots-clés."
+                : "Ajoute ta première carte pour commencer à réviser ce deck."}
+            </p>
+          </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-md border">
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/30 text-xs uppercase text-muted-foreground">
               <tr>
@@ -252,7 +299,7 @@ export function CardList({ deckId, searchQuery }: CardListProps) {
       {!searching && (cards.data?.length ?? 0) > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
-            Page {page + 1}
+            Page <span className="font-mono tabular-nums">{page + 1}</span>
             {hasMore ? "" : " (fin)"}
           </span>
           <div className="flex gap-2">
@@ -396,7 +443,10 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
       <td className="px-4 py-3 align-top">
         <p className="line-clamp-2 font-medium">{noteFrontPreview(note)}</p>
         {card && card.card_ord > 0 && (
-          <p className="mt-0.5 text-xs text-muted-foreground">Card #{card.card_ord + 1}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Carte n<span className="align-baseline">°</span>
+            <span className="font-mono tabular-nums">{card.card_ord + 1}</span>
+          </p>
         )}
       </td>
       <td className="hidden px-4 py-3 align-top md:table-cell">
@@ -417,9 +467,7 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
       </td>
       <td className="px-4 py-3 align-top">
         {card ? (
-          <Badge variant={stateBadgeVariant(card.state)} className="capitalize">
-            {card.state}
-          </Badge>
+          <Badge variant={stateBadgeVariant(card.state)}>{stateLabel(card.state)}</Badge>
         ) : (
           <span className="text-xs text-muted-foreground">—</span>
         )}
@@ -560,7 +608,7 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
               <img
                 src={convertFileSrc(imagePath)}
                 alt={`Aide visuelle pour « ${noteFrontPreview(note)} »`}
-                className="w-full rounded-md border"
+                className="w-full rounded-lg border"
                 data-testid="mnemonic-image"
               />
             ) : null}
@@ -620,11 +668,15 @@ function SketchHistoryDialog({
         </DialogHeader>
         {sketches.isLoading ? (
           <div
-            className="flex items-center gap-2 text-sm text-muted-foreground"
+            role="status"
+            aria-busy="true"
+            aria-label="Chargement des croquis"
+            className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3"
             data-testid="sketch-history-loading"
           >
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Chargement des croquis…
+            {SKELETON_KEYS.map((key) => (
+              <div key={key} className="aspect-[4/3] w-full animate-pulse rounded-lg bg-muted" />
+            ))}
           </div>
         ) : sketches.data && sketches.data.length > 0 ? (
           <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3">
@@ -637,7 +689,7 @@ function SketchHistoryDialog({
                 <img
                   src={toSrc(sketch.sketch_data)}
                   alt={`Croquis du ${formatSketchDate(sketch.created_at)}`}
-                  className="aspect-[4/3] w-full rounded-md border bg-white object-contain"
+                  className="aspect-[4/3] w-full rounded-lg border bg-white object-contain"
                 />
                 <figcaption className="text-center text-[11px] text-muted-foreground">
                   {formatSketchDate(sketch.created_at)}

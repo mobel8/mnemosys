@@ -7,6 +7,7 @@
  * streak") so the path is transparent.
  */
 
+import { motion } from "framer-motion";
 import { Award, Crown, Flame, Sparkles, Trophy } from "lucide-react";
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +21,11 @@ interface CatalogEntry {
   label: string;
   description: string;
   icon: IconCmp;
-  /** Tailwind text color for the badge in its unlocked state. */
+  /**
+   * Design-system text color token for the badge in its unlocked state.
+   * Drawn from the chart palette + semantic tokens so badges stay on-theme
+   * in light and dark (no raw Tailwind palette / zero-chroma greys).
+   */
   tone: string;
 }
 
@@ -35,61 +40,61 @@ export const ACHIEVEMENTS_CATALOG: Record<string, CatalogEntry> = {
     label: "Première carte",
     description: "Tu as répondu à ta première carte. Bienvenue !",
     icon: Sparkles,
-    tone: "text-sky-500",
+    tone: "text-chart-2",
   },
   first_deck: {
     label: "Premier deck",
     description: "Tu as créé ton premier deck. L'aventure commence.",
     icon: Sparkles,
-    tone: "text-violet-500",
+    tone: "text-brand-500",
   },
   streak_3: {
     label: "3 jours",
     description: "Trois jours d'affilée. L'habitude s'installe.",
     icon: Flame,
-    tone: "text-orange-400",
+    tone: "text-warning",
   },
   streak_7: {
     label: "Une semaine",
     description: "Sept jours consécutifs. C'est solide.",
     icon: Flame,
-    tone: "text-orange-500",
+    tone: "text-warning",
   },
   streak_30: {
     label: "Un mois",
     description: "Trente jours d'affilée. Bravo pour la régularité.",
     icon: Flame,
-    tone: "text-red-500",
+    tone: "text-chart-5",
   },
   streak_100: {
     label: "Cent jours",
     description: "100 jours sans interruption. Tu es inarrêtable.",
     icon: Crown,
-    tone: "text-amber-500",
+    tone: "text-warning",
   },
   reviews_100: {
     label: "100 reviews",
     description: "Tu as franchi le cap des 100 cartes étudiées.",
     icon: Award,
-    tone: "text-emerald-500",
+    tone: "text-success",
   },
   reviews_1000: {
     label: "1 000 reviews",
     description: "Mille cartes — voilà un cerveau bien entrainé.",
     icon: Award,
-    tone: "text-cyan-500",
+    tone: "text-chart-2",
   },
   reviews_10000: {
     label: "10 000 reviews",
     description: "Dix mille reviews. Tu joues dans la cour des maîtres.",
     icon: Trophy,
-    tone: "text-yellow-500",
+    tone: "text-warning",
   },
   master_100: {
     label: "100 cartes maîtrisées",
     description: "Cent cartes avec une stabilité ≥ 90 jours.",
     icon: Crown,
-    tone: "text-fuchsia-500",
+    tone: "text-chart-5",
   },
 };
 
@@ -132,7 +137,7 @@ export function Achievements() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="achievements-loading">
         {Array.from({ length: 6 }).map((_, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholders, order is stable
-          <div key={i} className="h-24 animate-pulse rounded-xl bg-muted/40" />
+          <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
         ))}
       </div>
     );
@@ -140,46 +145,61 @@ export function Achievements() {
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {DISPLAY_ORDER.map((code) => {
+      {DISPLAY_ORDER.map((code, i) => {
         const entry = ACHIEVEMENTS_CATALOG[code];
         if (!entry) return null;
         const ts = unlockedAt.get(code);
         const Icon = entry.icon;
         const locked = ts === undefined;
         return (
-          <Card
+          <motion.div
             key={code}
-            className={cn("transition-opacity", locked && "opacity-50 grayscale")}
-            data-locked={locked ? "true" : "false"}
-            data-testid={`achievement-${code}`}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: 0.2,
+              delay: Math.min(i * 0.03, 0.24),
+              ease: [0.22, 1, 0.36, 1],
+            }}
           >
-            <CardContent className="flex items-start gap-3 p-4">
-              <div
-                className={cn(
-                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted",
-                  !locked && entry.tone,
-                )}
-                aria-hidden
-              >
-                <Icon className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="truncate font-semibold leading-tight">{entry.label}</h3>
-                  {locked ? (
-                    <Badge variant="outline" className="text-[10px]">
-                      Verrouillé
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="text-[10px]">
-                      {formatUnlockedAt(ts)}
-                    </Badge>
+            <Card
+              className={cn(
+                "h-full transition-[opacity,box-shadow] duration-200 hover:shadow-md",
+                locked && "opacity-50 grayscale",
+              )}
+              data-locked={locked ? "true" : "false"}
+              data-testid={`achievement-${code}`}
+            >
+              <CardContent className="flex items-start gap-3 p-4">
+                <div
+                  className={cn(
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+                    locked ? "bg-muted text-muted-foreground" : cn("bg-brand-50", entry.tone),
                   )}
+                  aria-hidden
+                >
+                  <Icon className="h-5 w-5" />
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">{entry.description}</p>
-              </div>
-            </CardContent>
-          </Card>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="truncate font-display font-semibold leading-tight tracking-tight">
+                      {entry.label}
+                    </h3>
+                    {locked ? (
+                      <Badge variant="outline" className="text-[10px]">
+                        Verrouillé
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="font-mono text-[10px] tabular-nums">
+                        {formatUnlockedAt(ts)}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{entry.description}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
         );
       })}
     </div>

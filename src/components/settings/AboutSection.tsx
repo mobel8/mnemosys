@@ -34,13 +34,13 @@ export function AboutSection() {
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-lg font-bold text-primary-foreground">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary font-display text-lg font-bold text-primary-foreground shadow-sm">
             M
           </div>
           <div>
-            <p className="text-lg font-semibold">Mnemosys</p>
+            <p className="font-display text-lg font-semibold tracking-tight">Mnemosys</p>
             <p className="text-xs text-muted-foreground">
-              Version <span className="tabular-nums">{VERSION}</span>
+              Version <span className="font-mono tabular-nums">{VERSION}</span>
             </p>
           </div>
         </div>

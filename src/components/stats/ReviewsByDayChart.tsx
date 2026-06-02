@@ -10,10 +10,12 @@
  * comparable thanks to the consistent bar color.
  */
 
+import { BarChart3 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatDateLong, type Period, periodToDays } from "@/lib/date";
 import { useReviewsByDay } from "@/lib/queries";
+import { cn } from "@/lib/utils";
 
 interface ReviewsByDayChartProps {
   period: Period;
@@ -34,10 +36,10 @@ export function ReviewsByDayChart({ period }: ReviewsByDayChartProps) {
   }));
 
   return (
-    <Card className="flex flex-col">
+    <Card className={cn("flex flex-col", error && "border-destructive/40")}>
       <CardHeader>
-        <CardTitle>Reviews par jour</CardTitle>
-        <CardDescription>
+        <CardTitle>Révisions par jour</CardTitle>
+        <CardDescription className={cn(error && "text-destructive")}>
           {isLoading
             ? "Chargement…"
             : error
@@ -46,7 +48,11 @@ export function ReviewsByDayChart({ period }: ReviewsByDayChartProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
-        {chartData.length === 0 && !isLoading ? (
+        {isLoading ? (
+          <ChartSkeleton />
+        ) : error ? (
+          <ErrorState />
+        ) : chartData.length === 0 ? (
           <EmptyState />
         ) : (
           <div className="h-[300px] w-full">
@@ -107,8 +113,39 @@ export function ReviewsByDayChart({ period }: ReviewsByDayChartProps) {
 
 function EmptyState() {
   return (
-    <div className="flex h-[300px] items-center justify-center text-center text-sm text-muted-foreground">
-      Pas encore de reviews sur cette période.
+    <div className="flex h-[300px] flex-col items-center justify-center gap-4 text-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-500">
+        <BarChart3 className="h-6 w-6" />
+      </span>
+      <p className="mx-auto max-w-xs text-sm text-muted-foreground">
+        Pas encore de révisions sur cette période.
+      </p>
+    </div>
+  );
+}
+
+function ErrorState() {
+  return (
+    <div className="flex h-[300px] items-center justify-center text-center text-sm text-destructive">
+      Impossible de charger les révisions.
+    </div>
+  );
+}
+
+/** Soft pulsing bar-chart placeholder used while data loads. */
+function ChartSkeleton() {
+  const heights = [55, 70, 45, 80, 60, 90, 50, 75, 65];
+  return (
+    <div className="flex h-[300px] w-full items-end gap-2 px-2 pb-6" aria-hidden>
+      {heights.map((h, i) => (
+        <div
+          // Static decorative placeholder; the list never reorders.
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed skeleton bars.
+          key={i}
+          className="flex-1 animate-pulse rounded-lg bg-muted"
+          style={{ height: `${h}%` }}
+        />
+      ))}
     </div>
   );
 }

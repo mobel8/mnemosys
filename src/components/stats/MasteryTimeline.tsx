@@ -32,19 +32,20 @@ const TIMELINE_WEEKS = 12;
 const MIN_WEEKS_FOR_CHART = 3;
 
 /**
- * Eight visually distinct hues for up to eight concurrent tag lines. Fixed
- * literals (not CSS vars) so the lines stay distinguishable from one another
- * regardless of theme — the chart's own grid/axes use the theme tokens.
+ * Eight visually distinct hues for up to eight concurrent tag lines, all drawn
+ * from the design-system runtime tokens (chart palette + brand scale) so the
+ * lines stay on-brand and theme-aware. The chart's grid/axes use theme tokens
+ * too; these resolve against the `:root` / `.dark` custom properties.
  */
 const LINE_COLORS = [
-  "#3b82f6", // blue
-  "#ef4444", // red
-  "#10b981", // emerald
-  "#f59e0b", // amber
-  "#8b5cf6", // violet
-  "#ec4899", // pink
-  "#14b8a6", // teal
-  "#a3a30f", // olive
+  "var(--chart-1)", // indigo
+  "var(--chart-2)", // cyan
+  "var(--chart-3)", // green
+  "var(--chart-4)", // amber
+  "var(--chart-5)", // magenta
+  "var(--brand-400)", // light indigo
+  "var(--brand-700)", // deep indigo
+  "var(--brand-200)", // pale indigo
 ] as const;
 
 /** A recharts row: one ISO week plus a retention value per tag key. */
@@ -79,7 +80,7 @@ export function MasteryTimeline() {
     <Card className="flex flex-col">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5" />
+          <TrendingUp className="h-5 w-5 text-brand-500" />
           Évolution de la maîtrise
         </CardTitle>
         <CardDescription>
@@ -91,7 +92,9 @@ export function MasteryTimeline() {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
-        {!isLoading && (!hasSeries || !enoughWeeks) ? (
+        {isLoading ? (
+          <ChartSkeleton />
+        ) : !hasSeries || !enoughWeeks ? (
           <EmptyState />
         ) : (
           <div className="h-[320px] w-full">
@@ -162,11 +165,34 @@ export function MasteryTimeline() {
   );
 }
 
+/** Loading placeholder mimicking the chart footprint with soft pulsing bars. */
+function ChartSkeleton() {
+  const heights = [55, 70, 45, 80, 60, 90, 50, 75, 65, 85, 58, 72];
+  return (
+    <div className="flex h-[320px] w-full items-end gap-2 px-2 pb-6" aria-hidden>
+      {heights.map((h, i) => (
+        <div
+          // Static decorative placeholder; the list never reorders.
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed skeleton bars.
+          key={i}
+          className="flex-1 animate-pulse rounded-lg bg-muted"
+          style={{ height: `${h}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function EmptyState() {
   return (
-    <div className="flex h-[320px] items-center justify-center text-center text-sm text-muted-foreground">
-      Pas encore assez de révisions taguées pour tracer une évolution. Ajoute des tags à tes notes
-      et révise sur plusieurs semaines.
+    <div className="flex h-[320px] flex-col items-center justify-center gap-4 text-center">
+      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-500">
+        <TrendingUp className="h-7 w-7" />
+      </span>
+      <p className="mx-auto max-w-sm text-sm text-muted-foreground">
+        Pas encore assez de révisions taguées pour tracer une évolution. Ajoute des tags à tes notes
+        et révise sur plusieurs semaines.
+      </p>
     </div>
   );
 }

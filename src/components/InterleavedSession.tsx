@@ -20,13 +20,19 @@
  */
 
 import { useNavigate } from "@tanstack/react-router";
-import { Loader2, Shuffle } from "lucide-react";
+import { Check, Layers, Shuffle } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { ReviewSession } from "@/components/ReviewSession";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
 import { useDecks, useInterleavedDueCards } from "@/lib/queries";
 import type { CardWithNote } from "@/lib/tauri";
@@ -34,13 +40,8 @@ import { cn } from "@/lib/utils";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
-
-function clampLimit(value: number): number {
-  if (!Number.isFinite(value)) return DEFAULT_LIMIT;
-  if (value < 1) return 1;
-  if (value > MAX_LIMIT) return MAX_LIMIT;
-  return Math.floor(value);
-}
+/** Preset session sizes surfaced by the limit picker (all within 1..MAX_LIMIT). */
+const LIMIT_PRESETS = [10, 20, 30, 50, 100] as const;
 
 export function InterleavedSession() {
   const navigate = useNavigate();
@@ -91,10 +92,21 @@ export function InterleavedSession() {
   if (activeDeckIds !== null) {
     if (interleaved.isLoading) {
       return (
-        <div className="flex h-full items-center justify-center p-6">
-          <div className="flex flex-col items-center gap-3 text-muted-foreground">
-            <Loader2 className="h-6 w-6 animate-spin" />
-            <span className="text-sm">Mélange de la file…</span>
+        <div
+          className="flex flex-col items-center gap-6 py-10"
+          role="status"
+          aria-busy="true"
+          aria-label="Mélange de la file"
+        >
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Shuffle className="h-4 w-4 animate-pulse text-brand-500" aria-hidden />
+            Mélange de la file…
+          </div>
+          <div className="h-[280px] w-full max-w-2xl animate-pulse rounded-xl bg-muted" />
+          <div className="grid w-full max-w-2xl grid-cols-4 gap-2">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="h-14 animate-pulse rounded-md bg-muted" />
+            ))}
           </div>
         </div>
       );
@@ -103,7 +115,7 @@ export function InterleavedSession() {
     if (interleaved.error) {
       return (
         <div className="flex h-full items-center justify-center p-6">
-          <Card className="max-w-md">
+          <Card className="w-full max-w-md border-destructive/40">
             <CardHeader>
               <CardTitle>Impossible de charger la file</CardTitle>
               <CardDescription>{interleaved.error.message}</CardDescription>
@@ -124,9 +136,12 @@ export function InterleavedSession() {
     if (cards.length === 0) {
       return (
         <div className="flex h-full items-center justify-center p-6">
-          <Card className="max-w-md text-center">
+          <Card className="w-full max-w-md text-center">
             <CardHeader>
-              <CardTitle>Aucune carte due</CardTitle>
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-50 text-brand-500">
+                <Layers className="h-7 w-7" aria-hidden />
+              </div>
+              <CardTitle className="mt-3 font-display text-xl">Aucune carte due</CardTitle>
               <CardDescription>
                 Tous les decks sélectionnés sont à jour. Reviens plus tard ou choisis d'autres
                 decks.
@@ -174,7 +189,15 @@ export function InterleavedSession() {
         </CardHeader>
         <CardContent className="space-y-4">
           {decksQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Chargement des decks…</p>
+            <ul
+              className="grid gap-2 sm:grid-cols-2"
+              aria-busy="true"
+              aria-label="Chargement des decks"
+            >
+              {[0, 1, 2, 3].map((i) => (
+                <li key={i} className="h-[42px] animate-pulse rounded-md bg-muted" />
+              ))}
+            </ul>
           ) : decks.length === 0 ? (
             <div className="rounded-md border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
               Aucun deck disponible. Crée d'abord quelques decks avant d'utiliser le mode entrelacé.
@@ -212,26 +235,37 @@ export function InterleavedSession() {
                   const checked = selectedDeckIds.includes(deck.id);
                   return (
                     <li key={deck.id}>
-                      <label
+                      <button
+                        type="button"
+                        aria-pressed={checked}
+                        onClick={() => toggleDeck(deck.id)}
+                        aria-label={`Inclure « ${deck.name} » dans la session entrelacée`}
                         className={cn(
-                          "flex cursor-pointer items-center gap-2 rounded-md border p-2 text-sm transition-colors",
-                          checked ? "border-primary/50 bg-primary/5" : "hover:bg-accent/40",
+                          "flex w-full cursor-pointer items-center gap-2.5 rounded-lg border p-2.5 text-left text-sm transition-all duration-150",
+                          "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                          checked
+                            ? "border-primary/50 bg-accent text-accent-foreground shadow-xs"
+                            : "border-input bg-card hover:border-accent hover:bg-accent/40",
                         )}
                       >
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-input"
-                          checked={checked}
-                          onChange={() => toggleDeck(deck.id)}
-                          aria-label={`Inclure « ${deck.name} » dans la session entrelacée`}
-                        />
                         <span
                           aria-hidden
-                          className="inline-block h-3 w-3 rounded-full"
+                          className={cn(
+                            "flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] border transition-colors",
+                            checked
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-input bg-card",
+                          )}
+                        >
+                          {checked && <Check className="h-3 w-3" strokeWidth={3} />}
+                        </span>
+                        <span
+                          aria-hidden
+                          className="inline-block h-3 w-3 shrink-0 rounded-full ring-1 ring-border"
                           style={{ background: deck.color }}
                         />
                         <span className="truncate">{deck.name}</span>
-                      </label>
+                      </button>
                     </li>
                   );
                 })}
@@ -241,15 +275,23 @@ export function InterleavedSession() {
 
           <div className="grid gap-2 sm:max-w-xs">
             <Label htmlFor={limitInputId}>Nombre maximum de cartes</Label>
-            <Input
-              id={limitInputId}
-              type="number"
-              min={1}
-              max={MAX_LIMIT}
-              value={limit}
-              onChange={(e) => setLimit(clampLimit(Number.parseInt(e.target.value, 10)))}
-            />
-            <p className="text-xs text-muted-foreground">Entre 1 et {MAX_LIMIT}.</p>
+            <Select value={String(limit)} onValueChange={(v) => setLimit(Number(v))}>
+              <SelectTrigger id={limitInputId}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LIMIT_PRESETS.map((preset) => (
+                  <SelectItem
+                    key={preset}
+                    value={String(preset)}
+                    className="font-mono tabular-nums"
+                  >
+                    {preset} cartes
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Jusqu'à {MAX_LIMIT} cartes par session.</p>
           </div>
 
           <div className="flex items-center gap-2 pt-1">

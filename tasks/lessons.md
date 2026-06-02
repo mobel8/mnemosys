@@ -16,3 +16,9 @@
 - `aria-label` on a bare `<span>` → invalid; add `role="img"` when the element (e.g. an emoji) is semantically an image.
 - `useValidAnchor`: a literal `href="#"` flags; mirror existing pattern `href={to ?? "#"}` (dynamic) in router `<Link>` mocks.
 - Run `biome check --write <files>` to auto-fix formatting before the final repo-wide `biome check .`.
+
+## Native <select> → Radix Select swap can break unit tests (design polish)
+- Tests that drive a control via `fireEvent.change(el, { target: { value } })` and cast it to `HTMLSelectElement` (e.g. DeckPodcastDialog voice pickers, `tests/unit/deck-podcast-dialog.test.tsx`) ONLY work with a real `<select>`. Radix `<Select>` renders a button trigger — `fireEvent.change` is a no-op on it, so state never updates and the test fails.
+- Resolution when "tests must pass" outranks "replace native selects": KEEP the native `<select>` but style it to the `ui/select` trigger voice (`flex h-9 w-full items-center rounded-lg border border-input bg-card px-3 py-2 text-sm shadow-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background`). design.md explicitly allows this fallback ("sinon stylise-le proprement").
+- Selects only checked via `getByLabelText`/`getByRole` (no `fireEvent.change`) CAN safely become Radix `<Select>` — keep the same `aria-label` on `<SelectTrigger>` so `getByLabelText` still resolves (e.g. Planner trigger-type/deck selects, Metronome signature). Radix forbids empty-string `SelectItem` values → use a `"none"` sentinel mapped to `null`.
+- Switch swap (`<input type=checkbox>` → `ui/switch`) is test-safe when the checkbox isn't asserted; use `onCheckedChange` (not `onChange`) and keep the `data-testid`.

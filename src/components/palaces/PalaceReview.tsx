@@ -11,7 +11,8 @@
 
 import { useQueries } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, RotateCw } from "lucide-react";
+import { motion } from "framer-motion";
+import { AlertTriangle, ArrowLeft, ArrowRight, MapPin, RotateCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PalaceScene } from "@/components/palaces/PalaceScene";
 import { Badge } from "@/components/ui/badge";
@@ -42,15 +43,36 @@ export function PalaceReview({ palaceId }: PalaceReviewProps) {
 
   if (palaceQ.isLoading) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
-        Chargement…
+      <div className="flex h-full w-full flex-col" data-testid="palace-review-loading">
+        <div className="flex items-center justify-between gap-2 border-b p-3">
+          <div className="space-y-2">
+            <div className="h-5 w-56 animate-pulse rounded-md bg-muted" />
+            <div className="h-3 w-20 animate-pulse rounded-md bg-muted" />
+          </div>
+          <div className="h-8 w-20 animate-pulse rounded-lg bg-muted" />
+        </div>
+        <div className="relative h-[calc(100%-3.5rem)] w-full animate-pulse bg-muted/40">
+          <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center px-4">
+            <div className="h-40 w-full max-w-xl animate-pulse rounded-xl bg-muted" />
+          </div>
+        </div>
       </div>
     );
   }
   if (palaceQ.isError || !palaceQ.data) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-sm text-destructive">
-        Impossible de charger le palace.
+      <div className="flex h-full items-center justify-center p-6">
+        <Card className="border-destructive/40">
+          <CardContent className="flex flex-col items-center gap-2 p-8 text-center">
+            <AlertTriangle className="h-6 w-6 text-destructive" aria-hidden />
+            <h3 className="font-display text-base font-semibold tracking-tight">
+              Impossible de charger le palace
+            </h3>
+            <p className="max-w-xs text-sm text-muted-foreground">
+              Réessaie ou reviens à la liste des palaces.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -60,21 +82,32 @@ export function PalaceReview({ palaceId }: PalaceReviewProps) {
 
   if (palace.loci.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-sm text-muted-foreground">
-          Aucun locus dans ce palace. Place au moins une carte avant de réviser.
-        </p>
-        <Button
-          variant="outline"
-          onClick={() =>
-            navigate({
-              to: "/palaces/$palaceId",
-              params: { palaceId: palace.id },
-            })
-          }
-        >
-          Retourner à l'éditeur
-        </Button>
+      <div className="flex h-full items-center justify-center p-6">
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 p-10 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-500">
+              <MapPin className="h-6 w-6" aria-hidden />
+            </div>
+            <h3 className="font-display text-lg font-semibold tracking-tight">
+              Aucun locus dans ce palace
+            </h3>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Place au moins une carte dans l'éditeur avant de lancer un parcours de révision.
+            </p>
+            <Button
+              variant="outline"
+              className="mt-1"
+              onClick={() =>
+                navigate({
+                  to: "/palaces/$palaceId",
+                  params: { palaceId: palace.id },
+                })
+              }
+            >
+              Retourner à l'éditeur
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -168,42 +201,52 @@ function LocusOverlay({
 }: LocusOverlayProps) {
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center px-4">
-      <Card className="pointer-events-auto w-full max-w-xl border-2 shadow-2xl backdrop-blur">
-        <CardContent className="space-y-3 p-4">
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary">#{cursor + 1}</Badge>
-            <span className="flex-1 truncate text-xs text-muted-foreground">
-              {locus.label ?? `Locus card_id=${locus.card_id}`}
-            </span>
-          </div>
+      <motion.div
+        key={cursor}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+        className="pointer-events-auto w-full max-w-xl"
+      >
+        <Card className="border shadow-xl backdrop-blur">
+          <CardContent className="space-y-3 p-4">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="font-mono tabular-nums">
+                #{cursor + 1}
+              </Badge>
+              <span className="flex-1 truncate text-xs text-muted-foreground">
+                {locus.label ?? `Locus card_id=${locus.card_id}`}
+              </span>
+            </div>
 
-          <LocusCardBody locusCardId={locus.card_id} decks={decks} showBack={showBack} />
+            <LocusCardBody locusCardId={locus.card_id} decks={decks} showBack={showBack} />
 
-          <div className="flex items-center justify-between gap-2 pt-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onPrev}
-              disabled={cursor === 0}
-              className="gap-1"
-            >
-              <ArrowLeft className="h-3 w-3" /> Précédent
-            </Button>
-            <Button variant="default" size="sm" onClick={onFlip} className="gap-1">
-              <RotateCw className="h-3 w-3" /> {showBack ? "Recto" : "Verso"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onNext}
-              disabled={cursor === total - 1}
-              className="gap-1"
-            >
-              Suivant <ArrowRight className="h-3 w-3" />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onPrev}
+                disabled={cursor === 0}
+                className="gap-1"
+              >
+                <ArrowLeft className="h-3 w-3" /> Précédent
+              </Button>
+              <Button variant="default" size="sm" onClick={onFlip} className="gap-1">
+                <RotateCw className="h-3 w-3" /> {showBack ? "Recto" : "Verso"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onNext}
+                disabled={cursor === total - 1}
+                className="gap-1"
+              >
+                Suivant <ArrowRight className="h-3 w-3" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 }
@@ -256,8 +299,8 @@ function LocusCardBody({
   const front = readField(cwn.note.fields, "front") ?? readField(cwn.note.fields, "text") ?? "—";
   const back = readField(cwn.note.fields, "back") ?? "—";
   return (
-    <div className="rounded-md border bg-card/60 p-3">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+    <div className="rounded-lg border bg-muted/40 p-3">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
         {showBack ? "Verso" : "Recto"}
       </p>
       <p className="mt-1 text-sm leading-snug">{showBack ? back : front}</p>

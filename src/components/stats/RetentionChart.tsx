@@ -11,6 +11,7 @@
  * three dots is more noise than signal.
  */
 
+import { LineChart as LineChartIcon } from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -24,6 +25,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatDateLong, type Period, periodToDays } from "@/lib/date";
 import { useRetentionByDay } from "@/lib/queries";
+import { cn } from "@/lib/utils";
 
 const TARGET_RETENTION = 0.9;
 const MIN_DAYS_FOR_CHART = 7;
@@ -54,10 +56,10 @@ export function RetentionChart({ period }: RetentionChartProps) {
   const latestRate = chartData.at(-1)?.rate;
 
   return (
-    <Card className="flex flex-col">
+    <Card className={cn("flex flex-col", error && "border-destructive/40")}>
       <CardHeader>
         <CardTitle>Rétention</CardTitle>
-        <CardDescription>
+        <CardDescription className={cn(error && "text-destructive")}>
           {isLoading
             ? "Chargement…"
             : error
@@ -68,7 +70,11 @@ export function RetentionChart({ period }: RetentionChartProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
-        {!enoughData && !isLoading ? (
+        {isLoading ? (
+          <ChartSkeleton />
+        ) : error ? (
+          <ErrorState />
+        ) : !enoughData ? (
           <EmptyState />
         ) : (
           <div className="h-[300px] w-full">
@@ -151,9 +157,40 @@ export function RetentionChart({ period }: RetentionChartProps) {
 
 function EmptyState() {
   return (
-    <div className="flex h-[300px] items-center justify-center text-center text-sm text-muted-foreground">
-      Pas encore assez de reviews pour afficher la courbe (au moins {MIN_DAYS_FOR_CHART} jours
-      requis).
+    <div className="flex h-[300px] flex-col items-center justify-center gap-4 text-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-500">
+        <LineChartIcon className="h-6 w-6" />
+      </span>
+      <p className="mx-auto max-w-xs text-sm text-muted-foreground">
+        Pas encore assez de révisions pour afficher la courbe (au moins {MIN_DAYS_FOR_CHART} jours
+        requis).
+      </p>
+    </div>
+  );
+}
+
+function ErrorState() {
+  return (
+    <div className="flex h-[300px] items-center justify-center text-center text-sm text-destructive">
+      Impossible de charger la rétention.
+    </div>
+  );
+}
+
+/** Soft pulsing line-chart placeholder used while data loads. */
+function ChartSkeleton() {
+  const heights = [60, 72, 50, 80, 66, 90, 58, 76, 64];
+  return (
+    <div className="flex h-[300px] w-full items-end gap-2 px-2 pb-6" aria-hidden>
+      {heights.map((h, i) => (
+        <div
+          // Static decorative placeholder; the list never reorders.
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed skeleton bars.
+          key={i}
+          className="flex-1 animate-pulse rounded-lg bg-muted"
+          style={{ height: `${h}%` }}
+        />
+      ))}
     </div>
   );
 }

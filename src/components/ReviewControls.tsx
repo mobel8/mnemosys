@@ -53,28 +53,25 @@ const RATINGS: readonly RatingDef[] = [
     label: "Again",
     hotkey: "1",
     className:
-      "bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-400 dark:bg-red-700 dark:hover:bg-red-600",
+      "bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive",
   },
   {
     rating: 2,
     label: "Hard",
     hotkey: "2",
-    className:
-      "bg-orange-500 text-white hover:bg-orange-600 focus-visible:ring-orange-300 dark:bg-orange-600 dark:hover:bg-orange-500",
+    className: "bg-warning text-warning-foreground hover:bg-warning/90 focus-visible:ring-warning",
   },
   {
     rating: 3,
     label: "Good",
     hotkey: "3",
-    className:
-      "bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-400 dark:bg-emerald-700 dark:hover:bg-emerald-600",
+    className: "bg-success text-success-foreground hover:bg-success/90 focus-visible:ring-success",
   },
   {
     rating: 4,
     label: "Easy",
     hotkey: "4",
-    className:
-      "bg-sky-600 text-white hover:bg-sky-700 focus-visible:ring-sky-400 dark:bg-sky-700 dark:hover:bg-sky-600",
+    className: "bg-chart-2 text-background hover:bg-chart-2/90 focus-visible:ring-chart-2",
   },
 ];
 
@@ -161,11 +158,11 @@ export function ReviewControls({
               >
                 <span className="flex items-center gap-2">
                   <span>{r.label}</span>
-                  <span className="rounded border border-white/30 px-1 py-px text-[10px] font-mono opacity-80">
+                  <span className="rounded border border-current/30 px-1 py-px font-mono text-[10px] opacity-80">
                     {r.hotkey}
                   </span>
                 </span>
-                <span className="text-[11px] font-normal opacity-90 tabular-nums">
+                <span className="font-mono text-[11px] font-normal tabular-nums opacity-90">
                   {isPending ? "…" : interval === null ? "—" : formatInterval(interval)}
                 </span>
               </button>

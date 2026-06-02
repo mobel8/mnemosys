@@ -65,29 +65,32 @@ function pickMasteryLevel(m: DeckMastery): {
   const total = m.apprentice + m.guru + m.master + m.enlightened + m.burned;
   if (total === 0) return null;
   const half = total / 2;
+  // Tones map onto the design's named chart palette (indigo · cyan · green ·
+  // amber · magenta) so the badges stay inside the locked token system rather
+  // than reaching for raw Tailwind color scales.
   if (m.burned >= half)
     return {
       label: "Burned",
-      tone: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
+      tone: "border-chart-4/30 bg-chart-4/15 text-chart-4",
     };
   if (m.burned + m.enlightened >= half)
     return {
       label: "Enlightened",
-      tone: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/30",
+      tone: "border-chart-5/30 bg-chart-5/15 text-chart-5",
     };
   if (m.burned + m.enlightened + m.master >= half)
     return {
       label: "Master",
-      tone: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30",
+      tone: "border-chart-1/30 bg-chart-1/15 text-chart-1",
     };
   if (m.burned + m.enlightened + m.master + m.guru >= half)
     return {
       label: "Guru",
-      tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
+      tone: "border-chart-3/30 bg-chart-3/15 text-chart-3",
     };
   return {
     label: "Apprentice",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30",
+    tone: "border-chart-2/30 bg-chart-2/15 text-chart-2",
   };
 }
 
@@ -134,10 +137,7 @@ export function DeckCard({ deck }: DeckCardProps) {
 
   return (
     <>
-      <motion.div
-        whileHover={{ y: -2 }}
-        transition={{ type: "spring", stiffness: 300, damping: 25 }}
-      >
+      <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}>
         <Card
           className="group relative cursor-pointer overflow-hidden transition-shadow hover:shadow-md"
           onClick={go}
@@ -156,7 +156,7 @@ export function DeckCard({ deck }: DeckCardProps) {
             style={{ background: deck.color }}
           />
           <span
-            className="absolute right-12 top-3 text-[10px] uppercase tracking-wide text-muted-foreground"
+            className="absolute right-12 top-3 font-mono text-[10px] uppercase tracking-wide text-muted-foreground/70"
             title={`Algorithme de scheduling : ${schedulerLabel(deck.scheduler_kind)}`}
           >
             {schedulerLabel(deck.scheduler_kind)}
@@ -164,7 +164,7 @@ export function DeckCard({ deck }: DeckCardProps) {
           <CardContent className="space-y-3 p-5 pl-6">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <h3 className="truncate text-lg font-semibold leading-tight">{deck.name}</h3>
+                <h3 className="truncate font-display text-lg tracking-tight">{deck.name}</h3>
                 <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-sm text-muted-foreground">
                   {deck.description ?? "Pas de description."}
                 </p>
@@ -224,12 +224,14 @@ export function DeckCard({ deck }: DeckCardProps) {
                 <>
                   <Badge
                     variant={stats.data.due_today > 0 ? "default" : "secondary"}
-                    className="font-medium"
+                    className="font-medium tabular-nums"
                   >
                     {stats.data.due_today} dues
                   </Badge>
-                  <Badge variant="outline">{stats.data.new_cards} new</Badge>
-                  <Badge variant="outline" className="inline-flex items-center gap-1">
+                  <Badge variant="outline" className="tabular-nums">
+                    {stats.data.new_cards} nouvelles
+                  </Badge>
+                  <Badge variant="outline" className="inline-flex items-center gap-1 tabular-nums">
                     <BookOpen className="h-3 w-3" />
                     {stats.data.total_cards} total
                   </Badge>
@@ -245,7 +247,7 @@ export function DeckCard({ deck }: DeckCardProps) {
                   {locked && (
                     <Badge
                       variant="outline"
-                      className="inline-flex items-center gap-1 border-amber-500/40 bg-amber-500/10 font-medium text-amber-700 dark:text-amber-300"
+                      className="inline-flex items-center gap-1 border-warning/40 bg-warning/10 font-medium text-warning"
                       title={`Maîtrise d'abord ${prerequisiteName} (≥90% de rétention)`}
                     >
                       <Lock className="h-3 w-3" />
@@ -254,7 +256,11 @@ export function DeckCard({ deck }: DeckCardProps) {
                   )}
                 </>
               ) : (
-                <span className="text-xs text-muted-foreground">Chargement…</span>
+                <>
+                  <span className="h-5 w-14 animate-pulse rounded-full bg-muted" />
+                  <span className="h-5 w-12 animate-pulse rounded-full bg-muted" />
+                  <span className="h-5 w-16 animate-pulse rounded-full bg-muted" />
+                </>
               )}
             </div>
           </CardContent>

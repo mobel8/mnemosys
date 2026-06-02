@@ -86,11 +86,11 @@ export function SchedulerPicker({ value, onChange, helperText }: SchedulerPicker
               key={opt.kind}
               htmlFor={id}
               className={cn(
-                "cursor-pointer rounded-md border p-3 text-left transition-colors",
-                "focus-within:outline-none focus-within:ring-2 focus-within:ring-ring",
+                "cursor-pointer rounded-xl border p-3 text-left transition-all duration-150",
+                "focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background",
                 selected
-                  ? "border-primary bg-primary/5"
-                  : "border-input hover:border-muted-foreground/40",
+                  ? "border-primary bg-accent shadow-sm"
+                  : "border-input hover:border-primary/40 hover:shadow-sm",
               )}
             >
               <input
@@ -103,7 +103,9 @@ export function SchedulerPicker({ value, onChange, helperText }: SchedulerPicker
                 className="sr-only"
               />
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold">{opt.title}</span>
+                <span className="font-display text-sm font-semibold tracking-tight">
+                  {opt.title}
+                </span>
                 {opt.recommended && (
                   <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
                     Recommandé

@@ -160,7 +160,7 @@ export function FirstRunWizard({ open, onClose }: FirstRunWizardProps) {
             className="h-full w-full origin-left bg-primary"
             initial={false}
             animate={{ scaleX: (index + 1) / SLIDES.length }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
           />
         </div>
 
@@ -171,14 +171,14 @@ export function FirstRunWizard({ open, onClose }: FirstRunWizardProps) {
               initial={{ opacity: 0, x: enterOffset }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: exitOffset }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               className="space-y-5"
             >
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-500">
                 {slide.icon}
               </div>
               <div className="space-y-1.5">
-                <h2 id="wizard-title" className="text-2xl font-semibold tracking-tight">
+                <h2 id="wizard-title" className="font-display text-2xl tracking-tight">
                   {slide.title}
                 </h2>
                 <p className="text-base text-muted-foreground">{slide.subtitle}</p>

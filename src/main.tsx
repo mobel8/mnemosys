@@ -1,5 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+// Self-hosted variable fonts (offline-safe — bundled by Vite, no CDN).
+// Display: Space Grotesk · Body/UI: Inter · Numbers/mono: JetBrains Mono.
+import "@fontsource-variable/inter";
+import "@fontsource-variable/space-grotesk";
+import "@fontsource-variable/jetbrains-mono";
 import App from "./App";
 import "./styles/globals.css";
 

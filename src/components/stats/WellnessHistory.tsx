@@ -29,11 +29,11 @@ const MOOD_EMOJI: Record<number, string> = {
   5: "😄",
 };
 
-/** Stress `[1..5]` → label + dot colour (higher = redder). */
+/** Stress `[1..5]` → label + dot colour (higher = redder), via semantic tokens. */
 function stressTone(level: number): { label: string; dot: string } {
-  if (level >= 4) return { label: "Élevé", dot: "bg-red-500" };
-  if (level === 3) return { label: "Moyen", dot: "bg-amber-500" };
-  return { label: "Bas", dot: "bg-emerald-500" };
+  if (level >= 4) return { label: "Élevé", dot: "bg-destructive" };
+  if (level === 3) return { label: "Moyen", dot: "bg-warning" };
+  return { label: "Bas", dot: "bg-success" };
 }
 
 /** Render an ISO `YYYY-MM-DD` as a short localized date; raw string on garbage. */
@@ -84,8 +84,27 @@ export function WellnessHistory() {
   if (isLoading) {
     return (
       <Card>
-        <CardContent className="py-8 text-center text-sm text-muted-foreground">
-          Chargement…
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <HeartPulse className="h-5 w-5 text-brand-500" />
+            Bien-être
+          </CardTitle>
+          <CardDescription>
+            <span className="sr-only">Chargement…</span>
+            <span className="inline-block h-4 w-72 max-w-full animate-pulse rounded bg-muted align-middle" />
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul className="divide-y divide-border/60">
+            {[0, 1, 2, 3].map((i) => (
+              <li key={i} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 py-2.5">
+                <span className="h-4 w-28 animate-pulse rounded bg-muted" />
+                <span className="h-4 w-5 animate-pulse rounded bg-muted" />
+                <span className="h-4 w-12 animate-pulse rounded bg-muted" />
+                <span className="h-4 w-16 animate-pulse rounded bg-muted" />
+              </li>
+            ))}
+          </ul>
         </CardContent>
       </Card>
     );
@@ -96,7 +115,7 @@ export function WellnessHistory() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <HeartPulse className="h-5 w-5" />
+            <HeartPulse className="h-5 w-5 text-brand-500" />
             Bien-être
           </CardTitle>
           <CardDescription>
@@ -104,10 +123,20 @@ export function WellnessHistory() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Aucun check-in pour l'instant. Active les modes « neuro » dans les réglages pour
-            enregistrer ton humeur, ton sommeil et ton stress avant chaque session.
-          </p>
+          <div className="flex flex-col items-center gap-4 py-10 text-center">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-500">
+              <HeartPulse className="h-7 w-7" />
+            </span>
+            <div className="space-y-1.5">
+              <h3 className="font-display text-base font-semibold tracking-tight">
+                Aucun check-in pour l'instant
+              </h3>
+              <p className="mx-auto max-w-sm text-sm text-muted-foreground">
+                Active les modes « neuro » dans les réglages pour enregistrer ton humeur, ton
+                sommeil et ton stress avant chaque session.
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     );
@@ -117,7 +146,7 @@ export function WellnessHistory() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <HeartPulse className="h-5 w-5" />
+          <HeartPulse className="h-5 w-5 text-brand-500" />
           Bien-être
         </CardTitle>
         <CardDescription>

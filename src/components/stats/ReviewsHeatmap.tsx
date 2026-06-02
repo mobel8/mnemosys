@@ -18,6 +18,7 @@
  * on narrow viewports.
  */
 
+import { CalendarDays } from "lucide-react";
 import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { daysAgo, formatDateLong, isoDate } from "@/lib/date";
@@ -155,19 +156,25 @@ export function ReviewsHeatmap() {
   );
 
   return (
-    <Card>
+    <Card className={cn(error && "border-destructive/40")}>
       <CardHeader>
-        <CardTitle>Activité sur 365 jours</CardTitle>
-        <CardDescription>
+        <CardTitle className="flex items-center gap-2">
+          <CalendarDays className="h-5 w-5 text-brand-500" />
+          Activité sur 365 jours
+        </CardTitle>
+        <CardDescription className={cn(error && "text-destructive")}>
           {isLoading
             ? "Chargement…"
             : error
               ? `Erreur : ${error.message}`
-              : `${totalReviews} review(s) sur l'année`}
+              : `${totalReviews} révision(s) sur l'année`}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto" data-testid="heatmap-scroll">
+        <div
+          className={cn("overflow-x-auto", isLoading && "animate-pulse")}
+          data-testid="heatmap-scroll"
+        >
           <div className="inline-flex flex-col gap-1">
             {/* Month labels */}
             <div

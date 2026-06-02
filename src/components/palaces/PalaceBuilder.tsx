@@ -15,11 +15,12 @@
  */
 
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, MapPin, Pin, Play, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, MapPin, Pin, Play, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PalaceScene } from "@/components/palaces/PalaceScene";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/components/ui/use-toast";
 import {
@@ -77,15 +78,50 @@ export function PalaceBuilder({ palaceId }: PalaceBuilderProps) {
 
   if (palaceQ.isLoading) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
-        Chargement du palace…
+      <div className="flex h-full w-full flex-col" data-testid="palace-builder-loading">
+        <div className="flex items-center justify-between gap-2 border-b p-3">
+          <div className="space-y-2">
+            <div className="h-5 w-40 animate-pulse rounded-md bg-muted" />
+            <div className="h-3 w-24 animate-pulse rounded-md bg-muted" />
+          </div>
+          <div className="h-8 w-28 animate-pulse rounded-lg bg-muted" />
+        </div>
+        <div className="grid h-[calc(100%-3.5rem)] grid-cols-[260px_1fr_280px] gap-0">
+          <div className="border-r bg-card/30 p-2">
+            <div className="flex flex-col gap-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholders, order is stable
+                <div key={i} className="h-9 animate-pulse rounded-md bg-muted" />
+              ))}
+            </div>
+          </div>
+          <div className="animate-pulse bg-muted/40" />
+          <div className="border-l bg-card/30 p-2">
+            <div className="flex flex-col gap-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholders, order is stable
+                <div key={i} className="h-9 animate-pulse rounded-md bg-muted" />
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
   if (palaceQ.isError || !palaceQ.data) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-sm text-destructive">
-        Impossible de charger le palace.
+      <div className="flex h-full items-center justify-center p-6">
+        <Card className="border-destructive/40">
+          <CardContent className="flex flex-col items-center gap-2 p-8 text-center">
+            <AlertTriangle className="h-6 w-6 text-destructive" aria-hidden />
+            <h3 className="font-display text-base font-semibold tracking-tight">
+              Impossible de charger le palace
+            </h3>
+            <p className="max-w-xs text-sm text-muted-foreground">
+              Réessaie ou reviens à la liste des palaces.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -208,12 +244,11 @@ function DeckCardsSidebar({
             type="button"
             onClick={() => onSelectDeck(d.id)}
             className={cn(
-              "rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
+              "rounded-md border px-2 py-1 text-[11px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
               selectedDeckId === d.id
-                ? "border-foreground bg-foreground text-background"
-                : "border-border bg-card text-muted-foreground hover:bg-accent/50",
+                ? "border-accent bg-accent text-accent-foreground"
+                : "border-border bg-card text-muted-foreground hover:border-accent hover:bg-accent hover:text-accent-foreground",
             )}
-            style={selectedDeckId === d.id ? { borderColor: d.color } : undefined}
           >
             {d.name}
           </button>

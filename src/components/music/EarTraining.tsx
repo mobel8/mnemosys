@@ -13,6 +13,7 @@
  * AudioContext that's closed on unmount.
  */
 
+import { motion } from "framer-motion";
 import { Check, Ear, RotateCcw, Volume2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -192,15 +193,15 @@ export function EarTraining({ className }: EarTrainingProps) {
   return (
     <div className={cn("space-y-6", className)} data-testid="ear-training">
       {/* Mode switch. */}
-      <div className="inline-flex rounded-lg border p-1">
+      <div className="inline-flex rounded-lg border bg-muted/40 p-1">
         <button
           type="button"
           onClick={() => switchMode("notes")}
           data-testid="mode-notes"
           className={cn(
-            "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+            "rounded-md px-4 py-1.5 text-sm font-medium transition-all duration-150",
             mode === "notes"
-              ? "bg-primary text-primary-foreground"
+              ? "bg-primary text-primary-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -211,9 +212,9 @@ export function EarTraining({ className }: EarTrainingProps) {
           onClick={() => switchMode("intervals")}
           data-testid="mode-intervals"
           className={cn(
-            "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+            "rounded-md px-4 py-1.5 text-sm font-medium transition-all duration-150",
             mode === "intervals"
-              ? "bg-primary text-primary-foreground"
+              ? "bg-primary text-primary-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -222,11 +223,11 @@ export function EarTraining({ className }: EarTrainingProps) {
       </div>
 
       {/* Score. */}
-      <div className="flex items-center justify-between rounded-md border bg-muted/30 px-4 py-2 text-sm">
+      <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-4 py-2.5 text-sm">
         <span className="flex items-center gap-2 text-muted-foreground">
-          <Ear className="h-4 w-4" /> Score de session
+          <Ear className="h-4 w-4 text-brand-500" /> Score de session
         </span>
-        <span className="tabular-nums font-medium" data-testid="ear-score">
+        <span className="font-mono text-base font-medium tabular-nums" data-testid="ear-score">
           {correct} / {total}
         </span>
       </div>
@@ -245,18 +246,19 @@ export function EarTraining({ className }: EarTrainingProps) {
           {mode === "notes" ? "Jouer la note" : "Jouer l'intervalle"}
         </Button>
         {revealed && (
-          <p
+          <motion.p
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
             className={cn(
               "flex items-center gap-1.5 text-sm font-medium",
-              verdict === "right"
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-red-600 dark:text-red-400",
+              verdict === "right" ? "text-success" : "text-destructive",
             )}
             data-testid="ear-verdict"
           >
             {verdict === "right" ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
             {verdict === "right" ? "Correct" : "Raté"} — c'était {answerLabel}
-          </p>
+          </motion.p>
         )}
       </div>
 

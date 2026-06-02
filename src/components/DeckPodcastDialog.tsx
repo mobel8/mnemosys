@@ -74,6 +74,15 @@ const VOICES: { value: TTSVoice; label: string }[] = [
   { value: "sage", label: "Sage (posée)" },
 ];
 
+/**
+ * Token-styled native <select> for the voice pickers. We keep a real
+ * <select> here (rather than the Radix primitive) so the existing unit test
+ * can drive it via `fireEvent.change`; the styling mirrors `ui/select`'s
+ * trigger voice (rounded-lg, hairline border, card surface, focus ring).
+ */
+const VOICE_SELECT_CLASS =
+  "flex h-9 w-full items-center rounded-lg border border-input bg-card px-3 py-2 text-sm shadow-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Kio`;
@@ -231,7 +240,7 @@ export function DeckPodcastDialog({
                 id="host-voice"
                 value={hostVoice}
                 onChange={(e) => setHostVoice(e.target.value as TTSVoice)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className={VOICE_SELECT_CLASS}
               >
                 {VOICES.map((v) => (
                   <option key={v.value} value={v.value}>
@@ -246,7 +255,7 @@ export function DeckPodcastDialog({
                 id="expert-voice"
                 value={expertVoice}
                 onChange={(e) => setExpertVoice(e.target.value as TTSVoice)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className={VOICE_SELECT_CLASS}
               >
                 {VOICES.map((v) => (
                   <option key={v.value} value={v.value}>
@@ -304,15 +313,34 @@ export function DeckPodcastDialog({
           <div className="space-y-2">
             <Label className="text-sm font-medium">Épisodes précédents</Label>
             {listQuery.isLoading ? (
-              <p className="text-xs text-muted-foreground">Chargement…</p>
+              <ul className="space-y-2">
+                {[0, 1].map((i) => (
+                  <li
+                    key={`podcast-skeleton-${i}`}
+                    className="space-y-2 rounded-xl border bg-card p-3 shadow-sm"
+                  >
+                    <div className="h-3.5 w-1/2 animate-pulse rounded-lg bg-muted" />
+                    <div className="h-3 w-1/3 animate-pulse rounded-lg bg-muted" />
+                    <div className="h-8 w-full animate-pulse rounded-lg bg-muted" />
+                  </li>
+                ))}
+              </ul>
             ) : podcasts.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Aucun podcast généré pour ce deck.</p>
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed bg-muted/30 px-6 py-8 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-50 text-brand-500">
+                  <Mic2 className="h-5 w-5" />
+                </div>
+                <p className="text-sm font-medium">Aucun podcast pour ce deck</p>
+                <p className="max-w-xs text-xs text-muted-foreground">
+                  Choisis un format et deux voix, puis génère ton premier épisode.
+                </p>
+              </div>
             ) : (
               <ul className="space-y-2">
                 {podcasts.map((p) => (
                   <li
                     key={p.path}
-                    className="rounded-md border bg-background p-3"
+                    className="rounded-xl border bg-card p-3 shadow-sm transition-shadow hover:shadow-md"
                     data-testid="podcast-list-item"
                   >
                     <div className="flex items-center justify-between gap-2">
