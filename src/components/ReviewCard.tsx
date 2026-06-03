@@ -32,8 +32,8 @@
  * `AnimatePresence`; this component only owns the flip.
  */
 
-import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
 import { OcclusionReviewView } from "@/components/OcclusionReviewView";
 import { TtsButton } from "@/components/TtsButton";
 import {
@@ -262,6 +262,21 @@ export function ReviewCard({
   deckName,
 }: ReviewCardProps) {
   const isAnswer = phase === "answer" || phase === "submitting";
+  // P029 — honour the OS "reduce motion" preference: when set we skip the 3D
+  // rotateY flip + the entry/exit slide and snap between faces instead.
+  const reduceMotion = useReducedMotion();
+  // P020 — move keyboard/AT focus onto the revealed answer when the card
+  // flips so screen-reader users land on (and hear) the verso instead of
+  // staying parked on the now-hidden question face.
+  const answerFocusRef = useRef<HTMLDivElement | null>(null);
+  const wasAnswerRef = useRef(false);
+  useEffect(() => {
+    if (phase === "answer" && !wasAnswerRef.current) {
+      answerFocusRef.current?.focus();
+    }
+    // Track the answer→question reset so re-flipping a future card focuses anew.
+    wasAnswerRef.current = phase === "answer" || phase === "submitting";
+  }, [phase]);
   const isCloze = note.template === "cloze";
   const isOcclusion = note.template === "occlusion";
   // Vague 14 — disciplinary templates render a bespoke recto/verso inside the
@@ -301,9 +316,10 @@ export function ReviewCard({
       <AnimatePresence mode="wait">
         <motion.div
           key={note.id}
-          initial={{ opacity: 0, x: 40 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -40 }}
+          // P029 — fade-only for reduced-motion users (no horizontal slide).
+          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 40 }}
+          animate={reduceMotion ? { opacity: 1 } : { opacity: 1, x: 0 }}
+          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -40 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
           className="flex w-full flex-col items-center gap-3"
         >
@@ -343,13 +359,23 @@ export function ReviewCard({
         ? `${workedExample.steps.join(". ")}. Réponse : ${workedExample.answer}`
         : "";
 
+  // P020 — plain-text verso for the screen-reader announcement. Reuses the
+  // same per-template strings the visible verso / TTS already derive, so the
+  // spoken reveal stays in sync with what sighted users see.
+  const answerText = cloze
+    ? clozeToSpoken(getClozeText(note), "answer")
+    : isDisciplinary
+      ? disciplinaryBackSpoken
+      : (basic?.back ?? "");
+
   return (
     <AnimatePresence mode="wait">
       <motion.div
         key={note.id}
-        initial={{ opacity: 0, x: 40 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: -40 }}
+        // P029 — drop the horizontal slide for reduced-motion users; fade only.
+        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 40 }}
+        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, x: 0 }}
+        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -40 }}
         transition={{ duration: 0.2, ease: "easeOut" }}
         className="flex w-full flex-col items-center justify-center gap-4"
       >
@@ -364,14 +390,24 @@ export function ReviewCard({
           <motion.div
             className="relative w-full"
             initial={false}
+            // P029 — when the learner prefers reduced motion, skip the 3D
+            // rotateY animation entirely: snap to the target angle so the
+            // reveal is instant and vestibular-safe (the backface-visibility
+            // stacking still swaps faces, just without the spin).
             animate={{ rotateY: isAnswer ? 180 : 0 }}
             // GPU transform (rotateY) — kept snappy so reveal feels instant.
             // A full 3D flip below ~150ms reads as a jump-cut and loses the
             // front→back spatial cue, so we sit just above the 100ms target.
-            transition={{ duration: 0.18, ease: "easeInOut" }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.18, ease: "easeInOut" }}
             style={{ transformStyle: "preserve-3d" }}
           >
-            {/* Front (question) face */}
+            {/* Front (question) face.
+                When the answer is showing, the front face is visually hidden
+                behind the flip. We mark it `inert` (React 19) which both hides
+                it from the a11y tree *and* pulls its focusable children (the
+                TtsButton) out of the tab order — fixing WCAG 4.1.2 where a
+                focusable control could otherwise live inside an aria-hidden
+                subtree (P021). */}
             <Card
               className={cn(
                 "min-h-[280px] w-full",
@@ -379,7 +415,7 @@ export function ReviewCard({
                 "relative",
               )}
               style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
-              aria-hidden={isAnswer ? true : undefined}
+              inert={isAnswer ? true : undefined}
             >
               <div className="absolute right-3 top-3 z-10">
                 <TtsButton
@@ -409,7 +445,10 @@ export function ReviewCard({
               </CardContent>
             </Card>
 
-            {/* Back (answer) face — same size; reverse-rotated so its text reads correctly when the parent has rotated to 180. */}
+            {/* Back (answer) face — same size; reverse-rotated so its text reads
+                correctly when the parent has rotated to 180. Mirror of the
+                front: `inert` while the question is showing so its TtsButton
+                isn't tabbable / announced behind the visible face (P021). */}
             <Card
               className={cn("absolute inset-0 min-h-[280px] w-full", "border-primary/40 shadow-md")}
               style={{
@@ -417,7 +456,7 @@ export function ReviewCard({
                 WebkitBackfaceVisibility: "hidden",
                 transform: "rotateY(180deg)",
               }}
-              aria-hidden={isAnswer ? undefined : true}
+              inert={isAnswer ? undefined : true}
             >
               <div className="absolute right-3 top-3 z-10">
                 <TtsButton
@@ -502,6 +541,21 @@ export function ReviewCard({
               </CardContent>
             </Card>
           </motion.div>
+        </div>
+
+        {/* P020 — accessible reveal. This sits OUTSIDE both flip faces (which
+            are `inert` while hidden, so a live region inside them would never
+            fire). On flip it becomes the focus target *and* an assertive-but-
+            polite live region that re-announces the verso for screen-reader
+            users. Visually hidden so it doesn't disturb the sighted layout. */}
+        <div
+          ref={answerFocusRef}
+          tabIndex={-1}
+          aria-live="polite"
+          aria-atomic="true"
+          className="sr-only"
+        >
+          {isAnswer ? (answerText ? `Réponse : ${answerText}` : "Réponse révélée.") : ""}
         </div>
 
         {showVoiceAnswer && basic ? (

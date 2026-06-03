@@ -129,6 +129,14 @@ impl CardScheduler {
         self.desired_retention
     }
 
+    /// FSRS gives degenerate intervals outside `[0.7, 0.97]`. Deck retention
+    /// is validated to a *wider* band (`[0.5, 0.99]`) so a learner can ask for
+    /// very loose or very tight scheduling — clamp it into the FSRS-safe band
+    /// here so a valid deck value never errors at scheduling time (P006).
+    pub(crate) fn clamp_retention(retention: f32) -> f32 {
+        retention.clamp(0.7, 0.97)
+    }
+
     /// Compute the four possible next states (one per rating).
     /// `current` is `None` for a brand-new card. `elapsed_days` is how many
     /// days have actually passed since the previous review (0 for a new card).
@@ -137,10 +145,23 @@ impl CardScheduler {
         current: Option<MemoryStateDTO>,
         elapsed_days: u32,
     ) -> AppResult<NextStatesDTO> {
+        self.next_states_with_retention(current, elapsed_days, self.desired_retention)
+    }
+
+    /// Like [`Self::next_states`] but overrides the retention target for this
+    /// one call — used to honour a deck's per-deck `desired_retention` without
+    /// rebuilding the shared engine (P006). `retention` is clamped into the
+    /// FSRS-safe band via [`Self::clamp_retention`].
+    pub fn next_states_with_retention(
+        &self,
+        current: Option<MemoryStateDTO>,
+        elapsed_days: u32,
+        retention: f32,
+    ) -> AppResult<NextStatesDTO> {
         let curr = current.map(|m| m.to_fsrs());
         let ns = self
             .fsrs
-            .next_states(curr, self.desired_retention, elapsed_days)
+            .next_states(curr, Self::clamp_retention(retention), elapsed_days)
             .map_err(|e| AppError::Fsrs(e.to_string()))?;
         Ok(NextStatesDTO {
             again: NextStateDTO {
@@ -170,7 +191,21 @@ impl CardScheduler {
         elapsed_days: u32,
         rating: Rating,
     ) -> AppResult<ReviewOutcome> {
-        let ns = self.next_states(current, elapsed_days)?;
+        self.apply_review_with_retention(current, elapsed_days, rating, self.desired_retention)
+    }
+
+    /// Like [`Self::apply_review`] but overrides the retention target for this
+    /// one call so a deck's per-deck `desired_retention` actually drives the
+    /// scheduled interval (P006). `retention` is clamped into the FSRS-safe
+    /// band via [`Self::clamp_retention`].
+    pub fn apply_review_with_retention(
+        &self,
+        current: Option<MemoryStateDTO>,
+        elapsed_days: u32,
+        rating: Rating,
+        retention: f32,
+    ) -> AppResult<ReviewOutcome> {
+        let ns = self.next_states_with_retention(current, elapsed_days, retention)?;
         let next = match rating {
             Rating::Again => ns.again,
             Rating::Hard => ns.hard,

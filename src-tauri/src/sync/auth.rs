@@ -48,21 +48,29 @@ impl SupabaseConfig {
     /// Returns a config when both fields are populated; otherwise emits the
     /// canonical « not configured » error. The empty-string check guards
     /// against `Some("")` slipping in from the settings UI.
+    ///
+    /// Defense-in-depth (P043): even though `save_settings` already rejects a
+    /// non-`https` `supabase_url`, we re-validate the scheme here so the
+    /// reqwest client can never be built against an `http://` (cleartext) or
+    /// otherwise unsafe endpoint — credentials and JWTs only ever travel over
+    /// TLS.
     pub fn from_settings(url: Option<&str>, anon_key: Option<&str>) -> AppResult<Self> {
         let url = url
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .ok_or_else(|| {
                 AppError::Validation(
-                    "Sync not configured. Configure Supabase URL in settings.".into(),
+                    "Sync non configurée. Renseigne l'URL Supabase dans les Paramètres.".into(),
                 )
             })?;
+        validate_https_url(url)?;
         let anon_key = anon_key
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .ok_or_else(|| {
                 AppError::Validation(
-                    "Sync not configured. Configure Supabase anon key in settings.".into(),
+                    "Sync non configurée. Renseigne la clé anon Supabase dans les Paramètres."
+                        .into(),
                 )
             })?;
         Ok(SupabaseConfig {
@@ -70,6 +78,29 @@ impl SupabaseConfig {
             anon_key: anon_key.to_string(),
         })
     }
+}
+
+/// Validate that `raw` is an absolute `https://` URL with a non-empty host.
+///
+/// Rejects `http`, `file`, `ws`, … schemes (which would send the anon key,
+/// JWT and password in cleartext or to an unintended target) as well as
+/// host-less inputs like `https:///path`. Uses `reqwest::Url` (already a
+/// dependency) rather than hand-rolling a parser.
+pub fn validate_https_url(raw: &str) -> AppResult<()> {
+    let parsed = reqwest::Url::parse(raw)
+        .map_err(|_| AppError::Validation(format!("URL Supabase invalide : « {} ».", raw)))?;
+    if parsed.scheme() != "https" {
+        return Err(AppError::Validation(format!(
+            "L'URL Supabase doit utiliser https:// (reçu « {} »).",
+            parsed.scheme()
+        )));
+    }
+    if parsed.host_str().map(str::is_empty).unwrap_or(true) {
+        return Err(AppError::Validation(
+            "L'URL Supabase doit contenir un domaine valide.".into(),
+        ));
+    }
+    Ok(())
 }
 
 /// Raw response payload returned by `POST /auth/v1/token?grant_type=password`.
@@ -96,10 +127,14 @@ struct AuthUser {
 /// because the most common case is « wrong password » — actionable user input.
 pub async fn login(config: &SupabaseConfig, email: &str, password: &str) -> AppResult<SyncSession> {
     if email.trim().is_empty() {
-        return Err(AppError::Validation("email must not be empty".into()));
+        return Err(AppError::Validation(
+            "L'e-mail ne doit pas être vide.".into(),
+        ));
     }
     if password.is_empty() {
-        return Err(AppError::Validation("password must not be empty".into()));
+        return Err(AppError::Validation(
+            "Le mot de passe ne doit pas être vide.".into(),
+        ));
     }
 
     let endpoint = format!("{}/auth/v1/token?grant_type=password", config.url);
@@ -233,5 +268,41 @@ mod auth_tests {
         assert!(matches!(err, AppError::Validation(_)));
         let err = SupabaseConfig::from_settings(Some("https://x.co"), Some("   ")).unwrap_err();
         assert!(matches!(err, AppError::Validation(_)));
+    }
+
+    #[test]
+    fn supabase_config_rejects_non_https_scheme() {
+        // P043: http (cleartext) and any non-https scheme must be refused even
+        // if both fields are otherwise populated.
+        for bad in [
+            "http://x.supabase.co",
+            "ftp://x.supabase.co",
+            "file:///etc/passwd",
+        ] {
+            let err = SupabaseConfig::from_settings(Some(bad), Some("anon")).unwrap_err();
+            assert!(
+                matches!(err, AppError::Validation(_)),
+                "expected reject for {bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn supabase_config_rejects_hostless_or_malformed_url() {
+        // Note : le crate `url` « récupère » `https:///path` en host `path`, donc
+        // cette entrée n'est PAS hostless. Les URLs réellement sans hôte ou
+        // malformées sont rejetées soit au parse, soit par le garde host-vide de
+        // `validate_https_url`.
+        for bad in ["https://", "not-a-url", "https://?q=1"] {
+            let err = SupabaseConfig::from_settings(Some(bad), Some("anon")).unwrap_err();
+            assert!(matches!(err, AppError::Validation(_)), "doit rejeter {bad}");
+        }
+    }
+
+    #[test]
+    fn supabase_config_accepts_https() {
+        let cfg = SupabaseConfig::from_settings(Some("https://abc.supabase.co"), Some("anon"))
+            .expect("https config accepted");
+        assert_eq!(cfg.url, "https://abc.supabase.co");
     }
 }

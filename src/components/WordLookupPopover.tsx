@@ -96,6 +96,18 @@ export interface WordLookupPopoverProps {
   speakLoading?: boolean;
   /** Extra classes for the inline trigger wrapper. */
   className?: string;
+  /**
+   * Accessible label for the trigger button (announced by screen readers). The
+   * host passes e.g. « café — en cours » so the word's reading status is voiced
+   * alongside its colour, which colour alone cannot convey.
+   */
+  triggerLabel?: string;
+  /**
+   * Optional extra footer slot rendered below the definition / unavailable
+   * body — used by the reading view to host a « changer le statut » control so
+   * status cycling stays reachable from inside the accessible popover.
+   */
+  footer?: React.ReactNode;
   /** Controlled-open escape hatch; defaults to internal uncontrolled state. */
   open?: boolean;
   /** Notifies the host of open-state changes (works controlled or not). */
@@ -132,6 +144,8 @@ export function WordLookupPopover({
   onSpeak,
   speakLoading = false,
   className,
+  triggerLabel,
+  footer,
   open: openProp,
   onOpenChange,
 }: WordLookupPopoverProps) {
@@ -237,6 +251,7 @@ export function WordLookupPopover({
         onClick={toggle}
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-label={triggerLabel}
       >
         {children}
       </button>
@@ -287,6 +302,7 @@ export function WordLookupPopover({
                   onAiLookup={onAiLookup ? () => onAiLookup(word) : undefined}
                 />
               )}
+              {footer ? <div className="border-t bg-muted/40 px-4 py-3">{footer}</div> : null}
             </motion.div>
           )}
         </AnimatePresence>,

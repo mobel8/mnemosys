@@ -24,6 +24,7 @@
 //! when its rating is ≥ 3 (Good / Easy).
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use chrono::{Datelike, TimeZone, Utc};
 use serde::Serialize;
@@ -44,6 +45,12 @@ const P_GUESS: f64 = 0.2;
 /// How many tags (ranked by review volume) the dashboard surfaces.
 const TOP_N_TAGS: usize = 30;
 
+/// How far back the BKT replay reaches, in days. Reviews older than this are
+/// ignored: a year of practice already dominates the posterior, and bounding
+/// the scan keeps the dashboard cheap on a long-lived database instead of
+/// re-playing the entire review history on every open. One year ≈ 365 days.
+const MASTERY_WINDOW_DAYS: i64 = 365;
+
 /// One concept's mastery estimate, ready for the stats UI.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct ConceptMastery {
@@ -62,38 +69,47 @@ type Observation = bool;
 pub fn get_concept_mastery(state: State<'_, AppState>) -> AppResult<Vec<ConceptMastery>> {
     let conn = state.db.lock();
 
-    // Pull every review joined to its card's note tags, in chronological
-    // order. We parse the tags JSON in Rust (mirrors `NoteRepo::all_tags`)
-    // and fan each review out across all of its card's tags. A card with no
-    // tags simply contributes nothing.
+    // Pull recent reviews joined to their card's note, in chronological order.
+    // We carry `note_id` so each note's tags JSON is parsed **once** (cached in
+    // `tags_by_note`) instead of re-parsing the same string for every review of
+    // that note — a card reviewed 50 times used to mean 50 identical parses.
+    // The scan is bounded to the last `MASTERY_WINDOW_DAYS` so a long-lived DB
+    // doesn't replay its whole history on every dashboard open.
+    let since = Utc::now().timestamp() - MASTERY_WINDOW_DAYS * 86_400;
     let mut stmt = conn.prepare(
-        "SELECT n.tags, r.rating
+        "SELECT c.note_id, n.tags, r.rating
          FROM reviews r
          JOIN cards c ON c.id = r.card_id
          JOIN notes n ON n.id = c.note_id
+         WHERE r.reviewed_at >= ?1
          ORDER BY r.reviewed_at ASC, r.id ASC",
     )?;
 
     // tag -> chronological list of correct/incorrect observations.
     let mut by_tag: HashMap<String, Vec<Observation>> = HashMap::new();
+    // note_id -> its parsed tags, shared so we never re-parse the same JSON.
+    // `Rc` lets a note's tag list be reused across all of its reviews without
+    // cloning the strings on every row.
+    let mut tags_by_note: HashMap<i64, Rc<Vec<String>>> = HashMap::new();
 
-    let rows = stmt.query_map([], |row| {
-        let tags_json: String = row.get(0)?;
-        let rating: i64 = row.get(1)?;
-        Ok((tags_json, rating))
+    let rows = stmt.query_map([since], |row| {
+        let note_id: i64 = row.get(0)?;
+        let tags_json: String = row.get(1)?;
+        let rating: i64 = row.get(2)?;
+        Ok((note_id, tags_json, rating))
     })?;
 
     for row in rows {
-        let (tags_json, rating) = row?;
-        // Skip notes whose tags fail to parse rather than aborting the whole
-        // analytic — matches the defensive stance in `all_tags`.
-        let tags: Vec<String> = match serde_json::from_str(&tags_json) {
-            Ok(t) => t,
-            Err(_) => continue,
-        };
+        let (note_id, tags_json, rating) = row?;
+        // Parse each note's tags at most once. Notes whose tags fail to parse
+        // cache an empty list so we skip them cheaply on later reviews, matching
+        // the defensive stance in `all_tags` (skip rather than abort).
+        let tags = tags_by_note
+            .entry(note_id)
+            .or_insert_with(|| Rc::new(serde_json::from_str(&tags_json).unwrap_or_default()));
         let correct = rating >= 3;
-        for tag in tags {
-            by_tag.entry(tag).or_default().push(correct);
+        for tag in tags.iter() {
+            by_tag.entry(tag.clone()).or_default().push(correct);
         }
     }
 

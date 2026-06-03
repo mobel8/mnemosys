@@ -271,6 +271,66 @@ fn custom_desired_retention_changes_intervals() {
 }
 
 // ---------------------------------------------------------------------------
+// P006 — per-review retention override
+// ---------------------------------------------------------------------------
+
+#[test]
+fn retention_override_actually_changes_the_interval() {
+    // One engine built at a baseline retention; a per-call override must steer
+    // the interval just like building a whole new engine would (P006).
+    let s = CardScheduler::new(&DEFAULT_PARAMS, 0.85).unwrap();
+    let tight = s
+        .apply_review_with_retention(None, 0, Rating::Good, 0.95)
+        .unwrap();
+    let loose = s
+        .apply_review_with_retention(None, 0, Rating::Good, 0.75)
+        .unwrap();
+    assert!(
+        tight.scheduled_days <= loose.scheduled_days,
+        "tighter override (0.95) => <= interval than looser (0.75): {} vs {}",
+        tight.scheduled_days,
+        loose.scheduled_days
+    );
+}
+
+#[test]
+fn retention_override_clamps_valid_deck_values_without_erroring() {
+    // Deck `desired_retention` is validated to the wider [0.5, 0.99] band, but
+    // FSRS only behaves in [0.7, 0.97]. A deck value at either extreme must be
+    // clamped (not rejected) so scheduling never fails on a valid deck (P006).
+    let s = CardScheduler::with_defaults().unwrap();
+    for deck_value in [0.5_f32, 0.99_f32] {
+        let out = s.apply_review_with_retention(None, 0, Rating::Good, deck_value);
+        assert!(
+            out.is_ok(),
+            "valid deck retention {} must schedule without error",
+            deck_value
+        );
+    }
+    // The clamp endpoints match the FSRS-safe band.
+    assert!((CardScheduler::clamp_retention(0.5) - 0.7).abs() < EPSILON);
+    assert!((CardScheduler::clamp_retention(0.99) - 0.97).abs() < EPSILON);
+    assert!((CardScheduler::clamp_retention(0.88) - 0.88).abs() < EPSILON);
+}
+
+#[test]
+fn next_states_with_retention_matches_default_when_equal() {
+    // Passing the engine's own retention as the override must reproduce the
+    // default `next_states` exactly (the override is a pure pass-through).
+    let s = CardScheduler::new(&DEFAULT_PARAMS, 0.9).unwrap();
+    let default = s.next_states(None, 0).unwrap();
+    let overridden = s.next_states_with_retention(None, 0, 0.9).unwrap();
+    assert!(approx_eq(
+        default.good.interval_days,
+        overridden.good.interval_days
+    ));
+    assert!(approx_eq(
+        default.again.interval_days,
+        overridden.again.interval_days
+    ));
+}
+
+// ---------------------------------------------------------------------------
 // DTO / serde
 // ---------------------------------------------------------------------------
 

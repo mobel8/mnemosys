@@ -11,7 +11,7 @@
  */
 
 import { AudioLines, Cpu, Key, Loader2, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -135,9 +135,17 @@ export function IntegrationsSection() {
   const [piperBinary, setPiperBinary] = useState("");
   const [piperModel, setPiperModel] = useState("");
 
-  // Hydrate local state once settings arrive from the backend.
+  // Hydrate local state from the backend exactly once, on first arrival.
+  // Re-running on every `query.data` change would clobber the user's
+  // in-progress edits whenever another section saves and invalidates the
+  // shared settings query (lost-update, P040). After the initial hydration
+  // the form is user-owned; `handleSave` re-reads fresh server data so other
+  // sections' fields are never overwritten.
+  const hydratedRef = useRef(false);
   useEffect(() => {
-    const s = query.data ?? DEFAULTS;
+    if (hydratedRef.current || !query.data) return;
+    hydratedRef.current = true;
+    const s = query.data;
     setAnthropic(s.anthropic_api_key ?? "");
     setOpenai(s.openai_api_key ?? "");
     setVoice(((s.tts_voice as TTSVoice | null) ?? "nova") as TTSVoice);
@@ -151,7 +159,13 @@ export function IntegrationsSection() {
   }, [query.data]);
 
   async function handleSave() {
-    const current = query.data ?? DEFAULTS;
+    // Re-read the freshest persisted settings right before composing the
+    // payload so fields owned by other sections (theme, FSRS knobs, neuro
+    // modes…) are preserved even if they changed since we hydrated. Never
+    // fall back to DEFAULTS while real data exists — that would silently
+    // reset every untouched field.
+    const refreshed = await query.refetch();
+    const current = refreshed.data ?? query.data ?? DEFAULTS;
     const next: AppSettings = {
       ...current,
       anthropic_api_key: anthropic.trim() === "" ? null : anthropic.trim(),
@@ -305,6 +319,8 @@ export function IntegrationsSection() {
               </Label>
               <Slider
                 id="tts-speed"
+                aria-label="Vitesse de synthèse vocale"
+                aria-valuetext={`${speed.toFixed(2)} ×`}
                 value={[speed]}
                 min={SPEED_MIN}
                 max={SPEED_MAX}

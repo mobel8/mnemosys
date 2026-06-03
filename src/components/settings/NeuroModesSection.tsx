@@ -107,27 +107,48 @@ export function NeuroModesSection() {
   // Vague 18 — chronotype quiz dialog + ambient preview controller.
   const [quizOpen, setQuizOpen] = useState(false);
 
+  const dirty = useMemo(() => {
+    if (!query.data) return false;
+    const a = query.data;
+    const b = draft;
+    return (
+      a.neuro_modes_enabled !== b.neuro_modes_enabled ||
+      a.mood_checkin_enabled !== b.mood_checkin_enabled ||
+      a.movement_break_minutes !== b.movement_break_minutes ||
+      a.cyclic_sighing_enabled !== b.cyclic_sighing_enabled
+    );
+  }, [query.data, draft]);
+
+  // Re-sync the draft from the server when fresh settings arrive — but never
+  // while the user has unsaved edits, or another section's save (which
+  // invalidates the shared settings query) would clobber them (lost-update,
+  // P040). On a clean draft, picking up new server values is desirable so the
+  // non-neuro fields stay current.
   useEffect(() => {
-    if (query.data) {
+    if (query.data && !dirty) {
       setDraft(query.data);
     }
-  }, [query.data]);
+  }, [query.data, dirty]);
 
   // Persist a single-field patch immediately (used by the chronotype result
   // and the ambient dropdown — both act on their own, not via « Sauvegarder »).
-  function persistPatch(patch: Partial<AppSettings>) {
-    const base = query.data ?? DEFAULTS;
+  // Re-reads the freshest persisted settings first so a concurrent edit from
+  // another section isn't reverted, and never falls back to DEFAULTS while
+  // real data exists.
+  async function persistPatch(patch: Partial<AppSettings>) {
+    const refreshed = await query.refetch();
+    const base = refreshed.data ?? query.data ?? DEFAULTS;
     save.mutate({ ...base, ...patch });
   }
 
   function handleChronotypeResult(chronotype: Chronotype) {
     setDraft((d) => ({ ...d, chronotype }));
-    persistPatch({ chronotype });
+    void persistPatch({ chronotype });
   }
 
   function handleAmbientChange(value: AmbientKind) {
     setDraft((d) => ({ ...d, ambient_sound: value }));
-    persistPatch({ ambient_sound: value });
+    void persistPatch({ ambient_sound: value });
   }
 
   // Preview the chosen ambience for a few seconds. Self-stopping so we never
@@ -142,21 +163,13 @@ export function NeuroModesSection() {
 
   const currentChronotype = (query.data?.chronotype ?? null) as Chronotype | null;
 
-  const dirty = useMemo(() => {
-    if (!query.data) return false;
-    const a = query.data;
-    const b = draft;
-    return (
-      a.neuro_modes_enabled !== b.neuro_modes_enabled ||
-      a.mood_checkin_enabled !== b.mood_checkin_enabled ||
-      a.movement_break_minutes !== b.movement_break_minutes ||
-      a.cyclic_sighing_enabled !== b.cyclic_sighing_enabled
-    );
-  }, [query.data, draft]);
-
-  function onSave() {
+  async function onSave() {
+    // Re-read fresh persisted settings before composing the payload so fields
+    // owned by other sections survive, and never fall back to DEFAULTS while
+    // real data exists.
+    const refreshed = await query.refetch();
     save.mutate({
-      ...(query.data ?? DEFAULTS),
+      ...(refreshed.data ?? query.data ?? DEFAULTS),
       neuro_modes_enabled: draft.neuro_modes_enabled,
       mood_checkin_enabled: draft.mood_checkin_enabled,
       movement_break_minutes: clamp(draft.movement_break_minutes, MIN_MINUTES, MAX_MINUTES),
@@ -232,6 +245,8 @@ export function NeuroModesSection() {
           <Slider
             id="movement-slider"
             data-testid="movement-slider"
+            aria-label="Intervalle des pauses mouvement (minutes)"
+            aria-valuetext={`${draft.movement_break_minutes} min`}
             min={MIN_MINUTES}
             max={MAX_MINUTES}
             step={5}
@@ -270,7 +285,12 @@ export function NeuroModesSection() {
         </div>
 
         <div className="flex justify-end">
-          <Button onClick={onSave} disabled={!dirty || save.isPending}>
+          <Button
+            onClick={() => {
+              void onSave();
+            }}
+            disabled={!dirty || save.isPending}
+          >
             {save.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (

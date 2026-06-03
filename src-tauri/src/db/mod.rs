@@ -60,16 +60,6 @@ pub use reviews::{DayCount, DayRetention, NewReview, Review, ReviewRepo};
 pub use sketches::{Sketch, SketchRepo};
 pub use wellness::{WellnessLog, WellnessRepo};
 
-/// Default 21-element FSRS-5 parameter vector. Used as the seed value on a
-/// brand-new database. Agent A3 may overwrite this whenever an optimisation
-/// run completes. These are the canonical FSRS-5 defaults shipped by the
-/// upstream `fsrs` crate; safe to use until the user has enough reviews
-/// (~1k) for a custom fit.
-pub const DEFAULT_FSRS_PARAMS: [f32; 21] = [
-    0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01, 1.49, 0.14, 0.94, 2.18, 0.05, 0.34, 1.26, 0.29,
-    2.61, 0.5, 0.1, 0.07, 0.15,
-];
-
 /// Process-wide DB handle. Cheap to clone (just bumps an `Arc` refcount).
 #[derive(Clone)]
 pub struct Database {
@@ -192,7 +182,10 @@ fn configure_connection(conn: &Connection) -> AppResult<()> {
 fn seed_defaults(conn: &Connection) -> AppResult<()> {
     let count: i64 = conn.query_row("SELECT COUNT(*) FROM fsrs_params", [], |r| r.get(0))?;
     if count == 0 {
-        let json = serde_json::to_string(&DEFAULT_FSRS_PARAMS.to_vec())?;
+        // Single source of truth: the FSRS-6 defaults declared in the scheduler
+        // crate. Seeding from there keeps a brand-new DB and the in-memory
+        // scheduler fallback in lockstep (no divergent stale FSRS-5 vector).
+        let json = serde_json::to_string(&crate::fsrs::params::DEFAULT_PARAMS.to_vec())?;
         conn.execute(
             "INSERT INTO fsrs_params (id, params_json, optimized_at, reviews_at_optim)
              VALUES (1, ?1, NULL, 0)",

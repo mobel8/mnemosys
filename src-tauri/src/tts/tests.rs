@@ -245,7 +245,7 @@ fn piper_errors_clearly_when_model_path_blank() {
         .expect_err("blank model must fail before spawning");
     match err {
         AppError::Other(msg) => assert!(
-            msg.contains("Piper unavailable") && msg.contains("voice model"),
+            msg.contains("Piper indisponible") && msg.contains("modèle de voix"),
             "error should name the missing voice model, got: {msg}"
         ),
         other => panic!("expected AppError::Other, got {other:?}"),
@@ -264,7 +264,7 @@ fn piper_errors_clearly_when_model_file_missing() {
         .expect_err("missing model file must fail before spawning");
     match err {
         AppError::Other(msg) => assert!(
-            msg.contains("Piper unavailable") && msg.contains("not found"),
+            msg.contains("Piper indisponible") && msg.contains("introuvable"),
             "error should report the model file as not found, got: {msg}"
         ),
         other => panic!("expected AppError::Other, got {other:?}"),

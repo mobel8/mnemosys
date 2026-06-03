@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 16;
+pub const CURRENT_VERSION: i32 = 18;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -359,6 +359,119 @@ CREATE TABLE IF NOT EXISTS study_plans (
 );
 "#;
 
+/// v17 — Referential-integrity hardening for the `decks → {decks, cards}`
+/// relationships. Three coupled changes, all about making FK behaviour
+/// explicit instead of relying on application code:
+///
+///   1. `decks.prerequisite_deck_id` gains `ON DELETE SET NULL`. A deck used
+///      as another deck's mastery prerequisite could not be deleted before
+///      (the self-referential FK had no ON DELETE action, so SQLite aborted
+///      the DELETE with a constraint violation). Semantics: deleting a
+///      prerequisite simply *dissolves the gate* — the dependent deck becomes
+///      ungated rather than blocking the deletion.
+///   2. `cards.deck_id` gains `ON DELETE CASCADE`. Previously `notes.deck_id`
+///      cascaded (so a deck delete removed its notes, which cascaded to their
+///      cards via `cards.note_id`), but `cards.deck_id` itself had no action.
+///      The cascade chain happened to clean up cards, but the explicit action
+///      makes the intent unambiguous and robust to any future card that is
+///      not tied to a note in the same deck.
+///   3. New `idx_notes_deck` index on `notes(deck_id)` — the deck-detail and
+///      deletion paths filter notes by `deck_id`, and the FK cascade scans it.
+///
+/// Both `decks` and `cards` are rebuilt with the SQLite 12-step recipe because
+/// `ALTER TABLE` cannot add/alter a FOREIGN KEY action. Column ORDER is
+/// preserved verbatim so the positional `row_to_deck` / `row_to_card` readers
+/// keep working. `decks` is rebuilt first; because `cards.deck_id` references
+/// `decks(id)`, rebuilding `decks` would normally trip the cards FK, but the
+/// migration runner disables `foreign_keys` for the whole window and runs a
+/// `PRAGMA foreign_key_check` before COMMIT to catch any orphan it created.
+const SCHEMA_V17: &str = r#"
+PRAGMA defer_foreign_keys = ON;
+
+-- ---- (1) decks rebuild: ON DELETE SET NULL on prerequisite_deck_id ---------
+
+CREATE TABLE decks_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    color TEXT NOT NULL DEFAULT '#3b82f6',
+    desired_retention REAL NOT NULL DEFAULT 0.9,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    remote_id TEXT,
+    scheduler_kind TEXT NOT NULL DEFAULT 'fsrs6'
+        CHECK(scheduler_kind IN ('fsrs6', 'sm2', 'leitner', 'hlr', 'memorize')),
+    language_mode TEXT,
+    prerequisite_deck_id INTEGER REFERENCES decks(id) ON DELETE SET NULL
+);
+
+INSERT INTO decks_new (id, name, description, color, desired_retention,
+                       created_at, updated_at, remote_id, scheduler_kind,
+                       language_mode, prerequisite_deck_id)
+SELECT id, name, description, color, desired_retention,
+       created_at, updated_at, remote_id, scheduler_kind,
+       language_mode, prerequisite_deck_id
+FROM decks;
+
+DROP TABLE decks;
+ALTER TABLE decks_new RENAME TO decks;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_decks_remote_id
+    ON decks(remote_id) WHERE remote_id IS NOT NULL;
+
+-- ---- (2) cards rebuild: ON DELETE CASCADE on deck_id -----------------------
+
+CREATE TABLE cards_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    deck_id INTEGER NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
+    card_ord INTEGER NOT NULL DEFAULT 0,
+    state TEXT NOT NULL DEFAULT 'new' CHECK(state IN ('new', 'learning', 'review', 'relearning')),
+    stability REAL,
+    difficulty REAL,
+    last_review INTEGER,
+    next_review INTEGER,
+    elapsed_days INTEGER NOT NULL DEFAULT 0,
+    scheduled_days INTEGER NOT NULL DEFAULT 0,
+    reps INTEGER NOT NULL DEFAULT 0,
+    lapses INTEGER NOT NULL DEFAULT 0,
+    suspended INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    remote_id TEXT
+);
+
+INSERT INTO cards_new (id, note_id, deck_id, card_ord, state, stability,
+                       difficulty, last_review, next_review, elapsed_days,
+                       scheduled_days, reps, lapses, suspended, created_at,
+                       updated_at, remote_id)
+SELECT id, note_id, deck_id, card_ord, state, stability,
+       difficulty, last_review, next_review, elapsed_days,
+       scheduled_days, reps, lapses, suspended, created_at,
+       updated_at, remote_id
+FROM cards;
+
+DROP TABLE cards;
+ALTER TABLE cards_new RENAME TO cards;
+
+-- Recreate the indexes that died with the old `cards` table (v1 + v3).
+CREATE INDEX idx_cards_due ON cards(next_review) WHERE suspended = 0;
+CREATE INDEX idx_cards_deck ON cards(deck_id);
+CREATE INDEX idx_cards_state ON cards(state) WHERE suspended = 0;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_remote_id
+    ON cards(remote_id) WHERE remote_id IS NOT NULL;
+
+-- ---- (3) deck → note lookup index ------------------------------------------
+
+CREATE INDEX IF NOT EXISTS idx_notes_deck ON notes(deck_id);
+"#;
+
+// v18 — P018: composite covering index for the per-deck due query (deck filter
+// + next_review range) so a study session does a SEARCH on a covering index
+// instead of a cross-deck scan + temp B-tree.
+const SCHEMA_V18: &str =
+    "CREATE INDEX IF NOT EXISTS idx_cards_due_deck ON cards(deck_id, next_review) WHERE suspended = 0;";
+
 /// Apply all pending migrations to `conn`.
 ///
 /// Reads `PRAGMA user_version` and applies migrations in order. Each migration
@@ -464,6 +577,18 @@ pub fn run(conn: &Connection) -> AppResult<()> {
         apply_migration(conn, 16, SCHEMA_V16)?;
     }
 
+    // v17 — FK integrity hardening: ON DELETE SET NULL on
+    // `decks.prerequisite_deck_id`, ON DELETE CASCADE on `cards.deck_id`,
+    // and a `notes(deck_id)` index.
+    if current < 17 {
+        apply_migration(conn, 17, SCHEMA_V17)?;
+    }
+
+    // v18 — P018: per-deck due covering index.
+    if current < 18 {
+        apply_migration(conn, 18, SCHEMA_V18)?;
+    }
+
     Ok(())
 }
 
@@ -480,44 +605,99 @@ pub fn run(conn: &Connection) -> AppResult<()> {
 /// pragma cannot be toggled inside a transaction. So we disable FKs BEFORE
 /// `BEGIN` and restore them AFTER `COMMIT`, exactly as recommended by
 /// <https://www.sqlite.org/lang_altertable.html> ("Making Other Kinds Of
-/// Table Schema Changes"). `Database::new` re-asserts `foreign_keys = ON`
-/// for normal operation; this only relaxes it during the migration window.
+/// Table Schema Changes").
+///
+/// Panic-safety: the restore of `foreign_keys = ON` runs from an [`FkGuard`]
+/// `Drop` impl, so the live connection is *never* left with FK enforcement
+/// disabled — not on an early `?` return, not on a `COMMIT` failure, and not
+/// if `execute_batch` panics (e.g. an OOM unwind). Leaving FKs off would mean
+/// silent loss of cascade/constraint integrity for the rest of the session,
+/// since this `Connection` is the long-lived one shared by every command.
+///
+/// Integrity: every table-rebuild migration runs with FKs disabled, so a buggy
+/// `INSERT … SELECT` could leave dangling references. We run
+/// `PRAGMA foreign_key_check` *inside* the transaction, just before `COMMIT`,
+/// and abort (ROLLBACK) if it reports any violation — so a migration can never
+/// commit an orphaned row.
 fn apply_migration(conn: &Connection, version: i32, sql: &str) -> AppResult<()> {
     log::info!("Applying DB migration v{}", version);
 
-    // Must happen OUTSIDE any transaction (SQLite ignores the pragma inside one).
+    // Disabling FKs must happen OUTSIDE any transaction (SQLite ignores the
+    // pragma inside one). The guard re-asserts `foreign_keys = ON` from its
+    // `Drop`, covering every exit path including a panic.
     conn.pragma_update(None, "foreign_keys", "OFF")?;
+    let _fk_guard = FkGuard { conn };
 
-    // Run the whole migration body in a closure so we can restore
-    // `foreign_keys = ON` on EVERY exit path — including a failure of the
-    // `PRAGMA user_version` / `COMMIT` statements, which would otherwise
-    // leave the live connection with FK enforcement disabled (silent loss
-    // of cascade/constraint integrity for the rest of the session).
-    let result: AppResult<()> = (|| {
-        conn.execute_batch("BEGIN;")?;
-        if let Err(e) = conn.execute_batch(sql) {
-            // Best-effort rollback; surface the original error regardless.
-            let _ = conn.execute_batch("ROLLBACK;");
-            return Err(AppError::Database(format!(
-                "migration v{} failed: {}",
-                version, e
-            )));
-        }
-        // `PRAGMA user_version = ?` does not accept bind params, so format
-        // literally. `version` is a hard-coded i32 — no injection risk.
-        if let Err(e) = conn.execute_batch(&format!("PRAGMA user_version = {};", version)) {
-            let _ = conn.execute_batch("ROLLBACK;");
-            return Err(e.into());
-        }
-        conn.execute_batch("COMMIT;")?;
-        Ok(())
-    })();
+    conn.execute_batch("BEGIN;")?;
+    if let Err(e) = conn.execute_batch(sql) {
+        // Best-effort rollback; surface the original error regardless.
+        let _ = conn.execute_batch("ROLLBACK;");
+        return Err(AppError::Database(format!(
+            "migration v{} failed: {}",
+            version, e
+        )));
+    }
 
-    // ALWAYS restore enforcement, success or failure, before returning.
-    let restored = conn.pragma_update(None, "foreign_keys", "ON");
-    result?;
-    restored?;
+    // A table rebuild ran with FKs disabled — verify it left no dangling
+    // reference before committing. `foreign_key_check` returns one row per
+    // violation; any row means the migration is unsound, so we abort.
+    if let Err(e) = assert_no_fk_violations(conn) {
+        let _ = conn.execute_batch("ROLLBACK;");
+        return Err(AppError::Database(format!(
+            "migration v{} aborted — foreign-key check failed: {}",
+            version, e
+        )));
+    }
+
+    // `PRAGMA user_version = ?` does not accept bind params, so format
+    // literally. `version` is a hard-coded i32 — no injection risk.
+    if let Err(e) = conn.execute_batch(&format!("PRAGMA user_version = {};", version)) {
+        let _ = conn.execute_batch("ROLLBACK;");
+        return Err(e.into());
+    }
+    conn.execute_batch("COMMIT;")?;
     Ok(())
+    // `_fk_guard` drops here, restoring `foreign_keys = ON`.
+}
+
+/// Run `PRAGMA foreign_key_check` and fail if it reports any violation.
+///
+/// Must be called inside the migration transaction (after the rebuild SQL,
+/// before COMMIT) so a detected orphan can be rolled back. Each violation row
+/// is `(table, rowid, referenced_table, fk_index)`; we only need to know that
+/// at least one exists, plus a short description for the error message.
+fn assert_no_fk_violations(conn: &Connection) -> AppResult<()> {
+    let mut stmt = conn.prepare("PRAGMA foreign_key_check;")?;
+    let mut rows = stmt.query([])?;
+    if let Some(row) = rows.next()? {
+        let table: String = row.get(0).unwrap_or_else(|_| "<unknown>".to_string());
+        let parent: String = row.get(2).unwrap_or_else(|_| "<unknown>".to_string());
+        return Err(AppError::Database(format!(
+            "foreign-key violation in `{}` referencing `{}`",
+            table, parent
+        )));
+    }
+    Ok(())
+}
+
+/// RAII guard that re-asserts `PRAGMA foreign_keys = ON` when dropped.
+///
+/// Used by [`apply_migration`] so FK enforcement is restored on *every* exit
+/// path — early return, error, or panic unwind — preventing the shared live
+/// connection from silently running the rest of the session with foreign keys
+/// disabled.
+struct FkGuard<'a> {
+    conn: &'a Connection,
+}
+
+impl Drop for FkGuard<'_> {
+    fn drop(&mut self) {
+        if let Err(e) = self.conn.pragma_update(None, "foreign_keys", "ON") {
+            // Can't propagate from Drop; log loudly. A failure here is
+            // exceptional (the connection would have to be unusable).
+            log::error!("failed to restore foreign_keys=ON after migration: {}", e);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -650,5 +830,75 @@ mod tests {
             bad.is_err(),
             "unknown scheduler_kind must violate the CHECK"
         );
+    }
+
+    /// Helper: the `ON DELETE` action SQLite records for the FK on
+    /// `table.column` pointing at `parent`. Returns e.g. `"SET NULL"` /
+    /// `"CASCADE"` / `"NO ACTION"`.
+    fn fk_on_delete(conn: &Connection, table: &str, column: &str, parent: &str) -> Option<String> {
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA foreign_key_list({table})"))
+            .expect("prepare foreign_key_list");
+        // foreign_key_list columns: id, seq, table, from, to, on_update,
+        // on_delete, match.
+        let rows = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(2)?, // parent table
+                    r.get::<_, String>(3)?, // from column
+                    r.get::<_, String>(6)?, // on_delete
+                ))
+            })
+            .expect("query foreign_key_list");
+        for row in rows {
+            let (p, from, on_delete) = row.expect("fk row");
+            if p == parent && from == column {
+                return Some(on_delete);
+            }
+        }
+        None
+    }
+
+    /// v17 — `decks.prerequisite_deck_id` must carry `ON DELETE SET NULL`,
+    /// `cards.deck_id` must carry `ON DELETE CASCADE`, and `idx_notes_deck`
+    /// must exist. Guards the FK-integrity hardening (P013 / P014).
+    #[test]
+    fn migration_v17_sets_fk_actions_and_notes_index() {
+        let db = crate::db::Database::for_test();
+        let conn = db.lock();
+
+        assert_eq!(
+            fk_on_delete(&conn, "decks", "prerequisite_deck_id", "decks").as_deref(),
+            Some("SET NULL"),
+            "decks.prerequisite_deck_id must be ON DELETE SET NULL"
+        );
+        assert_eq!(
+            fk_on_delete(&conn, "cards", "deck_id", "decks").as_deref(),
+            Some("CASCADE"),
+            "cards.deck_id must be ON DELETE CASCADE"
+        );
+
+        // The deck→note lookup index must exist.
+        let has_index: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type = 'index' AND name = 'idx_notes_deck'",
+                [],
+                |r| r.get(0),
+            )
+            .expect("query sqlite_master for idx_notes_deck");
+        assert_eq!(has_index, 1, "idx_notes_deck index must be created by v17");
+
+        // The cards indexes recreated during the rebuild must survive.
+        for idx in ["idx_cards_due", "idx_cards_deck", "idx_cards_state"] {
+            let present: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?1",
+                    rusqlite::params![idx],
+                    |r| r.get(0),
+                )
+                .expect("query sqlite_master for cards index");
+            assert_eq!(present, 1, "{idx} must survive the v17 cards rebuild");
+        }
     }
 }

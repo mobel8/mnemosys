@@ -18,6 +18,7 @@
 //! - [`tests`]  — pure unit tests (LWW merge, delta extraction).
 
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager};
 
 pub mod apply;
 pub mod auth;
@@ -26,6 +27,43 @@ pub mod cycle;
 pub mod delta;
 #[cfg(test)]
 pub mod tests;
+
+/// Tighten on-disk permissions of a `tauri-plugin-store` file to owner-only
+/// (`0600`) on Unix.
+///
+/// P033 (defense-in-depth): API keys and Supabase JWTs (access + refresh) are
+/// persisted by `tauri-plugin-store` as world-readable JSON under the app data
+/// dir. Until the secrets are migrated to the OS keychain, we at least make the
+/// backing files unreadable by other local users. `relative_path` is the same
+/// file name handed to `app.store(...)`; the plugin resolves it against
+/// `BaseDirectory::AppData`, so we resolve it the same way to locate the file.
+///
+/// Best-effort: a missing file (store never flushed) or a non-Unix platform is
+/// a silent no-op — this only ever *narrows* access, never widens it, so it can
+/// never break a working install.
+pub fn harden_store_permissions(app: &AppHandle, relative_path: &str) {
+    let Ok(path) = app
+        .path()
+        .resolve(relative_path, tauri::path::BaseDirectory::AppData)
+    else {
+        return;
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(metadata) = std::fs::metadata(&path) {
+            let mut perms = metadata.permissions();
+            if perms.mode() & 0o077 != 0 {
+                perms.set_mode(0o600);
+                let _ = std::fs::set_permissions(&path, perms);
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
+}
 
 /// Session blob persisted in `sync_session.json` via `tauri-plugin-store`.
 ///

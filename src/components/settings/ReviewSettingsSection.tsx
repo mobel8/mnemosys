@@ -163,6 +163,8 @@ export function ReviewSettingsSection() {
           </div>
           <Slider
             id="retention-slider"
+            aria-label="Rétention cible"
+            aria-valuetext={`${retentionPct} %`}
             min={RETENTION_MIN}
             max={RETENTION_MAX}
             step={RETENTION_STEP}

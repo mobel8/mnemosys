@@ -13,15 +13,18 @@
  *   - 51-100         → `bg-green-600`  / dark:bg-green-500
  *   - 100+           → `bg-green-800`  / dark:bg-green-300
  *
- * Hover surface uses the native `title` attribute so we don't need to add
- * a popper library just for this view. The container scrolls horizontally
- * on narrow viewports.
+ * Accessibility: the grid carries `role="img"` with an `aria-label`
+ * summarising the year so screen readers don't have to crawl 365 cells.
+ * Each active day is a focusable button-like cell exposing its date and
+ * count via `aria-label` (not the unread native `title`), and the legend
+ * spells out each bucket in text so colour is never the sole signal. The
+ * container scrolls horizontally on narrow viewports.
  */
 
 import { CalendarDays } from "lucide-react";
 import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { daysAgo, formatDateLong, isoDate } from "@/lib/date";
+import { formatDateLong, isoDate } from "@/lib/date";
 import { useReviewsByDay } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +48,18 @@ const MONTH_LABELS = [
 ];
 
 /**
+ * A `Date` pinned to 00:00:00 UTC of the given UTC calendar day. Iterating
+ * with `setUTCDate(+1)` keeps every cursor aligned to a UTC midnight so
+ * `isoDate` (a UTC slice) yields a `YYYY-MM-DD` that matches the backend
+ * aggregate, which buckets reviews by UTC day. Keying off local midnight
+ * instead would shift counts onto the neighbouring cell for users away from
+ * UTC.
+ */
+function utcMidnight(year: number, month: number, day: number): Date {
+  return new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+}
+
+/**
  * Map a unique ISO day to its review count. Returns a fresh map every call
  * so callers can mutate freely without affecting upstream caches.
  */
@@ -57,13 +72,27 @@ function indexCounts(rows: { date: string; count: number }[] | undefined): Map<s
   return map;
 }
 
+/**
+ * Ordered colour buckets. Each entry pairs the Tailwind swatch class with a
+ * French text label so colour is never the only carrier of meaning — the
+ * label feeds both the legend and per-cell `aria-label`s.
+ */
+const BUCKETS = [
+  { max: 0, className: "bg-muted", label: "aucune révision" },
+  { max: 10, className: "bg-green-200 dark:bg-green-900", label: "1 à 10 révisions" },
+  { max: 50, className: "bg-green-400 dark:bg-green-700", label: "11 à 50 révisions" },
+  { max: 100, className: "bg-green-600 dark:bg-green-500", label: "51 à 100 révisions" },
+  {
+    max: Number.POSITIVE_INFINITY,
+    className: "bg-green-800 dark:bg-green-300",
+    label: "plus de 100 révisions",
+  },
+] as const;
+
 /** Tailwind class for a given review count. */
 function colorFor(count: number): string {
-  if (count <= 0) return "bg-muted";
-  if (count <= 10) return "bg-green-200 dark:bg-green-900";
-  if (count <= 50) return "bg-green-400 dark:bg-green-700";
-  if (count <= 100) return "bg-green-600 dark:bg-green-500";
-  return "bg-green-800 dark:bg-green-300";
+  const bucket = BUCKETS.find((b) => count <= b.max) ?? BUCKETS[BUCKETS.length - 1];
+  return bucket?.className ?? "bg-muted";
 }
 
 interface DayCell {
@@ -82,20 +111,29 @@ interface WeekColumn {
 /**
  * Build the column-major grid covering the last `TOTAL_DAYS` days, aligned
  * so each column starts on Monday.
+ *
+ * The whole grid is keyed and iterated in **UTC**. The stats backend buckets
+ * reviews by UTC day, so anchoring the cursor to local midnight (and then
+ * keying with `isoDate`, which slices the UTC date) would shift counts onto
+ * the neighbouring cell for any user away from UTC. Using UTC midnights end
+ * to end keeps each cell's key identical to the backend aggregate.
  */
 function buildGrid(counts: Map<string, number>): WeekColumn[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const nowUtc = new Date();
+  const today = utcMidnight(nowUtc.getUTCFullYear(), nowUtc.getUTCMonth(), nowUtc.getUTCDate());
 
-  const start = daysAgo(TOTAL_DAYS - 1);
-  start.setHours(0, 0, 0, 0);
+  const start = utcMidnight(
+    today.getUTCFullYear(),
+    today.getUTCMonth(),
+    today.getUTCDate() - (TOTAL_DAYS - 1),
+  );
 
   // Shift the start back to the previous Monday so the first column begins
-  // on a Monday. `getDay()` returns 0 for Sunday, 1 for Monday, …, 6 for
+  // on a Monday. `getUTCDay()` returns 0 for Sunday, 1 for Monday, …, 6 for
   // Saturday — normalise to Monday-first (Mon=0..Sun=6).
-  const startWeekdayMonFirst = (start.getDay() + 6) % 7;
+  const startWeekdayMonFirst = (start.getUTCDay() + 6) % 7;
   const gridStart = new Date(start);
-  gridStart.setDate(gridStart.getDate() - startWeekdayMonFirst);
+  gridStart.setUTCDate(gridStart.getUTCDate() - startWeekdayMonFirst);
 
   const columns: WeekColumn[] = [];
   const cursor = new Date(gridStart);
@@ -115,7 +153,7 @@ function buildGrid(counts: Map<string, number>): WeekColumn[] {
           count: counts.get(iso) ?? 0,
         });
       }
-      cursor.setDate(cursor.getDate() + 1);
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
     columns.push({ weekStart, days });
   }
@@ -130,14 +168,15 @@ function buildGrid(counts: Map<string, number>): WeekColumn[] {
 function monthLabels(columns: WeekColumn[]): (string | null)[] {
   let lastMonth = -1;
   return columns.map((col) => {
-    const month = col.weekStart.getMonth();
+    // Read months in UTC to stay consistent with the UTC-keyed grid.
+    const month = col.weekStart.getUTCMonth();
     if (month !== lastMonth) {
       lastMonth = month;
       // Pull a representative day inside the column (first non-pad) so the
       // label aligns with the actual month rather than the padded Monday.
       const sample = col.days.find((d) => d.date) ?? col.days[0];
       if (sample?.date) {
-        return MONTH_LABELS[sample.date.getMonth()] ?? null;
+        return MONTH_LABELS[sample.date.getUTCMonth()] ?? null;
       }
       return MONTH_LABELS[month] ?? null;
     }
@@ -196,7 +235,10 @@ export function ReviewsHeatmap() {
             </div>
 
             {/* Day rows + grid */}
+            {/* biome-ignore lint/a11y/useSemanticElements: grille heatmap — aucun élément sémantique adapté (<fieldset> inapproprié pour une grille de cases focusables) */}
             <div
+              role="group"
+              aria-label={`Carte d'activité des révisions sur les 365 derniers jours : ${totalReviews} révision(s) au total. Chaque case est un jour ; parcours les cases au clavier pour entendre la date et le nombre de révisions.`}
               className="grid gap-1"
               style={{
                 gridTemplateColumns: `1.5rem repeat(${grid.length}, 0.75rem)`,
@@ -218,44 +260,64 @@ export function ReviewsHeatmap() {
               {grid.map((col, colIdx) => {
                 const weekKey = isoDate(col.weekStart);
                 return col.days.map((cell, row) => {
-                  const colorClass = cell.isoDay ? colorFor(cell.count) : "bg-transparent";
-                  const titleStr = cell.isoDay
-                    ? `${formatDateLong(cell.isoDay)} : ${cell.count} review${cell.count > 1 ? "s" : ""}`
-                    : undefined;
                   // `cell.isoDay` is unique across the whole grid. For
                   // padding cells we fall back to `<weekStart>-pad-<row>`,
                   // which is also globally unique because weekStart is
                   // unique per column.
                   const key = cell.isoDay ?? `${weekKey}-pad-${row}`;
+                  // Padding slots carry no information — keep them out of the
+                  // accessibility tree and the tab order entirely.
+                  if (!cell.isoDay) {
+                    return (
+                      <div
+                        key={key}
+                        aria-hidden="true"
+                        className="h-3 w-3 rounded-sm bg-transparent"
+                        style={{ gridColumn: colIdx + 2, gridRow: row + 1 }}
+                      />
+                    );
+                  }
+                  const label = `${formatDateLong(cell.isoDay)} : ${cell.count} révision${
+                    cell.count > 1 ? "s" : ""
+                  }`;
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={key}
-                      title={titleStr}
+                      aria-label={label}
                       className={cn(
-                        "h-3 w-3 rounded-sm",
-                        colorClass,
-                        cell.isoDay && "ring-1 ring-inset ring-border/30",
+                        "h-3 w-3 rounded-sm ring-1 ring-inset ring-border/30",
+                        "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        colorFor(cell.count),
                       )}
                       style={{ gridColumn: colIdx + 2, gridRow: row + 1 }}
-                      data-testid={cell.isoDay ? "heatmap-cell" : undefined}
-                      data-iso={cell.isoDay ?? undefined}
-                      data-count={cell.isoDay ? cell.count : undefined}
+                      data-testid="heatmap-cell"
+                      data-iso={cell.isoDay}
+                      data-count={cell.count}
                     />
                   );
                 });
               })}
             </div>
 
-            {/* Legend */}
-            <div className="mt-2 flex items-center justify-end gap-2 text-[10px] text-muted-foreground">
-              <span>Moins</span>
-              <span className="h-3 w-3 rounded-sm bg-muted ring-1 ring-inset ring-border/30" />
-              <span className="h-3 w-3 rounded-sm bg-green-200 dark:bg-green-900" />
-              <span className="h-3 w-3 rounded-sm bg-green-400 dark:bg-green-700" />
-              <span className="h-3 w-3 rounded-sm bg-green-600 dark:bg-green-500" />
-              <span className="h-3 w-3 rounded-sm bg-green-800 dark:bg-green-300" />
-              <span>Plus</span>
-            </div>
+            {/* Legend — each swatch is paired with its text label so the
+                meaning of a colour is also available without seeing it. */}
+            <ul className="mt-2 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+              <li aria-hidden="true">Moins</li>
+              {BUCKETS.map((bucket) => (
+                <li key={bucket.label} className="flex items-center gap-1">
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "h-3 w-3 rounded-sm ring-1 ring-inset ring-border/30",
+                      bucket.className,
+                    )}
+                  />
+                  <span>{bucket.label}</span>
+                </li>
+              ))}
+              <li aria-hidden="true">Plus</li>
+            </ul>
           </div>
         </div>
       </CardContent>

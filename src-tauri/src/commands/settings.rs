@@ -288,6 +288,10 @@ pub fn get_settings(app: AppHandle) -> AppResult<AppSettings> {
             let defaults = AppSettings::default();
             store.set(STORE_KEY, serde_json::to_value(&defaults)?);
             let _ = store.save();
+            // P033: lock the freshly-created file down from the start so a key
+            // pasted via the very next `save_settings` never lands in a
+            // world-readable file even momentarily.
+            crate::sync::harden_store_permissions(&app, STORE_FILE);
             Ok(defaults)
         }
     }
@@ -337,6 +341,17 @@ pub fn save_settings(
             return Err(AppError::Validation(format!("invalid chronotype: {}", ct)));
         }
     }
+    // P043: a Supabase URL, when present, must be an `https://` endpoint with a
+    // real host. Without this guard a typo'd `http://…` would ship the anon
+    // key, the user's email/password (login) and the JWT in cleartext. An
+    // empty string is treated as « cleared » and skips validation; the sync
+    // subsystem stays dormant until both URL and key are filled in.
+    if let Some(raw) = settings.supabase_url.as_deref() {
+        let trimmed = raw.trim();
+        if !trimmed.is_empty() {
+            crate::sync::auth::validate_https_url(trimmed)?;
+        }
+    }
 
     let store = app
         .store(STORE_FILE)
@@ -345,6 +360,10 @@ pub fn save_settings(
     store
         .save()
         .map_err(|e| AppError::Other(format!("save settings store: {}", e)))?;
+    // P033: settings.json holds the Anthropic/OpenAI API keys and the Supabase
+    // anon key in cleartext. Until they move to the OS keychain, restrict the
+    // file to the current user (0600 on Unix) right after every flush.
+    crate::sync::harden_store_permissions(&app, STORE_FILE);
 
     // Rebuild the FSRS scheduler so the new retention target takes effect
     // without the user needing to restart the app.

@@ -42,6 +42,9 @@ CREATE TABLE cards (
 CREATE INDEX idx_cards_due ON cards(next_review) WHERE suspended = 0;
 CREATE INDEX idx_cards_deck ON cards(deck_id);
 CREATE INDEX idx_cards_state ON cards(state) WHERE suspended = 0;
+-- P018: composite covering index for the per-deck due query (deck filter +
+-- next_review range), avoiding a cross-deck scan + temp B-tree each session.
+CREATE INDEX idx_cards_due_deck ON cards(deck_id, next_review) WHERE suspended = 0;
 
 CREATE TABLE reviews (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

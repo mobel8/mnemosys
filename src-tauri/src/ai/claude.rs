@@ -72,15 +72,20 @@ enum ContentBlock {
 /// Errors specific to the Claude transport. Kept separate from
 /// [`AppError`](crate::error::AppError) so call sites can pattern-match on
 /// the cause (e.g. show a "configure your key" CTA on `NoApiKey`).
+//
+// Messages are surfaced verbatim in the (French) UI toasts (they reach the
+// frontend wrapped in `AppError::Other`), so they're written in French. The
+// `NoApiKey` text keeps the literal token "Anthropic" so the frontend's
+// `isApiKeyError` heuristic still routes it to the "configure your key" CTA.
 #[derive(Debug, thiserror::Error)]
 pub enum ClaudeError {
-    #[error("Claude API key not configured. Set ANTHROPIC_API_KEY or configure it in Settings.")]
+    #[error("Clé API Anthropic non configurée. Renseigne ANTHROPIC_API_KEY ou configure-la dans Paramètres.")]
     NoApiKey,
-    #[error("HTTP error: {0}")]
+    #[error("Erreur HTTP : {0}")]
     Http(String),
-    #[error("Claude API returned {status}: {message}")]
+    #[error("L'API Claude a renvoyé le statut {status} : {message}")]
     Api { status: u16, message: String },
-    #[error("Invalid response from Claude: {0}")]
+    #[error("Réponse invalide de Claude : {0}")]
     InvalidResponse(String),
 }
 

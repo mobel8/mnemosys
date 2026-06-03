@@ -212,6 +212,16 @@ export function useCardsInDeck(
   });
 }
 
+/** P017: fetch a single card + its note in one JOIN (PalaceReview per-locus). */
+export function useCardWithNote(cardId: number, opts?: Partial<UseQueryOptions<CardWithNote>>) {
+  return useQuery<CardWithNote>({
+    queryKey: ["card", cardId],
+    queryFn: () => api.cards.getCardWithNote(cardId),
+    enabled: Number.isFinite(cardId) && cardId > 0,
+    ...opts,
+  });
+}
+
 export function useDueCards(
   deckId: number | null,
   limit = 100,

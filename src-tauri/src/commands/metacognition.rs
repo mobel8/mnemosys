@@ -71,15 +71,9 @@ pub fn get_pending_jols(
 
     let mut out = Vec::with_capacity(pending.len());
     for prediction in pending {
-        // `cards::get_with_note` not in repo — fall back to a hand-rolled
-        // join. Two cheap selects keep this readable without bloating the
-        // CardRepo surface.
-        let card = state.db.cards(&conn).get(prediction.card_id)?;
-        let note = state.db.notes(&conn).get(card.note_id)?;
-        out.push(PendingJolDTO {
-            prediction,
-            card: CardWithNote { card, note },
-        });
+        // P016: single JOIN via the repo instead of two selects per prediction.
+        let card = state.db.cards(&conn).get_with_note(prediction.card_id)?;
+        out.push(PendingJolDTO { prediction, card });
     }
     Ok(out)
 }

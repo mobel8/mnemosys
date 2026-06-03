@@ -846,6 +846,8 @@ export const api = {
         limit,
         offset,
       }),
+    // P017: resolve a single card + its note in one JOIN (used by PalaceReview).
+    getCardWithNote: (cardId: number) => invoke<CardWithNote>("get_card_with_note", { cardId }),
     searchNotes: (query: string, limit: number) => invoke<Note[]>("search_notes", { query, limit }),
     createNote: (data: {
       deckId: number;

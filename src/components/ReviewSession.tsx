@@ -138,6 +138,13 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   // `handsFreeActive` toggles the alternative UI for the current session only.
   const handsFreeEnabled = settings.data?.hands_free_enabled ?? false;
   const [handsFreeActive, setHandsFreeActive] = useState(false);
+  // Vague 23 — number of cards graded inside the *current* hands-free run.
+  // HandsFreeReview owns its own cursor over `cards.slice(currentIndex)`, so
+  // the parent's `currentIndex` stays frozen while it's mounted. When the
+  // learner toggles back to the classic UI we must skip the parent past the
+  // cards already graded, or they get replayed (and re-rated → duplicate
+  // reviews). We count submits here and consume the tally on exit.
+  const handsFreeGradedRef = useRef(0);
   // Narrow the persisted `tts_voice` (a free-form `string | null`) to the
   // `TTSVoice` union HandsFreeReview expects, falling back to `undefined` (the
   // component then uses its own default) for unset or unknown values.
@@ -391,6 +398,10 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
               ...log,
               { rating, review_time_ms: reviewTimeMs, correct: rating >= 3 },
             ]);
+            // Tally this grade so a later `onExit` can skip the parent cursor
+            // past the cards already reviewed hands-free (otherwise the
+            // classic UI replays them → duplicate reviews on re-grade).
+            handsFreeGradedRef.current += 1;
             advanceInStore();
           },
           onError: (err) => {
@@ -405,6 +416,33 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
     },
     [advanceInStore, pushToast, submitReview],
   );
+
+  // Vague 23 — leave hands-free and resume the classic flip/rate UI. Skip the
+  // parent cursor past every card graded during this run, reset the per-card
+  // buffers for the card we land on, and re-arm the question phase. If the run
+  // happened to exhaust the queue, fall through to the summary instead.
+  const handleHandsFreeExit = useCallback(() => {
+    const graded = handsFreeGradedRef.current;
+    handsFreeGradedRef.current = 0;
+    setHandsFreeActive(false);
+    if (graded <= 0) return;
+    // Reset the per-card buffers — the card we resume on must start fresh.
+    setConfidence(null);
+    setConfidencePost(null);
+    sketchDataRef.current = null;
+    setTypedAnswer(null);
+    setSelfExplanationDone(false);
+    setCurrentIndex((i) => {
+      const next = i + graded;
+      if (next >= cards.length) {
+        setPhase("done");
+      } else {
+        setPhase("question");
+        cardShownAtRef.current = Date.now();
+      }
+      return next;
+    });
+  }, [cards.length]);
 
   const handleQuit = useCallback(() => {
     // `deckId < 0` is the interleaved-session sentinel (see InterleavedSession).
@@ -471,13 +509,21 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   // ---- Hotkeys -----------------------------------------------------------
   // react-hotkeys-hook v5 — `enableOnFormTags` defaults to false (good: we
   // don't want Space to flip while the user types in a search field).
+  //
+  // While any session modal is open (shortcut help, mood check-in, cyclic
+  // sighing primer) the underlying flip/rate/suspend/escape hotkeys must NOT
+  // fire — otherwise pressing Space/1-4/s/Esc to interact with (or dismiss)
+  // the modal silently mutates the card behind it. We gate every session
+  // hotkey on `!anyModalOpen`. (`shift+slash` is excluded so `?` can still
+  // toggle the help dialog closed.)
+  const anyModalOpen = helpOpen || moodCheckinOpen || cyclicSighingOpen;
   useHotkeys(
     "space",
     (e) => {
       e.preventDefault();
       handleFlip();
     },
-    { enabled: phase === "question" },
+    { enabled: phase === "question" && !anyModalOpen },
   );
 
   useHotkeys(
@@ -486,7 +532,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       e.preventDefault();
       handleRate(1);
     },
-    { enabled: phase === "answer" },
+    { enabled: phase === "answer" && !anyModalOpen },
   );
   useHotkeys(
     "2",
@@ -494,7 +540,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       e.preventDefault();
       handleRate(2);
     },
-    { enabled: phase === "answer" },
+    { enabled: phase === "answer" && !anyModalOpen },
   );
   useHotkeys(
     "3",
@@ -502,7 +548,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       e.preventDefault();
       handleRate(3);
     },
-    { enabled: phase === "answer" },
+    { enabled: phase === "answer" && !anyModalOpen },
   );
   useHotkeys(
     "4",
@@ -510,10 +556,12 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       e.preventDefault();
       handleRate(4);
     },
-    { enabled: phase === "answer" },
+    { enabled: phase === "answer" && !anyModalOpen },
   );
-  useHotkeys("escape", () => handleQuit(), { enabled: phase !== "done" });
-  useHotkeys("s", () => handleSuspend(), { enabled: phase !== "done" && phase !== "submitting" });
+  useHotkeys("escape", () => handleQuit(), { enabled: phase !== "done" && !anyModalOpen });
+  useHotkeys("s", () => handleSuspend(), {
+    enabled: phase !== "done" && phase !== "submitting" && !anyModalOpen,
+  });
   useHotkeys("shift+slash", () => setHelpOpen((v) => !v));
 
   const totalForBar = cards.length;
@@ -614,8 +662,9 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
           language="fr"
           voice={ttsVoice}
           onSubmit={handleHandsFreeSubmit}
-          onExit={() => setHandsFreeActive(false)}
+          onExit={handleHandsFreeExit}
           onDone={() => {
+            handsFreeGradedRef.current = 0;
             setHandsFreeActive(false);
             setPhase("done");
           }}
@@ -643,7 +692,10 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => setHandsFreeActive(true)}
+            onClick={() => {
+              handsFreeGradedRef.current = 0;
+              setHandsFreeActive(true);
+            }}
           >
             <Headphones className="mr-1 h-4 w-4" aria-hidden />
             Mode mains-libres
@@ -754,7 +806,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
           </DialogHeader>
           <ul className="space-y-2 text-sm">
             <Shortcut keys="Espace" label="Afficher la réponse" />
-            <Shortcut keys="1 / 2 / 3 / 4" label="Noter Again / Hard / Good / Easy" />
+            <Shortcut keys="1 / 2 / 3 / 4" label="Noter Encore / Difficile / Bien / Facile" />
             <Shortcut keys="S" label="Suspendre la carte" />
             <Shortcut keys="?" label="Afficher cette aide" />
             <Shortcut keys="Échap" label="Quitter la session" />

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Mnemosys",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "identifier": "com.mnemosys.app",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data:; font-src 'self' data:; media-src 'self' asset: http://asset.localhost blob:; connect-src 'self' ipc: http://ipc.localhost https://api.anthropic.com https://api.openai.com https://*.supabase.co http://localhost:11434",
       "assetProtocol": {
         "enable": true,
         "scope": ["$APPDATA/**", "$APPLOCALDATA/**", "$APPCACHE/**"]
@@ -48,7 +48,7 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": ["https://releases.mnemosys.app/{{target}}/{{current_version}}"],
+      "endpoints": [],
       "pubkey": "",
       "dangerousInsecureTransportProtocol": false
     }

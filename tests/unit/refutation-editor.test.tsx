@@ -24,6 +24,7 @@ vi.mock("@/components/ui/use-toast", () => ({
 }));
 
 vi.mock("@/lib/queries", () => ({
+  useUpdateNote: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useCreateNote: () => ({
     mutate: (vars: unknown, opts?: { onSuccess?: () => void }) => {
       mutateMock(vars);

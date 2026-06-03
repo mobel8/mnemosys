@@ -1,6 +1,6 @@
 [package]
 name = "mnemosys"
-version = "0.9.0"
+version = "0.10.0"
 description = "Next-gen spaced repetition (SRS) desktop app."
 authors = ["Mnemosys Team"]
 edition = "2021"
@@ -27,10 +27,22 @@ tauri-plugin-dialog = "2"
 # entirely in favour of sqlx (requires rewriting A2 repositories).
 tauri-plugin-store = "2"
 tauri-plugin-notification = "2"
-# Auto-updater (Session 4). Inert until a real `endpoints` URL + signing
-# pubkey are provided via `tauri.conf.json::plugins.updater`. See
-# `docs/SESSION_4_RELEASE.md` for the key-generation + hosting workflow.
-tauri-plugin-updater = "2"
+# Auto-updater (Session 4). SECURITY (P036): the plugin must NOT be compiled
+# in nor registered until a real minisign signing keypair exists and its
+# public key is committed to `tauri.conf.json::plugins.updater.pubkey`.
+# Shipping it with an empty `pubkey` + a live `endpoints` URL is a
+# supply-chain RCE vector (any party able to answer the update manifest can
+# push an unsigned binary). It is therefore an OPTIONAL dependency gated
+# behind the `updater` feature, which is OFF by default. To arm releases:
+#   1. `cargo tauri signer generate` → commit the public key into
+#      `tauri.conf.json::plugins.updater.pubkey`.
+#   2. add `"updater:default"` to `src-tauri/capabilities/default.json`.
+#   3. register the plugin behind `#[cfg(feature = "updater")]` in
+#      `src-tauri/src/lib.rs` (see MISROUTÉ note).
+#   4. build with `--features updater` and sign in CI with
+#      `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+# See `docs/SESSION_4_RELEASE.md` for the full key-generation + hosting flow.
+tauri-plugin-updater = { version = "2", optional = true }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -84,6 +96,12 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+
+# SECURITY (P036): opt-in auto-updater. OFF by default so no release can ship
+# the updater with an empty signing `pubkey`. Enable ONLY once a real minisign
+# pubkey is committed in `tauri.conf.json` and the plugin is registered behind
+# `#[cfg(feature = "updater")]` in `src-tauri/src/lib.rs`.
+updater = ["dep:tauri-plugin-updater"]
 
 [profile.release]
 panic = "abort"

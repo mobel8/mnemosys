@@ -39,8 +39,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 import { FREQUENCY_BAND_OPTIONS } from "@/lib/languages";
-import { useCreateNote } from "@/lib/queries";
-import type { FrequencyBand, NoteTemplate } from "@/lib/tauri";
+import { useCreateNote, useUpdateNote } from "@/lib/queries";
+import type { FrequencyBand, Note, NoteTemplate } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
 const MAX_TAGS = 10;
@@ -48,37 +48,99 @@ const TAG_SEPARATORS = [",", "Enter"];
 
 type TemplateTab = NoteTemplate;
 
+/** Read a string field from an existing note's `fields` blob, defaulting to
+ *  the empty string when absent or not a string. Used to pre-fill edit mode. */
+function fieldStr(note: Note | undefined, key: string): string {
+  if (!note) return "";
+  const value = (note.fields as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : "";
+}
+
+/** Read a string[] field (e.g. worked-example `steps`) from a note, keeping at
+ *  least one row so the dynamic list never collapses. */
+function fieldStrArray(note: Note | undefined, key: string): string[] {
+  if (!note) return [""];
+  const value = (note.fields as Record<string, unknown>)[key];
+  if (Array.isArray(value)) {
+    const strings = value.filter((v): v is string => typeof v === "string");
+    if (strings.length > 0) return strings;
+  }
+  return [""];
+}
+
+/**
+ * The full eight-template tab strip. Extracted so the occlusion branch (which
+ * renders the dedicated `<OcclusionEditor>` instead of a form) and the regular
+ * form branch share the *exact same* tab list — switching to "Image-occlusion"
+ * must never make the other tabs vanish (P068).
+ */
+function TemplateTabsList() {
+  return (
+    <TabsList>
+      <TabsTrigger value="basic">Basic</TabsTrigger>
+      <TabsTrigger value="basic_reverse">Basic + Reverse</TabsTrigger>
+      <TabsTrigger value="cloze">Cloze</TabsTrigger>
+      <TabsTrigger value="occlusion">Image-occlusion</TabsTrigger>
+      <TabsTrigger value="bidirectional" className="gap-1.5">
+        <Languages className="h-3.5 w-3.5" />
+        Phrase
+      </TabsTrigger>
+      <TabsTrigger value="illness_script" className="gap-1.5">
+        <Stethoscope className="h-3.5 w-3.5" />
+        Médecine
+      </TabsTrigger>
+      <TabsTrigger value="refutation" className="gap-1.5">
+        <FlaskConical className="h-3.5 w-3.5" />
+        Sciences
+      </TabsTrigger>
+      <TabsTrigger value="worked_example" className="gap-1.5">
+        <Sigma className="h-3.5 w-3.5" />
+        Maths
+      </TabsTrigger>
+    </TabsList>
+  );
+}
+
 interface NoteEditorProps {
   deckId: number;
   onAdded?: () => void;
+  /**
+   * P009 — when provided, the editor runs in **edit mode**: fields are
+   * pre-filled from this note, the template is locked (the backend validates
+   * `update_fields` against the existing template), and submit routes through
+   * `useUpdateNote`. `onUpdated` fires on a successful patch.
+   */
+  note?: Note;
+  onUpdated?: () => void;
 }
 
-export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
-  const [template, setTemplate] = useState<TemplateTab>("basic");
-  const [front, setFront] = useState("");
-  const [back, setBack] = useState("");
-  const [clozeText, setClozeText] = useState("");
+export function NoteEditor({ deckId, onAdded, note, onUpdated }: NoteEditorProps) {
+  const isEdit = note != null;
+  const [template, setTemplate] = useState<TemplateTab>(note?.template ?? "basic");
+  const [front, setFront] = useState(() => fieldStr(note, "front"));
+  const [back, setBack] = useState(() => fieldStr(note, "back"));
+  const [clozeText, setClozeText] = useState(() => fieldStr(note, "text"));
   // Vague 10 — sentence ("Phrase") template state.
-  const [source, setSource] = useState("");
-  const [target, setTarget] = useState("");
-  const [hint, setHint] = useState("");
+  const [source, setSource] = useState(() => fieldStr(note, "source"));
+  const [target, setTarget] = useState(() => fieldStr(note, "target"));
+  const [hint, setHint] = useState(() => fieldStr(note, "hint"));
   const [frequencyBand, setFrequencyBand] = useState<FrequencyBand | null>(null);
   // Vague 14 — Médecine ("illness_script") template state.
-  const [condition, setCondition] = useState("");
-  const [epidemiology, setEpidemiology] = useState("");
-  const [pathophysiology, setPathophysiology] = useState("");
-  const [clinical, setClinical] = useState("");
-  const [management, setManagement] = useState("");
+  const [condition, setCondition] = useState(() => fieldStr(note, "condition"));
+  const [epidemiology, setEpidemiology] = useState(() => fieldStr(note, "epidemiology"));
+  const [pathophysiology, setPathophysiology] = useState(() => fieldStr(note, "pathophysiology"));
+  const [clinical, setClinical] = useState(() => fieldStr(note, "clinical"));
+  const [management, setManagement] = useState(() => fieldStr(note, "management"));
   // Vague 14 — Sciences ("refutation") template state.
-  const [misconception, setMisconception] = useState("");
-  const [correct, setCorrect] = useState("");
-  const [explanation, setExplanation] = useState("");
+  const [misconception, setMisconception] = useState(() => fieldStr(note, "misconception"));
+  const [correct, setCorrect] = useState(() => fieldStr(note, "correct"));
+  const [explanation, setExplanation] = useState(() => fieldStr(note, "explanation"));
   // Vague 15 — Maths ("worked_example") template state. `steps` always holds
   // at least one (possibly empty) row so the dynamic list renders one input.
-  const [problem, setProblem] = useState("");
-  const [steps, setSteps] = useState<string[]>([""]);
-  const [answer, setAnswer] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
+  const [problem, setProblem] = useState(() => fieldStr(note, "problem"));
+  const [steps, setSteps] = useState<string[]>(() => fieldStrArray(note, "steps"));
+  const [answer, setAnswer] = useState(() => fieldStr(note, "answer"));
+  const [tags, setTags] = useState<string[]>(() => note?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
 
   const frontRef = useRef<HTMLTextAreaElement | null>(null);
@@ -89,6 +151,8 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
   const problemRef = useRef<HTMLTextAreaElement | null>(null);
 
   const createNote = useCreateNote();
+  const updateNote = useUpdateNote();
+  const isPending = isEdit ? updateNote.isPending : createNote.isPending;
 
   function resetFields(keepTags = false) {
     setFront("");
@@ -126,6 +190,10 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
   }
 
   function handleTemplateChange(next: string) {
+    // A note's template is immutable once created (the backend validates
+    // `update_fields` against the existing template), so we ignore tab
+    // switches in edit mode.
+    if (isEdit) return;
     const value = next as TemplateTab;
     setTemplate(value);
     resetFields(true);
@@ -286,6 +354,34 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
   function submit(continueAfter: boolean) {
     const validation = validate();
     if (!validation.ok) return;
+
+    // --- P009 — edit mode: patch the existing note's fields in place. -------
+    if (isEdit && note) {
+      updateNote.mutate(
+        { id: note.id, fields: validation.fields },
+        {
+          onSuccess: () => {
+            toast({
+              title: "Note mise à jour",
+              description:
+                note.template === "cloze"
+                  ? `${uniqueClozeNumbers(clozeText).length} cloze(s) — les cartes existantes sont conservées.`
+                  : "Le contenu de la note a été enregistré.",
+            });
+            onUpdated?.();
+          },
+          onError: (err) => {
+            toast({
+              title: "Mise à jour impossible",
+              description: err.message,
+              variant: "destructive",
+            });
+          },
+        },
+      );
+      return;
+    }
+
     // If the user typed a tag but didn't press Enter, capture it on submit.
     if (tagInput.trim().length > 0) commitTagInput();
     createNote.mutate(
@@ -346,19 +442,33 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
 
   const isCloze = template === "cloze";
   const isOcclusion = template === "occlusion";
+  const submitLabel = isEdit
+    ? isPending
+      ? "Enregistrement…"
+      : "Enregistrer"
+    : isPending
+      ? "Ajout…"
+      : "Ajouter";
 
   // The occlusion editor owns its own image picker + masks UI + submit
   // button, so we render it standalone (no <form>, no submit/tag rows below).
   if (isOcclusion) {
+    // Editing an occlusion note in place would mean re-running the mask editor
+    // AND reconciling the per-mask cards when the mask count changes (P049,
+    // backend territory). Out of scope for this in-place field editor — surface
+    // a clear notice instead of a broken half-flow.
+    if (isEdit) {
+      return (
+        <div className="rounded-md border border-dashed bg-muted/30 p-6 text-sm text-muted-foreground">
+          L'édition des cartes image-occlusion (déplacement des masques) n'est pas encore disponible
+          ici. Supprime la note puis recrée-la pour ajuster ses masques.
+        </div>
+      );
+    }
     return (
       <div className="space-y-6">
         <Tabs value={template} onValueChange={handleTemplateChange}>
-          <TabsList>
-            <TabsTrigger value="basic">Basic</TabsTrigger>
-            <TabsTrigger value="basic_reverse">Basic + Reverse</TabsTrigger>
-            <TabsTrigger value="cloze">Cloze</TabsTrigger>
-            <TabsTrigger value="occlusion">Image-occlusion</TabsTrigger>
-          </TabsList>
+          <TemplateTabsList />
           <TabsContent value="occlusion" className="space-y-4">
             <OcclusionEditor deckId={deckId} onSaved={() => onAdded?.()} />
           </TabsContent>
@@ -370,28 +480,9 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
   return (
     <form onSubmit={handleFormSubmit} className="space-y-6">
       <Tabs value={template} onValueChange={handleTemplateChange}>
-        <TabsList>
-          <TabsTrigger value="basic">Basic</TabsTrigger>
-          <TabsTrigger value="basic_reverse">Basic + Reverse</TabsTrigger>
-          <TabsTrigger value="cloze">Cloze</TabsTrigger>
-          <TabsTrigger value="occlusion">Image-occlusion</TabsTrigger>
-          <TabsTrigger value="bidirectional" className="gap-1.5">
-            <Languages className="h-3.5 w-3.5" />
-            Phrase
-          </TabsTrigger>
-          <TabsTrigger value="illness_script" className="gap-1.5">
-            <Stethoscope className="h-3.5 w-3.5" />
-            Médecine
-          </TabsTrigger>
-          <TabsTrigger value="refutation" className="gap-1.5">
-            <FlaskConical className="h-3.5 w-3.5" />
-            Sciences
-          </TabsTrigger>
-          <TabsTrigger value="worked_example" className="gap-1.5">
-            <Sigma className="h-3.5 w-3.5" />
-            Maths
-          </TabsTrigger>
-        </TabsList>
+        {/* In edit mode the template is fixed, so we hide the picker and just
+            render the matching template's fields. */}
+        {!isEdit && <TemplateTabsList />}
 
         <TabsContent value="basic" className="space-y-4">
           <div className="space-y-2">
@@ -816,56 +907,71 @@ export function NoteEditor({ deckId, onAdded }: NoteEditorProps) {
         </TabsContent>
       </Tabs>
 
-      <div className="space-y-2">
-        <Label htmlFor="tags">Tags</Label>
-        <div className="flex flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 shadow-sm focus-within:ring-1 focus-within:ring-ring">
-          {tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="gap-1 font-normal">
-              {tag}
-              <button
-                type="button"
-                aria-label={`Retirer ${tag}`}
-                onClick={() => removeTag(tag)}
-                className="ml-0.5 rounded-full text-muted-foreground hover:text-foreground"
-              >
-                ×
-              </button>
-            </Badge>
-          ))}
-          <input
-            id="tags"
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={handleTagKeyDown}
-            onBlur={() => commitTagInput()}
-            placeholder={tags.length === 0 ? "Ajoute des tags (Entrée ou virgule)" : ""}
-            className={cn(
-              "flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground",
-              "min-w-[120px]",
-            )}
-            disabled={tags.length >= MAX_TAGS}
-          />
+      {isEdit ? (
+        // Edit mode patches `fields` only — the backend `update_note` command
+        // doesn't touch tags, so we show them read-only rather than offering a
+        // control that would silently discard changes.
+        tags.length > 0 && (
+          <div className="space-y-2">
+            <Label>Tags</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              {tags.map((tag) => (
+                <Badge key={tag} variant="secondary" className="font-normal">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )
+      ) : (
+        <div className="space-y-2">
+          <Label htmlFor="tags">Tags</Label>
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 shadow-sm focus-within:ring-1 focus-within:ring-ring">
+            {tags.map((tag) => (
+              <Badge key={tag} variant="secondary" className="gap-1 font-normal">
+                {tag}
+                <button
+                  type="button"
+                  aria-label={`Retirer ${tag}`}
+                  onClick={() => removeTag(tag)}
+                  className="ml-0.5 rounded-full text-muted-foreground hover:text-foreground"
+                >
+                  ×
+                </button>
+              </Badge>
+            ))}
+            <input
+              id="tags"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={handleTagKeyDown}
+              onBlur={() => commitTagInput()}
+              placeholder={tags.length === 0 ? "Ajoute des tags (Entrée ou virgule)" : ""}
+              className={cn(
+                "flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground",
+                "min-w-[120px]",
+              )}
+              disabled={tags.length >= MAX_TAGS}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {tags.length}/{MAX_TAGS} tags. Entrée ou virgule pour valider.
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {tags.length}/{MAX_TAGS} tags. Entrée ou virgule pour valider.
-        </p>
-      </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" disabled={createNote.isPending}>
-          {createNote.isPending ? "Ajout…" : "Ajouter"}
+        <Button type="submit" disabled={isPending}>
+          {submitLabel}
           <kbd className="ml-2 hidden rounded bg-primary-foreground/10 px-1.5 py-0.5 text-[10px] sm:inline-block">
             Ctrl+Enter
           </kbd>
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={createNote.isPending}
-          onClick={() => submit(true)}
-        >
-          Ajouter et continuer
-        </Button>
+        {!isEdit && (
+          <Button type="button" variant="outline" disabled={isPending} onClick={() => submit(true)}>
+            Ajouter et continuer
+          </Button>
+        )}
         {isCloze && uniqueClozeNumbers(clozeText).length > 0 && (
           <span className="text-xs text-muted-foreground">
             {uniqueClozeNumbers(clozeText).length} cloze(s) détecté(s)

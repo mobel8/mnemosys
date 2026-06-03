@@ -1,13 +1,36 @@
 /**
  * Offline OCR via tesseract.js (WASM). All engine assets (worker, core wasm,
- * English traineddata) are bundled under `public/tesseract/` so recognition
- * runs fully offline inside the Tauri webview — no CDN, no network.
+ * traineddata) are bundled under `public/tesseract/` so recognition runs fully
+ * offline inside the Tauri webview — no CDN, no network.
+ *
+ * Language data: the OCR language is configurable (see `OcrLang` / `runOcr`).
+ * `eng.traineddata.gz` ships by default; drop `fra.traineddata.gz` (and any
+ * other `<lang>.traineddata.gz`) into `public/tesseract/` to enable that
+ * language. A worker is cached per language so switching languages is cheap on
+ * repeat use, and a failed language load surfaces as a thrown error the caller
+ * can toast rather than a silent freeze.
  *
  * Used by the « Capture → cartes » page to turn a screenshot / photo of notes
  * into flashcards.
  */
 
 import { createWorker, type Worker } from "tesseract.js";
+
+/**
+ * Recognised OCR languages. `fra` (French) is the sensible default for this
+ * FR-first app once `fra.traineddata.gz` is bundled; `eng` always ships.
+ * Tesseract language codes are ISO 639-2/T (three letters).
+ */
+export type OcrLang = "fra" | "eng";
+
+/** Default OCR language for the app (French-first UI). */
+export const DEFAULT_OCR_LANG: OcrLang = "fra";
+
+/** Selectable OCR languages with their FR display labels. */
+export const OCR_LANGUAGES: readonly { value: OcrLang; label: string }[] = [
+  { value: "fra", label: "Français" },
+  { value: "eng", label: "Anglais" },
+] as const;
 
 export interface OcrWord {
   text: string;
@@ -23,6 +46,12 @@ export interface OcrResult {
   lines: string[];
   /** Word-level boxes (for occlusion-mask suggestions). */
   words: OcrWord[];
+  /**
+   * Language actually used for recognition. Usually equals the requested
+   * `lang`, but falls back to `"eng"` when the requested traineddata could not
+   * be loaded (e.g. `fra.traineddata.gz` not bundled), so the caller can warn.
+   */
+  lang: OcrLang;
 }
 
 // Minimal shape of the (optionally-returned) block tree, typed locally so we
@@ -42,34 +71,59 @@ interface TessBlock {
   paragraphs?: TessParagraph[];
 }
 
-let workerPromise: Promise<Worker> | null = null;
+/** One cached worker per language, keyed by `OcrLang`. */
+const workerPromises = new Map<OcrLang, Promise<Worker>>();
 let progressCb: ((p: number) => void) | null = null;
 
-async function getWorker(): Promise<Worker> {
-  if (!workerPromise) {
-    workerPromise = createWorker("eng", 1, {
+async function getWorker(lang: OcrLang): Promise<Worker> {
+  let promise = workerPromises.get(lang);
+  if (!promise) {
+    promise = createWorker(lang, 1, {
       workerPath: "/tesseract/worker.min.js",
       corePath: "/tesseract",
       langPath: "/tesseract",
       logger: (m: { status: string; progress: number }) => {
         if (m.status === "recognizing text") progressCb?.(m.progress);
       },
+    }).catch((err) => {
+      // Don't cache a failed init (e.g. missing `<lang>.traineddata.gz`); a
+      // later retry — or a different language — must be able to start fresh.
+      workerPromises.delete(lang);
+      throw err;
     });
+    workerPromises.set(lang, promise);
   }
-  return workerPromise;
+  return promise;
 }
 
 /**
  * Recognise text in an image (data URL, Blob, File or HTMLImageElement source).
- * `onProgress` receives a 0..1 fraction during the recognition pass.
+ *
+ * @param lang OCR language code; defaults to {@link DEFAULT_OCR_LANG} (French).
+ *   The matching `<lang>.traineddata.gz` must be bundled under
+ *   `public/tesseract/`. When it is missing (e.g. French data not yet shipped),
+ *   recognition transparently falls back to English so OCR never hard-fails;
+ *   the effective language is reported back in `OcrResult.lang`.
+ * @param onProgress receives a 0..1 fraction during the recognition pass.
  */
 export async function runOcr(
   image: string | File | Blob,
   onProgress?: (fraction: number) => void,
+  lang: OcrLang = DEFAULT_OCR_LANG,
 ): Promise<OcrResult> {
   progressCb = onProgress ?? null;
   try {
-    const worker = await getWorker();
+    let effectiveLang = lang;
+    let worker: Worker;
+    try {
+      worker = await getWorker(lang);
+    } catch (err) {
+      // Requested language data unavailable. Fall back to English (which always
+      // ships) rather than failing the whole OCR pass.
+      if (lang === "eng") throw err;
+      effectiveLang = "eng";
+      worker = await getWorker("eng");
+    }
     const { data } = await worker.recognize(image, {}, { blocks: true });
 
     const words: OcrWord[] = [];
@@ -91,17 +145,24 @@ export async function runOcr(
       .map((l) => l.trim())
       .filter(Boolean);
 
-    return { text: data.text, lines, words };
+    return { text: data.text, lines, words, lang: effectiveLang };
   } finally {
     progressCb = null;
   }
 }
 
-/** Free the worker (and its WASM memory) when the capture page unmounts. */
+/** Free every cached worker (and its WASM memory) when the page unmounts. */
 export async function terminateOcr(): Promise<void> {
-  if (workerPromise) {
-    const worker = await workerPromise;
-    await worker.terminate();
-    workerPromise = null;
-  }
+  const pending = Array.from(workerPromises.values());
+  workerPromises.clear();
+  await Promise.all(
+    pending.map(async (promise) => {
+      try {
+        const worker = await promise;
+        await worker.terminate();
+      } catch {
+        // A worker that never finished initialising has nothing to free.
+      }
+    }),
+  );
 }

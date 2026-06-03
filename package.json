@@ -1,7 +1,7 @@
 {
   "name": "mnemosys",
   "private": true,
-  "version": "0.9.0",
+  "version": "0.10.0",
   "type": "module",
   "packageManager": "pnpm@11.3.0",
   "description": "Next-gen spaced repetition (SRS) desktop app powered by Tauri 2 + React 19 + FSRS-rs",
@@ -68,6 +68,7 @@
     "@tailwindcss/vite": "^4.3.0",
     "@tauri-apps/cli": "^2.11.0",
     "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/fra": "^1.0.0",
     "@testing-library/jest-dom": "^6.9.0",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",

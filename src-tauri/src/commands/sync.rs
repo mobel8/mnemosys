@@ -30,6 +30,12 @@ const SESSION_KEY: &str = "session";
 const SETTINGS_FILE: &str = "settings.json";
 const SETTINGS_KEY: &str = "app_settings";
 
+/// Clock-skew margin (seconds) applied when deciding whether a session is
+/// expired. We treat a token that dies within the next minute as already
+/// expired so a refresh fires *before* an in-flight request can 401, rather
+/// than racing the deadline.
+const EXPIRY_SKEW_SECS: i64 = 60;
+
 /// Read the persisted `AppSettings` blob; falls back to defaults when the
 /// store has never been written. Centralised here so both the command
 /// handlers and the helpers below stay in sync with `settings.rs`.
@@ -63,6 +69,10 @@ fn save_session(app: &AppHandle, session: &SyncSession) -> AppResult<()> {
     store
         .save()
         .map_err(|e| AppError::Other(format!("save session store: {}", e)))?;
+    // P033: sync_session.json holds the Supabase access + refresh JWTs in
+    // cleartext. Restrict it to the current user (0600 on Unix) after each
+    // flush until session storage moves to the OS keychain.
+    crate::sync::harden_store_permissions(app, SESSION_FILE);
     Ok(())
 }
 
@@ -82,6 +92,45 @@ fn supabase_config(settings: &AppSettings) -> AppResult<SupabaseConfig> {
         settings.supabase_url.as_deref(),
         settings.supabase_anon_key.as_deref(),
     )
+}
+
+/// `true` when `session` is expired (or about to be, within [`EXPIRY_SKEW_SECS`]).
+fn session_expired(session: &SyncSession, now: i64) -> bool {
+    session.expires_at <= now + EXPIRY_SKEW_SECS
+}
+
+/// Return a usable session, transparently refreshing the access token when the
+/// current one has expired (P042).
+///
+/// Supabase access tokens live ~1 h; the refresh token is long-lived. Before
+/// this helper existed, `refresh` was implemented but never called, so every
+/// sync past the first hour failed with « please log in again » even though a
+/// valid refresh token sat in `sync_session.json`. Now:
+///   * a still-valid session is returned untouched;
+///   * an expired session with a refresh token triggers `auth::refresh`, whose
+///     fresh bundle is persisted via `save_session` and returned;
+///   * only a failed refresh (or a missing refresh token) surfaces the
+///     actionable « log in again » error.
+async fn ensure_fresh_session(
+    app: &AppHandle,
+    config: &SupabaseConfig,
+    session: SyncSession,
+) -> AppResult<SyncSession> {
+    if !session_expired(&session, Utc::now().timestamp()) {
+        return Ok(session);
+    }
+    if session.refresh_token.trim().is_empty() {
+        return Err(AppError::Validation(
+            "Session de synchronisation expirée. Reconnecte-toi.".into(),
+        ));
+    }
+    let refreshed = auth::refresh(config, &session.refresh_token)
+        .await
+        .map_err(|_| {
+            AppError::Validation("Session de synchronisation expirée. Reconnecte-toi.".into())
+        })?;
+    save_session(app, &refreshed)?;
+    Ok(refreshed)
 }
 
 /// Payload accepted by `sync_login`. Kept as a struct so the frontend can
@@ -124,7 +173,7 @@ pub async fn sync_logout(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn sync_status(app: AppHandle, state: State<'_, AppState>) -> AppResult<SyncStatus> {
+pub async fn sync_status(app: AppHandle, state: State<'_, AppState>) -> AppResult<SyncStatus> {
     let settings = load_settings(&app)?;
     let configured = settings
         .supabase_url
@@ -135,12 +184,20 @@ pub fn sync_status(app: AppHandle, state: State<'_, AppState>) -> AppResult<Sync
             .as_deref()
             .is_some_and(|k| !k.trim().is_empty());
 
-    let session = load_session(&app).ok().flatten();
-    let now = Utc::now().timestamp();
-    let logged_in = match &session {
-        Some(s) => s.expires_at > now,
-        None => false,
+    // Resolve the effective session. When the access token has expired we try a
+    // silent refresh (P042) so the UI keeps reporting « logged in » across the
+    // ~1 h token lifetime instead of bouncing the user back to the login form.
+    // The refresh is best-effort here: if it fails (or sync isn't configured)
+    // we report `logged_in: false` without erroring the status query.
+    let session: Option<SyncSession> = match load_session(&app).ok().flatten() {
+        Some(current) if !session_expired(&current, Utc::now().timestamp()) => Some(current),
+        Some(current) => match supabase_config(&settings) {
+            Ok(config) => ensure_fresh_session(&app, &config, current).await.ok(),
+            Err(_) => None,
+        },
+        None => None,
     };
+    let logged_in = session.is_some();
 
     let last_sync_at: Option<i64> = {
         let conn = state.db.lock();
@@ -165,13 +222,51 @@ pub async fn sync_now(app: AppHandle, state: State<'_, AppState>) -> AppResult<S
     let settings = load_settings(&app)?;
     let config = supabase_config(&settings)?;
     let session = load_session(&app)?.ok_or_else(|| {
-        AppError::Validation("Sync requires an active session. Please log in first.".into())
+        AppError::Validation(
+            "La synchronisation requiert une session active. Connecte-toi d'abord.".into(),
+        )
     })?;
-    if session.expires_at <= Utc::now().timestamp() {
-        return Err(AppError::Validation(
-            "Sync session expired. Please log in again.".into(),
-        ));
-    }
+    // Transparently refresh an expired access token before running the cycle
+    // (P042). Only a failed refresh surfaces « please log in again ».
+    let session = ensure_fresh_session(&app, &config, session).await?;
 
     cycle::run_cycle(&state.db, &config, &session).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn session(expires_at: i64, refresh: &str) -> SyncSession {
+        SyncSession {
+            user_id: "u".into(),
+            email: "a@b.c".into(),
+            access_token: "access".into(),
+            refresh_token: refresh.into(),
+            expires_at,
+        }
+    }
+
+    #[test]
+    fn session_with_ample_lifetime_is_not_expired() {
+        let now = 1_000_000;
+        let s = session(now + 3600, "r");
+        assert!(!session_expired(&s, now));
+    }
+
+    #[test]
+    fn session_within_skew_window_counts_as_expired() {
+        // P042: a token dying inside the skew margin must be treated as expired
+        // so the refresh fires before an in-flight request can 401.
+        let now = 1_000_000;
+        let s = session(now + EXPIRY_SKEW_SECS - 1, "r");
+        assert!(session_expired(&s, now));
+    }
+
+    #[test]
+    fn past_deadline_is_expired() {
+        let now = 1_000_000;
+        assert!(session_expired(&session(now - 1, "r"), now));
+        assert!(session_expired(&session(now, "r"), now));
+    }
 }

@@ -58,8 +58,12 @@ fn resolve_api_key(app: &AppHandle) -> AppResult<String> {
         }
     }
 
+    // FR for the toast. The literal "API key" + "Anthropic" tokens are kept so
+    // the frontend's missing-key heuristics (`/api key/i`, `/anthropic/i`) still
+    // route this to the "configure your key" CTA.
     Err(AppError::Validation(
-        "Anthropic API key not configured. Set ANTHROPIC_API_KEY env var or configure it in Settings."
+        "Clé API Anthropic non configurée (Anthropic API key). Renseigne la variable \
+         d'environnement ANTHROPIC_API_KEY ou configure-la dans Paramètres."
             .to_string(),
     ))
 }
@@ -441,8 +445,11 @@ fn resolve_openai_key(app: &AppHandle) -> AppResult<String> {
         }
     }
 
+    // FR for the toast; keeps the literal "API key" token so the frontend's
+    // `/api key/i` missing-key heuristics still fire.
     Err(AppError::Validation(
-        "OpenAI API key not configured. Set OPENAI_API_KEY env var or configure it in Settings."
+        "Clé API OpenAI non configurée (OpenAI API key). Renseigne la variable \
+         d'environnement OPENAI_API_KEY ou configure-la dans Paramètres."
             .to_string(),
     ))
 }

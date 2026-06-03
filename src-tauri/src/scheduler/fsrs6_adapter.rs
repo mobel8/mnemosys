@@ -22,13 +22,41 @@ use super::{Scheduler, SchedulerOutcome};
 
 /// Borrows the process-wide [`CardScheduler`] so multiple invocations
 /// share the same parameter vector + retention target.
+///
+/// `retention_override` lets a single review honour the *deck's* per-deck
+/// `desired_retention` instead of the engine's global default (P006). `None`
+/// falls back to the engine's configured retention.
 pub struct Fsrs6Adapter<'a> {
     fsrs: &'a CardScheduler,
+    retention_override: Option<f32>,
 }
 
 impl<'a> Fsrs6Adapter<'a> {
+    /// Adapter using the engine's global retention target.
     pub fn new(fsrs: &'a CardScheduler) -> Self {
-        Self { fsrs }
+        Self {
+            fsrs,
+            retention_override: None,
+        }
+    }
+
+    /// Adapter that overrides the retention target for every review it
+    /// schedules — pass the deck's `desired_retention` so per-deck tuning
+    /// actually reaches FSRS (P006). The value is clamped into the FSRS-safe
+    /// band by [`CardScheduler`], so any valid deck value (`[0.5, 0.99]`) is
+    /// accepted without erroring.
+    pub fn with_retention(fsrs: &'a CardScheduler, retention: f32) -> Self {
+        Self {
+            fsrs,
+            retention_override: Some(retention),
+        }
+    }
+
+    /// The retention this adapter applies: the per-deck override when set,
+    /// otherwise the engine's configured default.
+    fn retention(&self) -> f32 {
+        self.retention_override
+            .unwrap_or_else(|| self.fsrs.desired_retention())
     }
 }
 
@@ -56,7 +84,12 @@ impl<'a> Scheduler for Fsrs6Adapter<'a> {
         let elapsed = super::elapsed_days_since(card.last_review, reviewed_at);
         let elapsed_u32: u32 = elapsed.try_into().unwrap_or(0);
 
-        let outcome = self.fsrs.apply_review(current, elapsed_u32, rating_enum)?;
+        let outcome = self.fsrs.apply_review_with_retention(
+            current,
+            elapsed_u32,
+            rating_enum,
+            self.retention(),
+        )?;
 
         let next_state = next_card_state(card.state, rating_enum);
 

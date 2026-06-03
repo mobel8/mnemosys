@@ -38,7 +38,7 @@ describe("ReviewControls", () => {
     );
     expect(screen.getByRole("button", { name: /voir la réponse/i })).toBeInTheDocument();
     // No rating buttons in question phase.
-    expect(screen.queryByTestId("rating-good")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("rating-3")).not.toBeInTheDocument();
   });
 
   it("invokes onFlip when the flip button is clicked", () => {
@@ -56,27 +56,33 @@ describe("ReviewControls", () => {
     const onFlip = vi.fn();
     const onRate = vi.fn();
     renderWithClient(<ReviewControls phase="answer" cardId={1} onFlip={onFlip} onRate={onRate} />);
-    expect(screen.getByTestId("rating-again")).toBeInTheDocument();
-    expect(screen.getByTestId("rating-hard")).toBeInTheDocument();
-    expect(screen.getByTestId("rating-good")).toBeInTheDocument();
-    expect(screen.getByTestId("rating-easy")).toBeInTheDocument();
+    // Stable numeric test ids (P030 localised the visible labels to FR).
+    expect(screen.getByTestId("rating-1")).toBeInTheDocument();
+    expect(screen.getByTestId("rating-2")).toBeInTheDocument();
+    expect(screen.getByTestId("rating-3")).toBeInTheDocument();
+    expect(screen.getByTestId("rating-4")).toBeInTheDocument();
+    // Visible labels are French.
+    expect(screen.getByText("Encore")).toBeInTheDocument();
+    expect(screen.getByText("Difficile")).toBeInTheDocument();
+    expect(screen.getByText("Bien")).toBeInTheDocument();
+    expect(screen.getByText("Facile")).toBeInTheDocument();
   });
 
-  it("calls onRate(3) when the Good button is clicked", () => {
+  it("calls onRate(3) when the « Bien » button is clicked", () => {
     const onFlip = vi.fn();
     const onRate = vi.fn();
     renderWithClient(<ReviewControls phase="answer" cardId={1} onFlip={onFlip} onRate={onRate} />);
-    fireEvent.click(screen.getByTestId("rating-good"));
+    fireEvent.click(screen.getByTestId("rating-3"));
     expect(onRate).toHaveBeenCalledTimes(1);
     expect(onRate).toHaveBeenCalledWith(3);
   });
 
-  it("calls onRate(1) for Again and onRate(4) for Easy", () => {
+  it("calls onRate(1) for « Encore » and onRate(4) for « Facile »", () => {
     const onFlip = vi.fn();
     const onRate = vi.fn();
     renderWithClient(<ReviewControls phase="answer" cardId={1} onFlip={onFlip} onRate={onRate} />);
-    fireEvent.click(screen.getByTestId("rating-again"));
-    fireEvent.click(screen.getByTestId("rating-easy"));
+    fireEvent.click(screen.getByTestId("rating-1"));
+    fireEvent.click(screen.getByTestId("rating-4"));
     expect(onRate).toHaveBeenNthCalledWith(1, 1);
     expect(onRate).toHaveBeenNthCalledWith(2, 4);
   });
@@ -108,7 +114,7 @@ describe("ReviewControls", () => {
         pendingRating={3}
       />,
     );
-    const good = screen.getByTestId("rating-good") as HTMLButtonElement;
+    const good = screen.getByTestId("rating-3") as HTMLButtonElement;
     expect(good.disabled).toBe(true);
     fireEvent.click(good);
     expect(onRate).not.toHaveBeenCalled();

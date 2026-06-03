@@ -21,6 +21,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
+import { MotionConfig } from "framer-motion";
 import { useEffect, useState } from "react";
 import { DelayedJolPrompt } from "@/components/DelayedJolPrompt";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -147,19 +148,22 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <ToastProvider>
-            <RouterProvider router={router} />
-            <ShortcutsHelpDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-            <NeuroModesShell />
-            <PlannerNotificationsShell />
-            <DelayedJolPrompt />
-            <Toaster />
-            <ToastViewport />
-          </ToastProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
+      {/* P029: respect prefers-reduced-motion globally for all framer-motion. */}
+      <MotionConfig reducedMotion="user">
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider>
+            <ToastProvider>
+              <RouterProvider router={router} />
+              <ShortcutsHelpDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+              <NeuroModesShell />
+              <PlannerNotificationsShell />
+              <DelayedJolPrompt />
+              <Toaster />
+              <ToastViewport />
+            </ToastProvider>
+          </ThemeProvider>
+        </QueryClientProvider>
+      </MotionConfig>
     </ErrorBoundary>
   );
 }

@@ -60,24 +60,26 @@ pub fn synthesize_piper(binary: &str, model: &str, text: &str, out_path: &Path) 
 
     if binary.is_empty() {
         return Err(AppError::Other(
-            "Piper unavailable: no binary path configured (set it in Settings → TTS local)."
+            "Piper indisponible : aucun chemin de binaire configuré (renseigne-le dans Paramètres → TTS local)."
                 .to_string(),
         ));
     }
     if model.is_empty() {
         return Err(AppError::Other(
-            "Piper unavailable: no voice model configured. Download a .onnx voice from \
-             github.com/OHF-Voice/piper1-gpl and set its path in Settings → TTS local."
+            "Piper indisponible : aucun modèle de voix configuré. Télécharge une voix .onnx depuis \
+             github.com/OHF-Voice/piper1-gpl et renseigne son chemin dans Paramètres → TTS local."
                 .to_string(),
         ));
     }
     if text.is_empty() {
-        return Err(AppError::Validation("text must not be empty".to_string()));
+        return Err(AppError::Validation(
+            "Le texte ne doit pas être vide.".to_string(),
+        ));
     }
     if !Path::new(model).is_file() {
         return Err(AppError::Other(format!(
-            "Piper unavailable: voice model not found at '{model}'. Download a .onnx voice and \
-             point the model path at it."
+            "Piper indisponible : modèle de voix introuvable à « {model} ». Télécharge une voix .onnx \
+             et fais pointer le chemin du modèle dessus."
         )));
     }
 
@@ -89,8 +91,8 @@ pub fn synthesize_piper(binary: &str, model: &str, text: &str, out_path: &Path) 
         .spawn()
         .map_err(|e| {
             AppError::Other(format!(
-                "Piper unavailable: cannot run '{binary}' ({e}). Install Piper and ensure the \
-                 binary path is correct (it can be a bare name on your PATH)."
+                "Piper indisponible : impossible d'exécuter « {binary} » ({e}). Installe Piper et \
+                 vérifie le chemin du binaire (un nom simple présent dans le PATH convient)."
             ))
         })?;
 

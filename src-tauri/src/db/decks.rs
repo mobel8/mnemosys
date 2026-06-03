@@ -290,7 +290,14 @@ impl<'a> DeckRepo<'a> {
         self.get(id)
     }
 
-    /// Delete a deck. Notes (and their cards / reviews) cascade via FK.
+    /// Delete a deck.
+    ///
+    /// Cascades via FK (schema v17): the deck's notes — and through them their
+    /// cards and reviews — are removed (`notes.deck_id` / `cards.deck_id`
+    /// `ON DELETE CASCADE`). Any *other* deck that gated itself behind this one
+    /// has its `prerequisite_deck_id` reset to `NULL`
+    /// (`ON DELETE SET NULL`): deleting a prerequisite simply dissolves the
+    /// gate instead of aborting the deletion with a constraint violation.
     pub fn delete(&self, id: i64) -> AppResult<()> {
         let affected = self
             .conn
@@ -616,6 +623,89 @@ mod tests {
             !status_b.unlocked,
             "B stays locked when A's retention is low"
         );
+    }
+
+    /// P013 regression — deleting a deck that is used as another deck's
+    /// mastery prerequisite must succeed (the FK is `ON DELETE SET NULL`, so
+    /// the gate dissolves) instead of failing with a constraint violation.
+    #[test]
+    fn deleting_prerequisite_deck_clears_dependent_gate() {
+        let db = Database::for_test();
+        let conn = db.lock();
+
+        let deck_a = db
+            .decks(&conn)
+            .create("A", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+        let deck_b = db
+            .decks(&conn)
+            .create("B", None, "#ef4444", 0.9, None, None, Some(deck_a.id))
+            .unwrap();
+        assert_eq!(deck_b.prerequisite_deck_id, Some(deck_a.id));
+
+        // Deleting the prerequisite A must NOT error.
+        db.decks(&conn)
+            .delete(deck_a.id)
+            .expect("deleting a prerequisite deck must succeed");
+
+        // B survives, but its gate has been dissolved (set to NULL).
+        let refreshed_b = db.decks(&conn).get(deck_b.id).unwrap();
+        assert_eq!(
+            refreshed_b.prerequisite_deck_id, None,
+            "dependent deck's prerequisite must be reset to NULL on delete"
+        );
+    }
+
+    /// P014 regression — deleting a deck cascades to its cards (and notes /
+    /// reviews) via the explicit `ON DELETE CASCADE` on `cards.deck_id`.
+    #[test]
+    fn deleting_deck_cascades_to_cards() {
+        let db = Database::for_test();
+        let conn = db.lock();
+
+        let deck = db
+            .decks(&conn)
+            .create("C", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+        // Creating a note also creates its card(s).
+        db.notes(&conn)
+            .create(
+                deck.id,
+                NoteTemplate::Basic,
+                json!({ "front": "f", "back": "b" }),
+                vec![],
+                None,
+            )
+            .unwrap();
+
+        let cards_before: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM cards WHERE deck_id = ?1",
+                params![deck.id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(cards_before, 1, "note creation should leave one card");
+
+        db.decks(&conn).delete(deck.id).unwrap();
+
+        let cards_after: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM cards WHERE deck_id = ?1",
+                params![deck.id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(cards_after, 0, "deck delete must cascade to its cards");
+
+        let notes_after: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM notes WHERE deck_id = ?1",
+                params![deck.id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(notes_after, 0, "deck delete must cascade to its notes");
     }
 
     #[test]

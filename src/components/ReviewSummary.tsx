@@ -14,7 +14,7 @@
 
 import { Link } from "@tanstack/react-router";
 import confetti from "canvas-confetti";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { PartyPopper } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -74,12 +74,15 @@ export function ReviewSummary({
   remainingDue = 0,
   onContinue,
 }: ReviewSummaryProps) {
+  // P029 — respect the OS "reduce motion" preference: no confetti burst and
+  // no slide-up entrance for users who opted out of non-essential animation.
+  const reduceMotion = useReducedMotion();
   const firedRef = useRef(false);
   useEffect(() => {
     if (firedRef.current) return;
     firedRef.current = true;
-    fireConfetti();
-  }, []);
+    if (!reduceMotion) fireConfetti();
+  }, [reduceMotion]);
 
   const total = reviewed.length;
   const correct = reviewed.filter((r) => r.correct).length;
@@ -88,8 +91,8 @@ export function ReviewSummary({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
+      animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
       className="flex w-full justify-center px-4 py-10"
     >

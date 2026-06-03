@@ -104,6 +104,58 @@ jobs:
         working-directory: src-tauri
         run: cargo test --no-fail-fast
 
+  licenses:
+    # SECURITY (P037): block copyleft (GPL/AGPL/LGPL) dependencies from
+    # entering a product shipped under MIT in compiled binaries. A single
+    # GPL dependency taints the whole distributed bundle. This job fails CI
+    # the moment such a license appears in either the npm or the Cargo tree.
+    name: Licenses (no GPL/AGPL)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check npm licenses (license-checker)
+        # `--failOn` exits non-zero if any production dependency carries a
+        # banned license. Semicolon-separated SPDX ids. `--production` skips
+        # devDependencies (not shipped in the bundle).
+        run: |
+          pnpm dlx license-checker-rseidelsohn@4 \
+            --production \
+            --failOn "GPL-3.0;GPL-3.0-only;GPL-3.0-or-later;GPL-2.0;GPL-2.0-only;GPL-2.0-or-later;AGPL-3.0;AGPL-3.0-only;AGPL-3.0-or-later;LGPL-3.0;LGPL-2.1"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - name: Check Cargo licenses (cargo-deny)
+        working-directory: src-tauri
+        # `cargo deny check licenses` is reliable only with an explicit
+        # `src-tauri/deny.toml` allow/deny list (see MISROUTÉ note — that file
+        # is outside this job's perimeter). When it lands, this step enforces
+        # the same no-copyleft policy on the Rust dependency tree.
+        run: |
+          if [ -f deny.toml ]; then
+            cargo deny check licenses
+          else
+            echo "::warning::src-tauri/deny.toml missing — Cargo license gate skipped. Add deny.toml with a copyleft deny-list to enforce it."
+          fi
+
   build:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

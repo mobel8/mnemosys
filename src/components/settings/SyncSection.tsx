@@ -14,19 +14,21 @@
  * status query so the rendered branch always reflects the persisted state.
  */
 
+import { useQueryClient } from "@tanstack/react-query";
 import { Cloud, CloudOff, Loader2, LogOut, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
 import {
+  queryKeys,
   useSaveSettings,
   useSettingsQuery,
   useSyncLogin,
   useSyncLogout,
-  useSyncNow,
   useSyncStatus,
 } from "@/lib/queries";
 import type { AppSettings } from "@/lib/tauri";
@@ -78,10 +80,16 @@ function formatLastSync(ts: number | null): string {
 }
 
 export function SyncSection() {
+  const qc = useQueryClient();
   const settingsQuery = useSettingsQuery();
   const statusQuery = useSyncStatus();
   const saveSettings = useSaveSettings({
     onSuccess: () => {
+      // Saving the Supabase URL/key flips `status.configured` on the backend,
+      // which decides which sub-form renders below. `useSaveSettings` only
+      // invalidates the settings query, so refresh the sync-status query here
+      // or the UI would stay stuck on the "not configured" branch.
+      qc.invalidateQueries({ queryKey: queryKeys.syncStatus });
       toast({ title: "Configuration Supabase enregistrée" });
     },
     onError: (err) => {
@@ -109,34 +117,26 @@ export function SyncSection() {
       toast({ title: "Déconnexion effectuée" });
     },
   });
-  const syncNow = useSyncNow({
-    onSuccess: (report) => {
-      const pushed =
-        report.decks_pushed + report.notes_pushed + report.cards_pushed + report.reviews_pushed;
-      const pulled =
-        report.decks_pulled + report.notes_pulled + report.cards_pulled + report.reviews_pulled;
-      toast({
-        title: "Synchronisation terminée",
-        description: `${pushed} ligne(s) envoyée(s), ${pulled} reçue(s).`,
-      });
-    },
-    onError: (err) => {
-      toast({
-        title: "Échec de la synchronisation",
-        description: err.message,
-        variant: "destructive",
-      });
-    },
-  });
+  // NOTE: `useSyncNow` is intentionally not wired here. The backend sync
+  // client is still scaffolding (it exchanges no data and would advance
+  // `last_sync_at` on an empty cycle), so the "Synchroniser maintenant"
+  // action below is rendered disabled until the cloud backend is live and
+  // audited. See P041 in the audit log.
 
   const [supabaseUrl, setSupabaseUrl] = useState("");
   const [anonKey, setAnonKey] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Hydrate from persisted settings once they arrive.
+  // Hydrate the Supabase inputs from persisted settings exactly once, on
+  // first arrival. Re-running on every `settingsQuery.data` change would wipe
+  // the user's in-progress URL/key whenever another section saves and
+  // invalidates the shared settings query (lost-update, P040).
+  const hydratedRef = useRef(false);
   useEffect(() => {
-    const s = settingsQuery.data ?? DEFAULTS;
+    if (hydratedRef.current || !settingsQuery.data) return;
+    hydratedRef.current = true;
+    const s = settingsQuery.data;
     setSupabaseUrl(s.supabase_url ?? "");
     setAnonKey(s.supabase_anon_key ?? "");
   }, [settingsQuery.data]);
@@ -144,7 +144,11 @@ export function SyncSection() {
   const status = statusQuery.data;
 
   async function handleSaveSupabaseConfig() {
-    const current = settingsQuery.data ?? DEFAULTS;
+    // Re-read the freshest persisted settings before composing the payload so
+    // fields owned by other sections survive. Never fall back to DEFAULTS
+    // while real data exists.
+    const refreshed = await settingsQuery.refetch();
+    const current = refreshed.data ?? settingsQuery.data ?? DEFAULTS;
     const next: AppSettings = {
       ...current,
       supabase_url: supabaseUrl.trim() === "" ? null : supabaseUrl.trim(),
@@ -172,10 +176,12 @@ export function SyncSection() {
         <CardTitle className="flex items-center gap-2">
           <Cloud className="h-5 w-5 text-brand-500" />
           Synchronisation cloud
+          <Badge variant="secondary">Bêta — bientôt disponible</Badge>
         </CardTitle>
         <CardDescription>
-          Sauvegarde ta collection sur ton propre projet Supabase et synchronise-la entre plusieurs
-          appareils. Optionnel — l'application reste pleinement fonctionnelle sans connexion.
+          La synchronisation multi-appareils via Supabase est en cours de développement. Tu peux
+          déjà enregistrer les identifiants de ton projet, mais aucune donnée n'est encore échangée
+          avec le serveur. L'application reste pleinement fonctionnelle sans connexion.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -274,19 +280,16 @@ export function SyncSection() {
             <p className="text-xs text-muted-foreground">
               Dernière synchronisation : <strong>{formatLastSync(status.last_sync_at)}</strong>
             </p>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => syncNow.mutate()}
-              disabled={syncNow.isPending}
-            >
-              {syncNow.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
+            <div className="space-y-1.5">
+              <Button type="button" size="sm" disabled aria-disabled="true">
                 <RefreshCw className="h-4 w-4" />
-              )}
-              Synchroniser maintenant
-            </Button>
+                Synchroniser maintenant
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                L'échange de données avec le serveur n'est pas encore actif — disponible dans une
+                prochaine version.
+              </p>
+            </div>
           </section>
         ) : (
           <form className="space-y-3" onSubmit={handleLogin}>

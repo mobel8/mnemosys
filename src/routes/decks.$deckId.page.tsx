@@ -14,7 +14,7 @@
  */
 
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Pencil, Play, Plus } from "lucide-react";
+import { AlertTriangle, Lock, Pencil, Play, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CardList } from "@/components/CardList";
 import { EditDeckDialog } from "@/components/EditDeckDialog";
@@ -24,7 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { languageLabel } from "@/lib/languages";
-import { useDeck, useDeckStats } from "@/lib/queries";
+import { useDeck, useDeckMasteryStatus, useDeckStats, useDecks } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 const routeApi = getRouteApi("/decks/$deckId");
@@ -37,6 +37,16 @@ export default function DeckDetailPage() {
   const navigate = useNavigate();
   const deck = useDeck(deckId);
   const stats = useDeckStats(deckId);
+  // Vague 15 — Bloom mastery gate. Only query when this deck declares a
+  // prerequisite; an ungated deck is always unlocked, so we skip the round-trip.
+  const hasPrerequisite = deck.data?.prerequisite_deck_id != null;
+  const masteryStatus = useDeckMasteryStatus(deckId, { enabled: hasPrerequisite });
+  const locked = hasPrerequisite && masteryStatus.data ? !masteryStatus.data.unlocked : false;
+  // Resolve the prerequisite's display name for the disabled-CTA tooltip.
+  const allDecks = useDecks({ enabled: hasPrerequisite });
+  const prerequisiteName =
+    allDecks.data?.find((dk) => dk.id === deck.data?.prerequisite_deck_id)?.name ??
+    "le deck prérequis";
   const [editOpen, setEditOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -131,12 +141,23 @@ export default function DeckDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button asChild>
-            <Link to="/review/$deckId" params={{ deckId }}>
-              <Play className="h-4 w-4" />
-              Étudier
-            </Link>
-          </Button>
+          {locked ? (
+            <Button
+              disabled
+              title={`Maîtrise d'abord ${prerequisiteName} (≥90% de rétention)`}
+              aria-label={`Étudier (verrouillé : maîtrise d'abord ${prerequisiteName})`}
+            >
+              <Lock className="h-4 w-4" />
+              Verrouillé
+            </Button>
+          ) : (
+            <Button asChild>
+              <Link to="/review/$deckId" params={{ deckId }}>
+                <Play className="h-4 w-4" />
+                Étudier
+              </Link>
+            </Button>
+          )}
           <Button asChild variant="outline">
             <Link to="/decks/$deckId/new-card" params={{ deckId }}>
               <Plus className="h-4 w-4" />

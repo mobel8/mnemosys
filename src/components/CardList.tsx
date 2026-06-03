@@ -24,12 +24,24 @@ import {
   Loader2,
   MoreHorizontal,
   PauseCircle,
+  Pencil,
   PlayCircle,
   RotateCcw,
   SearchX,
   Trash2,
 } from "lucide-react";
 import { memo, useMemo, useState } from "react";
+import { NoteEditor } from "@/components/NoteEditor";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -170,6 +182,16 @@ function noteFrontPreview(note: Note): string {
   return front || "(vide)";
 }
 
+/** Cap a preview string for use inside confirmation dialogs (P070). Trims to
+ *  ~60 chars on a word boundary when possible, adding an ellipsis. */
+function truncatePreview(text: string, max = 60): string {
+  const clean = text.trim();
+  if (clean.length <= max) return clean;
+  const slice = clean.slice(0, max);
+  const lastSpace = slice.lastIndexOf(" ");
+  return `${(lastSpace > max * 0.6 ? slice.slice(0, lastSpace) : slice).trimEnd()}…`;
+}
+
 /**
  * Format a card's `last_review` timestamp. The backend stores it as Unix
  * *seconds* (`Utc::now().timestamp()`), so we convert to milliseconds before
@@ -220,12 +242,16 @@ export function CardList({ deckId, searchQuery }: CardListProps) {
   const rows = useMemo<DisplayRow[]>(() => {
     if (searching) {
       const notes = search.data ?? [];
+      // `search_notes` is global (no deck filter server-side), so we MUST scope
+      // the results to the current deck here — otherwise a search inside deck A
+      // would surface notes living in deck B (cross-deck leak). The filter is
+      // intentionally strict equality on `deck_id` with no escape hatch.
       return notes
-        .filter((n) => n.deck_id === deckId || trimmedQuery.length > 0)
+        .filter((n) => n.deck_id === deckId)
         .map<DisplayRow>((note) => ({ kind: "note", note }));
     }
     return (cards.data ?? []).map<DisplayRow>((entry) => ({ kind: "card", entry }));
-  }, [searching, search.data, cards.data, deckId, trimmedQuery]);
+  }, [searching, search.data, cards.data, deckId]);
 
   const isLoading = searching ? search.isLoading : cards.isLoading;
   const isError = searching ? search.error : cards.error;
@@ -433,6 +459,15 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
   // a real card (search-result rows carry only the note, no card id).
   const [sketchesOpen, setSketchesOpen] = useState(false);
 
+  // P009 — in-place editor for the note's content. Reuses <NoteEditor> in edit
+  // mode (template locked, submit via useUpdateNote).
+  const [editOpen, setEditOpen] = useState(false);
+
+  // P070 — destructive confirmations via AlertDialog (Radix) instead of the
+  // native window.confirm (consistent styling + a11y focus restitution).
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   return (
     <tr
       className={cn(
@@ -488,6 +523,9 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+              <Pencil className="h-4 w-4" /> Éditer
+            </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() => {
                 void navigate({
@@ -514,17 +552,7 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
               </DropdownMenuItem>
             )}
             {card && card.state !== "new" && (
-              <DropdownMenuItem
-                onSelect={() => {
-                  if (
-                    window.confirm(
-                      "Réinitialiser cette carte ? Elle repart en « new ». L'historique des reviews est conservé.",
-                    )
-                  ) {
-                    resetCard.mutate(card.id);
-                  }
-                }}
-              >
+              <DropdownMenuItem onSelect={() => setConfirmReset(true)}>
                 <RotateCcw className="h-4 w-4" /> Réinitialiser (FSRS)
               </DropdownMenuItem>
             )}
@@ -546,11 +574,7 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
-              onSelect={() => {
-                if (window.confirm(`Supprimer la note « ${noteFrontPreview(note)} » ?`)) {
-                  deleteNote.mutate(note.id);
-                }
-              }}
+              onSelect={() => setConfirmDelete(true)}
             >
               <Trash2 className="h-4 w-4" /> Supprimer la note
             </DropdownMenuItem>
@@ -624,6 +648,73 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
             onOpenChange={setSketchesOpen}
           />
         )}
+
+        {/* P009 — edit the note's content in place. The editor is keyed by the
+            note id so it re-initialises cleanly each time it opens. */}
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="h-5 w-5 text-primary" />
+                Éditer la note
+              </DialogTitle>
+              <DialogDescription>{noteFrontPreview(note)}</DialogDescription>
+            </DialogHeader>
+            {editOpen && (
+              <NoteEditor
+                key={note.id}
+                deckId={note.deck_id}
+                note={note}
+                onUpdated={() => setEditOpen(false)}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* P070 — reset confirmation (Radix AlertDialog: focus restitution,
+            consistent styling). Only mounted for real cards. */}
+        {card && (
+          <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Réinitialiser cette carte ?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  « {truncatePreview(noteFrontPreview(note))} » repart en « Nouvelle ». L'historique
+                  des reviews est conservé.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction onClick={() => resetCard.mutate(card.id)}>
+                  Réinitialiser
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+
+        {/* P070 — delete confirmation. Supprimer une note retire la note et
+            toutes les cartes qu'elle a engendrées (cloze/reverse/occlusion). */}
+        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Supprimer cette note ?</AlertDialogTitle>
+              <AlertDialogDescription>
+                « {truncatePreview(noteFrontPreview(note))} » et toutes les cartes qu'elle a
+                générées seront définitivement supprimées. Cette action est irréversible.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => deleteNote.mutate(note.id)}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Supprimer
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </td>
     </tr>
   );

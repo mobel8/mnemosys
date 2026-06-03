@@ -98,11 +98,22 @@ export default function MinimalPairsDrill() {
   /** Whether we've fallen back to the Web Speech API for this session. */
   const [usingFallback, setUsingFallback] = useState(false);
 
+  /** `true` once the learner has triggered playback for the current round. */
+  const [hasPlayed, setHasPlayed] = useState(false);
+
   const settingsQuery = useSettingsQuery();
   const synthesize = useSynthesizeAudio();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   /** The text spoken in the active round, replayed by « réécouter ». */
   const spokenWordRef = useRef<string | null>(null);
+  /**
+   * Monotonic generation counter, bumped whenever a new round is prepared or
+   * the contrast changes. Each `speak()` captures the value on entry and drops
+   * its audio if the counter has since moved on, so a slow synthesis from an
+   * abandoned round can never play over the current one (stale-resolution
+   * guard).
+   */
+  const generationRef = useRef(0);
 
   const voice = resolveVoice(settingsQuery.data?.tts_voice);
   const speed = settingsQuery.data?.tts_speed ?? DEFAULT_SPEED;
@@ -113,12 +124,16 @@ export default function MinimalPairsDrill() {
   const speak = useCallback(
     async (word: string) => {
       spokenWordRef.current = word;
+      // Capture the generation on entry; if a new round/contrast supersedes
+      // this one while synthesis is in flight, we must not play stale audio.
+      const gen = generationRef.current;
       if (usingFallback) {
         speakWithWebApi(word);
         return;
       }
       try {
         const res = await synthesize.mutateAsync({ text: word, voice, speed });
+        if (gen !== generationRef.current) return; // round changed — drop it.
         const audio = audioRef.current;
         if (audio) {
           audio.src = convertFileSrc(res.path);
@@ -137,36 +152,44 @@ export default function MinimalPairsDrill() {
             ? "Clé OpenAI absente — on bascule sur la synthèse vocale du système."
             : "Synthèse en ligne indisponible — on bascule sur la voix du système.",
         });
-        speakWithWebApi(word);
+        if (gen === generationRef.current) speakWithWebApi(word);
       }
     },
     [synthesize, voice, speed, usingFallback],
   );
 
-  /** Draw a fresh pair + side and speak it. All randomness lives here. */
-  const startRound = useCallback(
-    (target: Contrast) => {
-      const pairs = target.pairs;
-      if (pairs.length === 0) return;
-      const pairIndex = Math.floor(Math.random() * pairs.length);
-      const pair = pairs[pairIndex];
-      if (!pair) return;
-      const side: Side = Math.random() < 0.5 ? "a" : "b";
-      setResult(null);
-      setRound({ pair, target: side });
-      void speak(side === "a" ? pair.a : pair.b);
-    },
-    [speak],
-  );
+  /**
+   * Draw a fresh pair + side for a new round. Randomness lives here; the word
+   * is NOT spoken automatically — the learner triggers playback explicitly
+   * (« Écouter le mot »), so the page never autoplays on mount or on contrast
+   * change. Bumps the generation counter so any pending synthesis is discarded.
+   */
+  const startRound = useCallback((target: Contrast) => {
+    const pairs = target.pairs;
+    if (pairs.length === 0) return;
+    const pairIndex = Math.floor(Math.random() * pairs.length);
+    const pair = pairs[pairIndex];
+    if (!pair) return;
+    const side: Side = Math.random() < 0.5 ? "a" : "b";
+    generationRef.current += 1;
+    setResult(null);
+    setHasPlayed(false);
+    setRound({ pair, target: side });
+    spokenWordRef.current = side === "a" ? pair.a : pair.b;
+  }, []);
 
-  // Reset the session and queue the first round whenever the contrast changes.
-  // The draw happens inside startRound (an event-callback), not at render.
+  // Reset the session and prepare a (silent) first round whenever the contrast
+  // changes. The draw happens inside startRound (not at render) and nothing is
+  // spoken until the learner clicks « Écouter ». The score resets here so a new
+  // contrast always starts at 0/0.
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-run on contrast id only; startRound/contrast are derived from it.
   useEffect(() => {
+    generationRef.current += 1;
     setScore(0);
     setAttempts(0);
     setResult(null);
     setRound(null);
+    setHasPlayed(false);
     spokenWordRef.current = null;
     if (contrast) startRound(contrast);
   }, [contrastId]);
@@ -180,9 +203,12 @@ export default function MinimalPairsDrill() {
     };
   }, []);
 
-  function handleReplay() {
+  /** Play (or replay) the target word for the current round. */
+  function handlePlay() {
     const word = spokenWordRef.current;
-    if (word) void speak(word);
+    if (!word) return;
+    setHasPlayed(true);
+    void speak(word);
   }
 
   function handleAnswer(picked: Side) {
@@ -257,7 +283,8 @@ export default function MinimalPairsDrill() {
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle className="text-lg">Écoute et identifie</CardTitle>
-            <div className="flex items-center gap-4 text-sm">
+            {/* Score announced politely so SR users hear it move after each try. */}
+            <div className="flex items-center gap-4 text-sm" aria-live="polite">
               <span className="text-muted-foreground">
                 Score{" "}
                 <span className="font-mono tabular-nums text-foreground" data-testid="score">
@@ -278,12 +305,12 @@ export default function MinimalPairsDrill() {
                 type="button"
                 size="lg"
                 variant="outline"
-                onClick={handleReplay}
+                onClick={handlePlay}
                 disabled={isSpeaking}
                 data-testid="replay-button"
               >
                 <Volume2 className={cn("h-4 w-4", isSpeaking && "animate-pulse")} aria-hidden />
-                Réécouter
+                {hasPlayed ? "Réécouter" : "Écouter le mot"}
               </Button>
             </div>
 
@@ -292,6 +319,20 @@ export default function MinimalPairsDrill() {
                 const word = side === "a" ? round.pair.a : round.pair.b;
                 const ipa = side === "a" ? round.pair.ipaA : round.pair.ipaB;
                 const revealed = result !== null;
+                const isTarget = round.target === side;
+                const isPicked = result?.picked === side;
+                // Once revealed, convey correct/incorrect with an icon + label
+                // — not colour alone (P026). The target word is "correct"; the
+                // word the learner wrongly picked is "incorrect".
+                const showCorrect = revealed && isTarget;
+                const showIncorrect = revealed && isPicked && !result.correct;
+                const ariaLabel = !revealed
+                  ? word
+                  : showCorrect
+                    ? `${word} — bonne réponse`
+                    : showIncorrect
+                      ? `${word} — réponse incorrecte`
+                      : word;
                 return (
                   <button
                     key={side}
@@ -299,6 +340,8 @@ export default function MinimalPairsDrill() {
                     onClick={() => handleAnswer(side)}
                     disabled={revealed}
                     data-testid={`word-${side}`}
+                    aria-label={ariaLabel}
+                    aria-pressed={isPicked}
                     className={cn(
                       "flex flex-col items-center gap-1 rounded-xl border px-4 py-6 text-center shadow-xs transition-all duration-150",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
@@ -307,7 +350,9 @@ export default function MinimalPairsDrill() {
                       wordButtonClass(side),
                     )}
                   >
-                    <span className="font-display text-2xl font-semibold tracking-tight">
+                    <span className="flex items-center gap-1.5 font-display text-2xl font-semibold tracking-tight">
+                      {showCorrect && <Check className="h-5 w-5 shrink-0" aria-hidden />}
+                      {showIncorrect && <X className="h-5 w-5 shrink-0" aria-hidden />}
                       {word}
                     </span>
                     <AnimatePresence>
@@ -327,7 +372,16 @@ export default function MinimalPairsDrill() {
               })}
             </div>
 
-            <div className="flex min-h-9 items-center justify-center">
+            {/*
+              Feedback live region: stable wrapper with role=status +
+              aria-live=assertive so the « Correct » / « Raté » verdict is
+              announced immediately to screen readers, not just shown by colour.
+            */}
+            <div
+              className="flex min-h-9 items-center justify-center"
+              role="status"
+              aria-live="assertive"
+            >
               <AnimatePresence mode="wait">
                 {result ? (
                   <motion.div

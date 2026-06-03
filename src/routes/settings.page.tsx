@@ -40,7 +40,11 @@ export default function SettingsPage() {
       <FsrsOptimizerSection />
       <IntegrationsSection />
       <NeuroModesSection />
-      <SyncSection />
+      {/* Cloud sync is still no-op scaffolding (the backend HTTP client
+          exchanges no data). To avoid presenting an unfinished, potentially
+          data-loss-misleading feature to end users, gate it behind the dev
+          build until the Supabase backend is live and audited (P041). */}
+      {import.meta.env.DEV ? <SyncSection /> : null}
       <ImportExportSection />
       <AboutSection />
     </div>

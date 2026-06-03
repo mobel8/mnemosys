@@ -86,14 +86,16 @@ pub fn get_interleaved_due_cards(
 #[tauri::command]
 pub fn preview_next_states(state: State<'_, AppState>, card_id: i64) -> AppResult<NextStatesDTO> {
     let now = chrono::Utc::now().timestamp();
-    let (card, kind) = {
+    let (card, kind, deck_retention) = {
         let conn = state.db.lock();
         let card = state.db.cards(&conn).get(card_id)?;
         let deck = state.db.decks(&conn).get(card.deck_id)?;
-        (card, deck.scheduler_kind)
+        (card, deck.scheduler_kind, deck.desired_retention as f32)
     };
     let fsrs = state.scheduler.lock().expect("scheduler mutex poisoned");
-    let dispatcher = scheduler::from_kind(kind, &fsrs);
+    // Honour the deck's own retention target so the preview chips match what
+    // submit_review will actually schedule (P006).
+    let dispatcher = scheduler::from_kind_with_retention(kind, &fsrs, deck_retention);
     let preview = dispatcher.preview(&card, now)?;
     Ok(preview_to_dto(&preview))
 }
@@ -116,8 +118,17 @@ pub fn submit_review(
     let now = chrono::Utc::now().timestamp();
 
     let conn = state.db.lock();
-    let card = state.db.cards(&conn).get(card_id)?;
-    let deck = state.db.decks(&conn).get(card.deck_id)?;
+
+    // P003 — wrap the whole mutation (card update + review log + JOL resolve +
+    // gamification) in ONE transaction so a mid-way failure can't leave the
+    // card advanced without a matching review row (or vice-versa). The repos
+    // take `&Connection`; a `Transaction` derefs to `Connection`, so the same
+    // accessors work against `tx`. `unchecked_transaction` only needs `&self`,
+    // which is all we hold through the mutex guard.
+    let tx = conn.unchecked_transaction()?;
+
+    let card = state.db.cards(&tx).get(card_id)?;
+    let deck = state.db.decks(&tx).get(card.deck_id)?;
 
     let state_before = card.state;
     let stability_before = card.stability;
@@ -125,7 +136,12 @@ pub fn submit_review(
 
     let outcome = {
         let fsrs = state.scheduler.lock().expect("scheduler mutex poisoned");
-        let dispatcher = scheduler::from_kind(deck.scheduler_kind, &fsrs);
+        // P006 — thread the deck's own retention target into FSRS scheduling.
+        let dispatcher = scheduler::from_kind_with_retention(
+            deck.scheduler_kind,
+            &fsrs,
+            deck.desired_retention as f32,
+        );
         dispatcher.next_review(&card, rating, now)?
     };
 
@@ -134,8 +150,11 @@ pub fn submit_review(
     // toast. Negative values cannot occur (each algorithm clamps).
     let scheduled_days_u32 = outcome.scheduled_days.max(0) as u32;
 
-    let updated_card = state.db.cards(&conn).update_after_review(
-        card_id,
+    // P003 — reuse the already-loaded `card`; no redundant SELECT inside the
+    // transaction (update_after_review_with reads reps/lapses/last_review off
+    // the passed value).
+    let updated_card = state.db.cards(&tx).update_after_review_with(
+        &card,
         outcome.state,
         outcome.stability,
         outcome.difficulty,
@@ -143,7 +162,7 @@ pub fn submit_review(
         now,
     )?;
 
-    let inserted_review = state.db.reviews(&conn).insert(
+    let inserted_review = state.db.reviews(&tx).insert(
         NewReview {
             card_id,
             rating: rating as i64,
@@ -164,11 +183,12 @@ pub fn submit_review(
 
     // Vague 7 — best-effort: if a JOL was waiting on this card, resolve it
     // against this review's outcome. Swallow errors so a calibration write
-    // failure never blocks the underlying review.
+    // failure never blocks the underlying review (the JOL row is auxiliary;
+    // it lives in the same transaction but a failure here is non-fatal).
     let correct_for_jol = rating >= 3;
     if let Err(e) = state
         .db
-        .metacognition(&conn)
+        .metacognition(&tx)
         .resolve_prediction(card_id, correct_for_jol, now)
     {
         log::warn!("jol resolve_prediction failed: {}", e);
@@ -178,13 +198,17 @@ pub fn submit_review(
     // the user's review is always recorded.
     let correct = rating >= 2;
     let (user_stats, newly_unlocked) =
-        match update_gamification(&state, &conn, now, correct, updated_card.deck_id) {
+        match update_gamification(&state, &tx, now, correct, updated_card.deck_id) {
             Ok((stats, unlocked)) => (Some(stats), unlocked),
             Err(e) => {
                 log::warn!("gamification update failed: {}", e);
                 (None, Vec::new())
             }
         };
+
+    // Commit the canonical mutation. Any error before this point dropped `tx`
+    // unread → automatic ROLLBACK, leaving the card + review log consistent.
+    tx.commit()?;
 
     Ok(ReviewResultDTO {
         card: updated_card,

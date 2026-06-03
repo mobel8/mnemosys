@@ -24,6 +24,14 @@ pub fn list_cards_in_deck(
     state.db.cards(&conn).list_in_deck(deck_id, limit, offset)
 }
 
+/// P017: resolve a single card + its note in one JOIN, so `PalaceReview` can
+/// fetch only the locus's card instead of loading every deck's cards.
+#[tauri::command]
+pub fn get_card_with_note(state: State<'_, AppState>, card_id: i64) -> AppResult<CardWithNote> {
+    let conn = state.db.lock();
+    state.db.cards(&conn).get_with_note(card_id)
+}
+
 #[tauri::command]
 pub fn search_notes(state: State<'_, AppState>, query: String, limit: u32) -> AppResult<Vec<Note>> {
     let conn = state.db.lock();

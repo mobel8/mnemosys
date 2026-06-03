@@ -141,6 +141,9 @@ importers:
       '@tesseract.js-data/eng':
         specifier: ^1.0.0
         version: 1.0.0
+      '@tesseract.js-data/fra':
+        specifier: ^1.0.0
+        version: 1.0.0
       '@testing-library/jest-dom':
         specifier: ^6.9.0
         version: 6.9.1
@@ -1861,6 +1864,9 @@ packages:
 
   '@tesseract.js-data/eng@1.0.0':
     resolution: {integrity: sha512-mbTumm6KQPUHyzTPQaF3ObXYnx0SqqfV2nabqFVQBwD6Kl7PhGSLSzOlfFTWy0P3BjghaSKA2W9GB19Jk+ZcTg==}
+
+  '@tesseract.js-data/fra@1.0.0':
+    resolution: {integrity: sha512-pp58gMaoyidoBBLd5y5rnf0WW0Y1994QrGqZrYatITqIU/AReUJMykD+YY3JDgvnmgz7uAx1UmhjjuyEmV8JEA==}
 
   '@testing-library/dom@10.4.1':
     resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
@@ -4709,6 +4715,8 @@ snapshots:
       - seedrandom
 
   '@tesseract.js-data/eng@1.0.0': {}
+
+  '@tesseract.js-data/fra@1.0.0': {}
 
   '@testing-library/dom@10.4.1':
     dependencies:

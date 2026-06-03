@@ -71,10 +71,14 @@ const MAX_OUTPUT_TOKENS: u32 = 8000;
 
 /// Run the critic pass over a batch of freshly-generated cards.
 ///
-/// Returns one [`CardCritique`] per input card (order preserved). An empty
-/// input short-circuits without an API call. The caller is responsible for
-/// surfacing scores / applying `suggested_fix` — this function is pure
-/// transport + parsing.
+/// Returns one [`CardCritique`] per input card, re-ordered so `out[i]`
+/// describes input card `i` (callers join by position). An empty input
+/// short-circuits without an API call. If the model returns the wrong number
+/// of verdicts, or `card_index` values that aren't a clean permutation of
+/// `0..n`, the whole pass fails with [`ClaudeError::InvalidResponse`] — the
+/// critique is advisory, so it's better to drop it than to attach a score to
+/// the wrong card. The caller is responsible for surfacing scores / applying
+/// `suggested_fix`.
 pub async fn critique_cards(
     client: &ClaudeClient,
     cards: &[GeneratedCard],
@@ -100,7 +104,56 @@ pub async fn critique_cards(
         .complete(Some(SYSTEM_PROMPT), &prompt, MAX_OUTPUT_TOKENS)
         .await?;
 
-    parse_critique_response(&response)
+    let critiques = parse_critique_response(&response)?;
+    // The caller (and the UI) join each verdict to its card *by position*, so a
+    // wrong count or a bogus `card_index` would silently mis-attribute scores
+    // and suggested fixes to the wrong card. Reject anything that isn't a clean
+    // 1:1 mapping and return the verdicts re-ordered to `cards`' order, so the
+    // critique pass is abandoned (advisory) on mismatch rather than corrupting
+    // the user's drafts.
+    validate_and_align(critiques, cards.len())
+}
+
+/// Enforce that `critiques` is a valid 1:1 mapping onto the `n` input cards and
+/// return them re-ordered so `out[i]` is the verdict for input card `i`.
+///
+/// "Valid" means: exactly `n` verdicts whose `card_index` values are a
+/// permutation of `0..n` (each index present exactly once, none out of range).
+/// Any deviation yields [`ClaudeError::InvalidResponse`] so the caller drops the
+/// (advisory) critique rather than attaching a score to the wrong card.
+fn validate_and_align(
+    critiques: Vec<CardCritique>,
+    n: usize,
+) -> Result<Vec<CardCritique>, ClaudeError> {
+    if critiques.len() != n {
+        return Err(ClaudeError::InvalidResponse(format!(
+            "critique count mismatch: got {} verdict(s) for {n} card(s)",
+            critiques.len()
+        )));
+    }
+
+    // Slot each verdict by its self-declared index, rejecting out-of-range or
+    // duplicate indices — together with the length check above this proves the
+    // indices form a permutation of `0..n`.
+    let mut slots: Vec<Option<CardCritique>> = (0..n).map(|_| None).collect();
+    for c in critiques {
+        let Some(slot) = slots.get_mut(c.card_index) else {
+            return Err(ClaudeError::InvalidResponse(format!(
+                "critique card_index {} out of range for {n} card(s)",
+                c.card_index
+            )));
+        };
+        if slot.is_some() {
+            return Err(ClaudeError::InvalidResponse(format!(
+                "duplicate critique for card_index {}",
+                c.card_index
+            )));
+        }
+        *slot = Some(c);
+    }
+
+    // Every slot is now filled (n verdicts, n distinct in-range indices).
+    Ok(slots.into_iter().flatten().collect())
 }
 
 // ---------------------------------------------------------------------------
@@ -189,6 +242,72 @@ mod tests {
     fn garbage_response_errors() {
         let raw = "Désolé, je ne peux pas évaluer ces cartes.";
         let err = parse_critique_response(raw).expect_err("garbage must error");
+        assert!(matches!(err, ClaudeError::InvalidResponse(_)));
+    }
+
+    /// Build a trivially-clean verdict for `card_index` (score 1.0, no fix).
+    fn verdict(card_index: usize) -> CardCritique {
+        CardCritique {
+            card_index,
+            score: 1.0,
+            issues: Vec::new(),
+            suggested_fix: None,
+        }
+    }
+
+    #[test]
+    fn validate_and_align_reorders_a_permutation() {
+        // Model returned the verdicts out of order (indices 2,0,1). They must
+        // be re-slotted so `out[i].card_index == i`.
+        let scrambled = vec![
+            CardCritique {
+                card_index: 2,
+                score: 0.2,
+                ..verdict(2)
+            },
+            CardCritique {
+                card_index: 0,
+                score: 0.9,
+                ..verdict(0)
+            },
+            CardCritique {
+                card_index: 1,
+                score: 0.5,
+                ..verdict(1)
+            },
+        ];
+        let aligned = validate_and_align(scrambled, 3).expect("clean permutation must pass");
+        assert_eq!(aligned.len(), 3);
+        assert_eq!(aligned[0].card_index, 0);
+        assert!((aligned[0].score - 0.9).abs() < 1e-6);
+        assert_eq!(aligned[1].card_index, 1);
+        assert!((aligned[1].score - 0.5).abs() < 1e-6);
+        assert_eq!(aligned[2].card_index, 2);
+        assert!((aligned[2].score - 0.2).abs() < 1e-6);
+    }
+
+    #[test]
+    fn validate_and_align_rejects_count_mismatch() {
+        // Two verdicts for three cards: abandon rather than mis-attribute.
+        let err = validate_and_align(vec![verdict(0), verdict(1)], 3)
+            .expect_err("short count must error");
+        assert!(matches!(err, ClaudeError::InvalidResponse(_)));
+    }
+
+    #[test]
+    fn validate_and_align_rejects_out_of_range_index() {
+        // Right count, but an index points past the input slice.
+        let err = validate_and_align(vec![verdict(0), verdict(5)], 2)
+            .expect_err("out-of-range index must error");
+        assert!(matches!(err, ClaudeError::InvalidResponse(_)));
+    }
+
+    #[test]
+    fn validate_and_align_rejects_duplicate_index() {
+        // Right count, in range, but card 1 is described twice and card 0 not
+        // at all — not a permutation, so we can't trust the mapping.
+        let err = validate_and_align(vec![verdict(1), verdict(1)], 2)
+            .expect_err("duplicate index must error");
         assert!(matches!(err, ClaudeError::InvalidResponse(_)));
     }
 }

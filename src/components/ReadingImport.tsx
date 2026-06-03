@@ -25,31 +25,43 @@
  */
 
 import { Link } from "@tanstack/react-router";
-import { BookOpen, Loader2, Sparkles } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { BookOpen, Loader2, RotateCw, Sparkles } from "lucide-react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
-import { lookupLocal } from "@/lib/dictionary";
+import { WordLookupPopover } from "@/components/WordLookupPopover";
+import { type DictEntry, lookupLocal } from "@/lib/dictionary";
 import {
   useCreateCardsFromWords,
+  useCreateNote,
   useDecks,
+  useGenerateCardsFromText,
   useSetWordStatus,
+  useSynthesizeAudio,
   useWordStatuses,
 } from "@/lib/queries";
 import type { WordStatusKind } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
-/** Language options — value is the ISO 639-1 hint stored alongside the word. */
-const LANGUAGES = [
-  { value: "en", label: "English" },
-  { value: "fr", label: "Français" },
-  { value: "es", label: "Español" },
-  { value: "de", label: "Deutsch" },
-  { value: "ja", label: "日本語" },
-] as const;
+/**
+ * Language options — value is the ISO 639-1 hint stored alongside the word.
+ *
+ * The inline dictionary (`lookupLocal`) is **English → French only** today, and
+ * the tokeniser splits on Unicode word boundaries (whitespace/punctuation),
+ * which does NOT segment space-less scripts such as Chinese/Japanese/Korean.
+ * Offering five languages with no matching data made the picker misleading:
+ * every non-English word fell back to « définition indisponible » and CJK text
+ * tokenised into one giant run. So the picker is intentionally restricted to
+ * English until per-language dictionaries (and CJK segmentation) land — see
+ * P012. The reader still works for any language at the *status-tracking* level
+ * (click a word to mark it new/learning/known); only the offline gloss is
+ * English-specific, and unknown words fall back to the AI lookup affordance.
+ */
+const LANGUAGES = [{ value: "en", label: "English" }] as const;
 
 type LanguageValue = (typeof LANGUAGES)[number]["value"];
 
@@ -147,8 +159,17 @@ export function ReadingImport() {
   const [deckId, setDeckId] = useState<number | null>(null);
   /** Optimistic per-word status overrides (word → status). */
   const [overrides, setOverrides] = useState<Record<string, WordStatusKind>>({});
-  /** Hovered word → inline dictionary popover (definition + IPA + translation). */
-  const [hover, setHover] = useState<{ word: string; x: number; y: number } | null>(null);
+  /**
+   * Which token's lookup popover is open (keyed by the unique token key, not
+   * the normalised word, so repeated words don't open every occurrence at once).
+   */
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  /** AI-resolved glosses for words missing from the offline dictionary. */
+  const [aiEntries, setAiEntries] = useState<Record<string, DictEntry>>({});
+  /** Word currently being looked up via the AI (null = none in flight). */
+  const [aiLoadingWord, setAiLoadingWord] = useState<string | null>(null);
+  /** Last AI lookup error, keyed by word, for the popover unavailable state. */
+  const [aiErrors, setAiErrors] = useState<Record<string, string>>({});
 
   const textInputId = useId();
   const langSelectId = useId();
@@ -156,6 +177,10 @@ export function ReadingImport() {
 
   const setStatus = useSetWordStatus();
   const createCards = useCreateCardsFromWords();
+  const createNote = useCreateNote();
+  const synthesize = useSynthesizeAudio();
+  const generateCards = useGenerateCardsFromText();
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Tokenise the *submitted* text (not the live draft) so editing the
   // textarea doesn't re-render hundreds of word buttons on every keystroke.
@@ -220,6 +245,126 @@ export function ReadingImport() {
       },
     );
   }
+
+  /** Resolve the gloss for a word: AI override wins, else the offline lookup. */
+  const entryOf = useCallback(
+    (word: string): DictEntry | null => aiEntries[word] ?? lookupLocal(word),
+    [aiEntries],
+  );
+
+  /** Speak a word via the project TTS (used by the popover speaker button). */
+  const handleSpeak = useCallback(
+    async (word: string) => {
+      try {
+        const voice = "nova" as const;
+        const res = await synthesize.mutateAsync({ text: word, voice });
+        const audio = audioRef.current;
+        if (audio) {
+          audio.src = convertFileSrc(res.path);
+          audio.currentTime = 0;
+          await audio.play().catch(() => {});
+        }
+      } catch (err) {
+        toast({
+          title: "Lecture audio impossible",
+          description: err instanceof Error ? err.message : "Erreur inconnue",
+          variant: "destructive",
+        });
+      }
+    },
+    [synthesize],
+  );
+
+  /** Mint one Basic card from a popover (front = word, back = gloss + IPA). */
+  const handleCreateCardFromEntry = useCallback(
+    (entry: DictEntry) => {
+      if (deckId === null) {
+        toast({
+          title: "Choisis d'abord un deck",
+          description: "Sélectionne un deck cible ci-dessus pour créer une carte.",
+          variant: "destructive",
+        });
+        return;
+      }
+      createNote.mutate(
+        {
+          deckId,
+          template: "basic",
+          fields: { front: entry.word, back: `${entry.fr} — ${entry.ipa}` },
+          tags: ["reading"],
+        },
+        {
+          onSuccess: () => {
+            toast({
+              title: "Carte créée",
+              description: `« ${entry.word} » ajouté au deck.`,
+            });
+          },
+          onError: (err) => {
+            toast({
+              title: "Création impossible",
+              description: err.message ?? "Erreur inconnue",
+              variant: "destructive",
+            });
+          },
+        },
+      );
+    },
+    [deckId, createNote],
+  );
+
+  /**
+   * Ask the AI to define a word absent from the offline dictionary. We reuse
+   * the card-generation command (one card max) and read its front/back as a
+   * lightweight gloss; on success the popover re-renders with the new entry.
+   */
+  const handleAiLookup = useCallback(
+    (word: string) => {
+      setAiLoadingWord(word);
+      setAiErrors((prev) => {
+        const copy = { ...prev };
+        delete copy[word];
+        return copy;
+      });
+      generateCards.mutate(
+        { text: word, maxCards: 1, language },
+        {
+          onSuccess: (cards) => {
+            const first = cards[0];
+            if (!first) {
+              setAiErrors((prev) => ({ ...prev, [word]: "Aucune définition générée." }));
+              return;
+            }
+            // `basic` → { front, back }; `cloze` → { text }. Read whichever is
+            // present as the gloss, falling back gracefully.
+            const fields = first.fields;
+            const back = typeof fields.back === "string" ? fields.back.trim() : "";
+            const front = typeof fields.front === "string" ? fields.front.trim() : "";
+            const cloze = typeof fields.text === "string" ? fields.text.trim() : "";
+            setAiEntries((prev) => ({
+              ...prev,
+              [word]: {
+                word,
+                ipa: "",
+                pos: "nom",
+                fr: back || front || cloze || "(définition générée)",
+              },
+            }));
+          },
+          onError: (err) => {
+            setAiErrors((prev) => ({
+              ...prev,
+              [word]: err.message ?? "Échec de la génération IA.",
+            }));
+          },
+          onSettled: () => {
+            setAiLoadingWord((cur) => (cur === word ? null : cur));
+          },
+        },
+      );
+    },
+    [language, generateCards],
+  );
 
   // Coverage stats over distinct words. Reads `statusByWord` directly (rather
   // than the `statusOf` helper) so the dependency list is exactly what biome's
@@ -318,6 +463,10 @@ export function ReadingImport() {
                   </option>
                 ))}
               </select>
+              <p className="text-xs text-muted-foreground">
+                Dictionnaire hors-ligne anglais → français. Pour une autre langue, les mots inconnus
+                utilisent la définition générée par l'IA.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor={deckSelectId}>Deck cible (pour les cartes)</Label>
@@ -354,10 +503,11 @@ export function ReadingImport() {
             <CardTitle className="text-lg">Lecture</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Stats line */}
+            {/* Stats line — announced politely so SR users hear coverage shift. */}
             <div
               className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm"
               data-testid="reading-stats"
+              aria-live="polite"
             >
               <span className="text-muted-foreground">
                 <strong className="text-foreground">{stats.unknown}</strong> mot
@@ -384,63 +534,65 @@ export function ReadingImport() {
               <span>· clique un mot pour changer son statut</span>
             </div>
 
-            {/* The text itself */}
+            {/*
+              The text itself. Each word is a `WordLookupPopover` trigger:
+              click (or Enter/Space) opens an accessible dialog with the
+              definition / IPA / FR gloss, a TTS speaker, a per-word « créer une
+              carte » and — for unknown words — an « Générer avec l'IA »
+              fallback. Status cycling (new → learning → known) lives in the
+              popover footer so it stays reachable by keyboard and screen
+              readers. The trigger carries an aria-label conveying the reading
+              status, which the colour alone cannot announce.
+            */}
             <p
               className="whitespace-pre-wrap break-words text-base leading-8"
               data-testid="reading-text"
             >
-              {tokens.map((token) =>
-                token.isWord ? (
-                  <button
+              {tokens.map((token) => {
+                if (!token.isWord) {
+                  return <span key={token.key}>{token.raw}</span>;
+                }
+                const word = token.normalized;
+                const status = statusOf(word);
+                return (
+                  <WordLookupPopover
                     key={token.key}
-                    type="button"
-                    onClick={() => handleWordClick(token.normalized)}
-                    onMouseEnter={(e) => {
-                      const r = e.currentTarget.getBoundingClientRect();
-                      setHover({
-                        word: token.normalized,
-                        x: r.left + r.width / 2,
-                        y: r.top,
-                      });
-                    }}
-                    onMouseLeave={() => setHover(null)}
-                    className={cn(
-                      "cursor-pointer rounded px-0.5 transition-colors",
-                      statusClasses(statusOf(token.normalized)),
-                    )}
-                    title={`${token.raw} — ${STATUS_LABEL[statusOf(token.normalized)]}`}
-                    data-testid="reading-word"
-                    data-word={token.normalized}
-                    data-status={statusOf(token.normalized)}
+                    word={word}
+                    entry={entryOf(word)}
+                    open={openKey === token.key}
+                    onOpenChange={(next) => setOpenKey(next ? token.key : null)}
+                    onSpeak={handleSpeak}
+                    speakLoading={synthesize.isPending}
+                    onCreateCard={handleCreateCardFromEntry}
+                    onAiLookup={handleAiLookup}
+                    aiLoading={aiLoadingWord === word}
+                    aiError={aiErrors[word] ?? null}
+                    triggerLabel={`${token.raw} — ${STATUS_LABEL[status]}. Voir la définition.`}
+                    className={cn("rounded px-0.5 transition-colors", statusClasses(status))}
+                    footer={
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-center"
+                        onClick={() => handleWordClick(word)}
+                        data-testid="cycle-status-button"
+                      >
+                        <RotateCw />
+                        Marquer {STATUS_LABEL[nextStatus(status)]}
+                      </Button>
+                    }
                   >
-                    {token.raw}
-                  </button>
-                ) : (
-                  <span key={token.key}>{token.raw}</span>
-                ),
-              )}
+                    <span data-testid="reading-word" data-word={word} data-status={status}>
+                      {token.raw}
+                    </span>
+                  </WordLookupPopover>
+                );
+              })}
             </p>
 
-            {/* Inline dictionary on hover (definition + IPA + FR translation) */}
-            {hover &&
-              (() => {
-                const entry = lookupLocal(hover.word);
-                if (!entry) return null;
-                return (
-                  <div
-                    className="pointer-events-none fixed z-50 w-max max-w-xs -translate-x-1/2 -translate-y-full rounded-lg border bg-popover px-3 py-2 text-popover-foreground shadow-lg"
-                    style={{ left: hover.x, top: hover.y - 8 }}
-                  >
-                    <div className="flex items-baseline gap-2">
-                      <span className="font-display font-semibold">{entry.word}</span>
-                      <span className="font-mono text-xs text-muted-foreground">{entry.ipa}</span>
-                    </div>
-                    <div className="mt-0.5 text-sm text-muted-foreground">
-                      <span className="text-accent-foreground">{entry.pos}</span> · {entry.fr}
-                    </div>
-                  </div>
-                );
-              })()}
+            {/* biome-ignore lint/a11y/useMediaCaption: TTS playback of single words — no captions available. */}
+            <audio ref={audioRef} preload="none" className="hidden" />
 
             {/* Create cards action */}
             <div className="flex flex-wrap items-center gap-2 border-t pt-4">

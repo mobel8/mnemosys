@@ -35,19 +35,23 @@ use crate::app_state::AppState;
 /// Entry point used by both `main.rs` (release) and integration tests.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         // tauri-plugin-sql is intentionally NOT registered — rusqlite owns
         // the DB layer and exposes #[tauri::command] handlers.
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_notification::init())
-        // Auto-updater (Session 4). The plugin is registered unconditionally
-        // so a release build can hot-swap binaries when a manifest server
-        // becomes available, but it stays dormant until the `endpoints` /
-        // `pubkey` fields in `tauri.conf.json::plugins.updater` point at a
-        // real server. See `docs/SESSION_4_RELEASE.md` for the workflow.
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_notification::init());
+
+    // Auto-updater (Session 4) — OPT-IN behind the `updater` Cargo feature,
+    // OFF by default. SECURITY (P036): never register it with an empty signing
+    // `pubkey` + a live `endpoints` URL (supply-chain RCE). Build with
+    // `--features updater` only once a real minisign pubkey is committed in
+    // `tauri.conf.json::plugins.updater`. See `docs/SESSION_4_RELEASE.md`.
+    #[cfg(feature = "updater")]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
         .setup(|app| {
             // Resolve `<app_data_dir>/mnemosys.db`. `app_data_dir()` on
             // Linux gives `~/.local/share/<bundle id>`; we create the
@@ -84,6 +88,7 @@ pub fn run() {
             commands::decks::get_deck_mastery_status,
             // cards / notes
             commands::cards::list_cards_in_deck,
+            commands::cards::get_card_with_note,
             commands::cards::search_notes,
             commands::cards::create_note,
             commands::cards::update_note,

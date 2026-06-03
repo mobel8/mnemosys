@@ -33,17 +33,23 @@ const REQUEST_TIMEOUT_SECS: u64 = 120;
 
 /// Errors specific to the image transport. Kept distinct so the command layer
 /// can surface a "configure your OpenAI key" CTA on [`ImageError::NoApiKey`].
+//
+// Messages reach the (French) UI verbatim, so they're written in French. The
+// `NoApiKey` text keeps the literal "API key" token so the frontend's
+// `/api key/i` missing-key heuristic still surfaces the "configure your key"
+// CTA.
 #[derive(Debug, thiserror::Error)]
 pub enum ImageError {
     #[error(
-        "OpenAI API key not configured. Set OPENAI_API_KEY env var or configure it in Settings."
+        "Clé API OpenAI non configurée (OpenAI API key). Renseigne la variable \
+         d'environnement OPENAI_API_KEY ou configure-la dans Paramètres."
     )]
     NoApiKey,
-    #[error("HTTP error: {0}")]
+    #[error("Erreur HTTP : {0}")]
     Http(String),
-    #[error("OpenAI Images API returned {status}: {message}")]
+    #[error("L'API Images d'OpenAI a renvoyé le statut {status} : {message}")]
     Api { status: u16, message: String },
-    #[error("Invalid response from OpenAI Images API: {0}")]
+    #[error("Réponse invalide de l'API Images d'OpenAI : {0}")]
     InvalidResponse(String),
 }
 

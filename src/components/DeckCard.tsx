@@ -7,7 +7,7 @@
  */
 
 import { useNavigate } from "@tanstack/react-router";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { BookOpen, Lock, Mic2, MoreVertical, Pencil, Play, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { DeckPodcastDialog } from "@/components/DeckPodcastDialog";
@@ -55,7 +55,8 @@ interface DeckCardProps {
  * cards) the function returns `null` and the caller renders no badge.
  *
  * Order of preference (best first): Burned → Enlightened → Master → Guru →
- * Apprentice. A deck with `apprentice = 100%` lands on Apprentice; the
+ * Apprentice (rendered in French: Ancré → Expert → Maître → Confirmé →
+ * Apprenti). A deck with `apprentice = 100%` lands on Apprenti; the
  * thresholds are explicit so a future change of policy stays trivial.
  */
 function pickMasteryLevel(m: DeckMastery): {
@@ -70,32 +71,37 @@ function pickMasteryLevel(m: DeckMastery): {
   // than reaching for raw Tailwind color scales.
   if (m.burned >= half)
     return {
-      label: "Burned",
+      label: "Ancré",
       tone: "border-chart-4/30 bg-chart-4/15 text-chart-4",
     };
   if (m.burned + m.enlightened >= half)
     return {
-      label: "Enlightened",
+      label: "Expert",
       tone: "border-chart-5/30 bg-chart-5/15 text-chart-5",
     };
   if (m.burned + m.enlightened + m.master >= half)
     return {
-      label: "Master",
+      label: "Maître",
       tone: "border-chart-1/30 bg-chart-1/15 text-chart-1",
     };
   if (m.burned + m.enlightened + m.master + m.guru >= half)
     return {
-      label: "Guru",
+      label: "Confirmé",
       tone: "border-chart-3/30 bg-chart-3/15 text-chart-3",
     };
   return {
-    label: "Apprentice",
+    label: "Apprenti",
     tone: "border-chart-2/30 bg-chart-2/15 text-chart-2",
   };
 }
 
 export function DeckCard({ deck }: DeckCardProps) {
   const navigate = useNavigate();
+  // P029b — honour prefers-reduced-motion: skip the hover lift entirely so the
+  // tile stays still for users who opted out of motion (MotionConfig already
+  // covers the global case; this makes the intent explicit and avoids a
+  // transform animation being queued at all).
+  const reduceMotion = useReducedMotion();
   const stats = useDeckStats(deck.id);
   const mastery = useDeckMastery(deck.id);
   const masteryLevel = mastery.data ? pickMasteryLevel(mastery.data) : null;
@@ -104,9 +110,11 @@ export function DeckCard({ deck }: DeckCardProps) {
   const hasPrerequisite = deck.prerequisite_deck_id != null;
   const masteryStatus = useDeckMasteryStatus(deck.id, { enabled: hasPrerequisite });
   const locked = hasPrerequisite && masteryStatus.data ? !masteryStatus.data.unlocked : false;
-  // Resolve the prerequisite's display name from the cached deck list for a
-  // helpful tooltip ("Maîtrise d'abord {name}").
-  const allDecks = useDecks({ enabled: hasPrerequisite });
+  // The cached deck list backs two things: resolving the prerequisite's
+  // display name for the lock tooltip ("Maîtrise d'abord {name}"), and (P013b)
+  // listing the decks that point to *this* deck as their Bloom prerequisite.
+  // The list is shared app-wide so this query is effectively free.
+  const allDecks = useDecks();
   const prerequisiteName =
     allDecks.data?.find((d) => d.id === deck.prerequisite_deck_id)?.name ?? "le deck prérequis";
   const [editOpen, setEditOpen] = useState(false);
@@ -117,15 +125,32 @@ export function DeckCard({ deck }: DeckCardProps) {
   // the backend enforces the same floor (≥3 cards).
   const canPodcast = cardCount >= 3;
 
+  // P013b — decks that list this one as their Bloom prerequisite. The backend
+  // uses ON DELETE SET NULL, so deleting succeeds and simply unlocks them; we
+  // surface that side-effect in the success toast and, if a FK error ever
+  // resurfaces, explain the prerequisite link in plain French.
+  const dependents = (allDecks.data ?? []).filter((d) => d.prerequisite_deck_id === deck.id);
+
   const deleteDeck = useDeleteDeck({
     onSuccess: () => {
-      toast({ title: "Deck supprimé", description: `« ${deck.name} » a été supprimé.` });
+      toast({
+        title: "Deck supprimé",
+        description:
+          dependents.length > 0
+            ? `« ${deck.name} » a été supprimé. ${dependents.length} deck(s) qui l'avaient comme prérequis sont désormais déverrouillés.`
+            : `« ${deck.name} » a été supprimé.`,
+      });
       setConfirmDelete(false);
     },
     onError: (err) => {
+      const isPrerequisiteConflict = /prerequisite|prérequis|foreign key|constraint/i.test(
+        err.message,
+      );
       toast({
         title: "Suppression impossible",
-        description: err.message,
+        description: isPrerequisiteConflict
+          ? `« ${deck.name} » sert de prérequis à un autre deck. Retire d'abord ce prérequis dans le deck concerné, puis réessaie.`
+          : err.message,
         variant: "destructive",
       });
     },
@@ -137,19 +162,11 @@ export function DeckCard({ deck }: DeckCardProps) {
 
   return (
     <>
-      <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}>
-        <Card
-          className="group relative cursor-pointer overflow-hidden transition-shadow hover:shadow-md"
-          onClick={go}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              go();
-            }
-          }}
-          role="button"
-          tabIndex={0}
-        >
+      <motion.div
+        whileHover={reduceMotion ? undefined : { y: -2 }}
+        transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <Card className="group relative overflow-hidden transition-shadow hover:shadow-md">
           <span
             aria-hidden
             className="absolute inset-y-0 left-0 w-1.5"
@@ -164,7 +181,21 @@ export function DeckCard({ deck }: DeckCardProps) {
           <CardContent className="space-y-3 p-5 pl-6">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <h3 className="truncate font-display text-lg tracking-tight">{deck.name}</h3>
+                <h3 className="truncate font-display text-lg tracking-tight">
+                  {/* Stretched-link pattern: the title is the only real control,
+                      but its `::after` overlay makes the whole tile clickable
+                      without nesting interactive elements (valid ARIA). The
+                      action menu below sits in its own stacking context so it
+                      stays clickable above the overlay. */}
+                  <button
+                    type="button"
+                    onClick={go}
+                    aria-label={`Ouvrir le deck ${deck.name}`}
+                    className="rounded-sm text-left outline-none after:absolute after:inset-0 after:content-[''] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    {deck.name}
+                  </button>
+                </h3>
                 <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-sm text-muted-foreground">
                   {deck.description ?? "Pas de description."}
                 </p>
@@ -174,10 +205,8 @@ export function DeckCard({ deck }: DeckCardProps) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 opacity-60 hover:opacity-100"
+                    className="relative z-10 h-8 w-8 opacity-60 hover:opacity-100"
                     aria-label="Actions du deck"
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
                   >
                     <MoreVertical className="h-4 w-4" />
                   </Button>

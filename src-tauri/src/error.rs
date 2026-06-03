@@ -7,24 +7,28 @@
 use serde::Serialize;
 use thiserror::Error;
 
+// Messages are surfaced verbatim in the (French) UI toasts via the `Serialize`
+// impl below, so the human-facing prefixes are written in French. The wrapped
+// `{0}` payloads can still be technical (a SQLite/serde message), but the
+// prefix gives the user a localised, intelligible category.
 #[derive(Debug, Error)]
 pub enum AppError {
-    #[error("Database error: {0}")]
+    #[error("Erreur de base de données : {0}")]
     Database(String),
 
-    #[error("FSRS error: {0}")]
+    #[error("Erreur FSRS : {0}")]
     Fsrs(String),
 
-    #[error("IO error: {0}")]
+    #[error("Erreur d'entrée/sortie : {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("Serialization error: {0}")]
+    #[error("Erreur de sérialisation : {0}")]
     Serde(#[from] serde_json::Error),
 
-    #[error("Validation error: {0}")]
+    #[error("Erreur de validation : {0}")]
     Validation(String),
 
-    #[error("Not found: {0}")]
+    #[error("Introuvable : {0}")]
     NotFound(String),
 
     #[error("{0}")]

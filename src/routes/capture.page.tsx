@@ -18,7 +18,14 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { type OcrResult, runOcr, terminateOcr } from "@/lib/ocr";
+import {
+  DEFAULT_OCR_LANG,
+  OCR_LANGUAGES,
+  type OcrLang,
+  type OcrResult,
+  runOcr,
+  terminateOcr,
+} from "@/lib/ocr";
 import { useCreateNote, useDecks } from "@/lib/queries";
 
 type CardMode = "cloze" | "basic";
@@ -29,20 +36,37 @@ interface DraftCard {
   preview: string;
 }
 
-/** Longest alphabetic word on a line — the one we mask in a cloze. */
-function salientWord(line: string): string | null {
-  const words = line.match(/\p{L}[\p{L}\p{N}'-]{2,}/gu) ?? [];
-  if (words.length === 0) return null;
-  return words.reduce((a, b) => (b.length > a.length ? b : a));
+/**
+ * Longest alphabetic word on a line — the one we mask in a cloze. Returns the
+ * word **and its byte offset** in the line so the caller can splice it back in
+ * by position rather than via an un-anchored `String.replace`, which would mask
+ * the first *substring* match (e.g. "at" hiding inside "cat").
+ */
+function salientWord(line: string): { word: string; index: number } | null {
+  const re = /\p{L}[\p{L}\p{N}'-]{2,}/gu;
+  let best: { word: string; index: number } | null = null;
+  let match: RegExpExecArray | null = re.exec(line);
+  while (match !== null) {
+    const word = match[0];
+    // Strict `>` keeps the FIRST occurrence on a length tie.
+    if (best === null || word.length > best.word.length) {
+      best = { word, index: match.index };
+    }
+    match = re.exec(line);
+  }
+  return best;
 }
 
 function buildCards(lines: string[], mode: CardMode): DraftCard[] {
   if (mode === "cloze") {
     return lines
       .map((line): DraftCard | null => {
-        const w = salientWord(line);
-        if (!w || line.split(/\s+/).length < 2) return null;
-        const text = line.replace(w, `{{c1::${w}}}`);
+        const salient = salientWord(line);
+        if (!salient || line.split(/\s+/).length < 2) return null;
+        const { word, index } = salient;
+        // Splice by exact index so only the chosen token is masked, even when
+        // it also appears as a substring of another word on the line.
+        const text = `${line.slice(0, index)}{{c1::${word}}}${line.slice(index + word.length)}`;
         return { template: "cloze", fields: { text }, preview: text };
       })
       .filter((c): c is DraftCard => c !== null);
@@ -73,6 +97,7 @@ export default function CapturePage() {
   const [text, setText] = useState("");
   const [mode, setMode] = useState<CardMode>("cloze");
   const [deckId, setDeckId] = useState<string>("");
+  const [ocrLang, setOcrLang] = useState<OcrLang>(DEFAULT_OCR_LANG);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => () => void terminateOcr(), []);
@@ -118,9 +143,17 @@ export default function CapturePage() {
     setBusy(true);
     setProgress(0);
     try {
-      const result = await runOcr(imageUrl, setProgress);
+      const result = await runOcr(imageUrl, setProgress, ocrLang);
       setOcr(result);
       setText(result.text.trim());
+      if (result.lang !== ocrLang) {
+        // Requested language data wasn't available — recognition used English.
+        toast({
+          title: "Langue de secours utilisée",
+          description:
+            "Les données françaises ne sont pas installées : reconnaissance effectuée en anglais.",
+        });
+      }
       if (result.lines.length === 0) {
         toast({
           title: "Aucun texte détecté",
@@ -136,7 +169,7 @@ export default function CapturePage() {
     } finally {
       setBusy(false);
     }
-  }, [imageUrl, toast]);
+  }, [imageUrl, toast, ocrLang]);
 
   const lines = text
     .split("\n")
@@ -232,6 +265,22 @@ export default function CapturePage() {
                   </>
                 )}
               </Button>
+              <Select
+                value={ocrLang}
+                onValueChange={(v) => setOcrLang(v as OcrLang)}
+                disabled={busy}
+              >
+                <SelectTrigger className="w-[160px]" aria-label="Langue de reconnaissance">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OCR_LANGUAGES.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 variant="ghost"
                 onClick={() => {
@@ -245,7 +294,15 @@ export default function CapturePage() {
               </Button>
             </div>
             {busy && (
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label="Progression de la reconnaissance OCR"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(progress * 100)}
+                aria-live="polite"
+              >
                 <div
                   className="h-full rounded-full bg-primary transition-all duration-200"
                   style={{ width: `${Math.round(progress * 100)}%` }}

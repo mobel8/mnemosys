@@ -125,11 +125,11 @@ impl OllamaClient {
                 // one actionable message.
                 if e.is_connect() || e.is_timeout() {
                     AppError::Other(format!(
-                        "Ollama unreachable at {}. Is it running? Install it from ollama.com and run `ollama serve`.",
+                        "Ollama injoignable à {}. Est-il bien lancé ? Installe-le depuis ollama.com puis lance `ollama serve`.",
                         self.url
                     ))
                 } else {
-                    AppError::Other(format!("Ollama request failed: {e}"))
+                    AppError::Other(format!("Échec de la requête Ollama : {e}"))
                 }
             })?;
 
@@ -143,12 +143,12 @@ impl OllamaClient {
             // pulled yet — point the user at the fix.
             if status.as_u16() == 404 {
                 return Err(AppError::Other(format!(
-                    "Ollama model '{}' not found. Run `ollama pull {}` first. ({})",
+                    "Modèle Ollama « {} » introuvable. Lance d'abord `ollama pull {}`. ({})",
                     self.model, self.model, raw
                 )));
             }
             return Err(AppError::Other(format!(
-                "Ollama returned {}: {}",
+                "Ollama a renvoyé le statut {} : {}",
                 status.as_u16(),
                 raw
             )));
@@ -157,7 +157,7 @@ impl OllamaClient {
         let parsed: GenerateResponse = resp
             .json()
             .await
-            .map_err(|e| AppError::Other(format!("invalid Ollama response: {e}")))?;
+            .map_err(|e| AppError::Other(format!("Réponse Ollama invalide : {e}")))?;
         Ok(parsed.response)
     }
 }

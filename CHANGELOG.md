@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.10.0] — Audit qualité multi-agents : 48 corrections critical + high (2026-06-03)
+
+Audit exhaustif (52 finders + 7 stratèges + 7 veille concurrentielle, ~533
+constats → 132 problèmes triés) puis correction des **48 problèmes critical +
+high** par escouades de fixers, suivi d'une vérification centrale complète
+(tsc · biome · vitest · cargo check/fmt/clippy/test · console).
+
+### Correctness / parcours (critique)
+- **P001** : les cartes neuves (`state='new'`) n'entraient jamais dans la file
+  de révision (`due_cards` filtrait `next_review IS NOT NULL`) — un deck neuf
+  était inétudiable. Fusion des cartes neuves dans la file + tests.
+- **P003** : `submit_review` (update carte + log + JOL + gamification) désormais
+  dans une seule transaction (atomicité).
+- **P004** : la recherche de cartes ne fuit plus entre decks.
+- **P005** : le mode mains-libres ne rejoue plus les cartes déjà notées.
+- **P006/P007** : rétention par deck réellement appliquée au scheduling FSRS ;
+  source unique des paramètres FSRS-6 par défaut (fin des poids FSRS-5 périmés).
+- **P016/P017/P018** : suppression des N+1 (`due_cards`, `PalaceReview` via la
+  nouvelle commande `get_card_with_note`) + index couvrant `idx_cards_due_deck`
+  (migration v18).
+
+### Sécurité / distribution
+- **P033** : permissions du fichier de session/secrets durcies (0600).
+- **P034** : CSP stricte (fin de `csp: null`).
+- **P035** : scope d'écriture FS resserré (retrait de `$HOME`/`$DESKTOP`/`$DOCUMENT`).
+- **P036** : auto-updater rendu opt-in derrière la feature `updater` (plus de
+  `pubkey` vide + endpoint live).
+- **P037** : `cargo-deny` / vérification de licences en CI (conflit GPL webgazer).
+- **P013/P014/P044** : intégrité DB (FK `ON DELETE`, index, migration panic-safe).
+
+### Accessibilité / i18n
+- Lecteurs d'écran : flip de carte annoncé, `inert` sur la face cachée, sliders
+  labellisés, heatmap décrite, titres de section en vrais `<h2>` (P020/P021/P024/P027/P028).
+- `prefers-reduced-motion` respecté globalement (`<MotionConfig reducedMotion="user">`).
+- Libellés UI et messages d'erreur backend (sync, TTS Piper) francisés (P030/P031).
+
+### Langues
+- OCR français (`fra.traineddata` bundlé) + langue OCR configurable (P032).
+- Cloze/occlusion : masquage par index ancré (fini le faux positif sous-chaîne) (P010).
+- Dictionnaire inline câblé au clavier en Lecture (P045/P046).
+
+### Qualité
+- tsc · Biome (225 fichiers) · Vitest (191) · cargo check/fmt/clippy `-D warnings`/test : verts.
+- *(Les 84 problèmes medium/low restants sont planifiés pour une 0.10.x.)*
+
 ## [0.9.0] — Refonte design « Studio Moderne » + apprentissage des langues (2026-06-02)
 
 Refonte visuelle premium de toute l'application (système de design verrouillé,

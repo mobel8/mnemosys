@@ -9,17 +9,16 @@
  * scheduled review through palaces will land in a follow-up release.
  */
 
-import { useQueries } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { AlertTriangle, ArrowLeft, ArrowRight, MapPin, RotateCw } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { PalaceScene } from "@/components/palaces/PalaceScene";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useDecks, usePalace } from "@/lib/queries";
-import { api, type CardWithNote, type PalaceLocus } from "@/lib/tauri";
+import { useCardWithNote, usePalace } from "@/lib/queries";
+import type { PalaceLocus } from "@/lib/tauri";
 
 interface PalaceReviewProps {
   palaceId: number;
@@ -27,7 +26,6 @@ interface PalaceReviewProps {
 
 export function PalaceReview({ palaceId }: PalaceReviewProps) {
   const palaceQ = usePalace(palaceId);
-  const decksQ = useDecks();
   const navigate = useNavigate();
   const [cursor, setCursor] = useState(0);
   const [showBack, setShowBack] = useState(false);
@@ -78,7 +76,6 @@ export function PalaceReview({ palaceId }: PalaceReviewProps) {
   }
 
   const palace = palaceQ.data;
-  const decks = decksQ.data ?? [];
 
   if (palace.loci.length === 0) {
     return (
@@ -162,7 +159,6 @@ export function PalaceReview({ palaceId }: PalaceReviewProps) {
           cursor={cursor}
           total={palace.loci.length}
           showBack={showBack}
-          decks={decks}
           onFlip={() => setShowBack((v) => !v)}
           onPrev={() => {
             setCursor((c) => Math.max(0, c - 1));
@@ -183,7 +179,6 @@ interface LocusOverlayProps {
   cursor: number;
   total: number;
   showBack: boolean;
-  decks: Array<{ id: number; name: string }>;
   onFlip: () => void;
   onPrev: () => void;
   onNext: () => void;
@@ -194,7 +189,6 @@ function LocusOverlay({
   cursor,
   total,
   showBack,
-  decks,
   onFlip,
   onPrev,
   onNext,
@@ -219,7 +213,7 @@ function LocusOverlay({
               </span>
             </div>
 
-            <LocusCardBody locusCardId={locus.card_id} decks={decks} showBack={showBack} />
+            <LocusCardBody locusCardId={locus.card_id} showBack={showBack} />
 
             <div className="flex items-center justify-between gap-2 pt-1">
               <Button
@@ -252,47 +246,15 @@ function LocusOverlay({
 }
 
 /**
- * Resolves the card content for the active locus. We don't have a
- * `get_card_by_id` Tauri command yet, so we fetch all cards from every
- * deck the user owns and build a single lookup map. For typical decks
- * (a few hundred cards) this stays well under a beat.
+ * Resolves the card content for the active locus. P017: fetches ONLY this
+ * locus's card via the `get_card_with_note` JOIN command, instead of loading
+ * every card of every deck and building a lookup map.
  */
-function LocusCardBody({
-  locusCardId,
-  decks,
-  showBack,
-}: {
-  locusCardId: number;
-  decks: Array<{ id: number; name: string }>;
-  showBack: boolean;
-}) {
-  // Fan-out per-deck fetch via `useQueries` so we stay on the hooks-at-top
-  // rule even when the decks list changes shape between renders. Caching
-  // keeps repeats free, and we cap per-deck fetch at 500 cards (covers
-  // virtually every learner).
-  const results = useQueries({
-    queries: decks.map((d) => ({
-      queryKey: ["cards-in-deck", d.id, 500, 0] as const,
-      queryFn: () => api.cards.listInDeck(d.id, 500, 0),
-      enabled: Number.isFinite(d.id),
-    })),
-  });
-  // Re-derive when any per-deck query refetches. We feed both the array
-  // identity (`results`) and the join of updatedAt timestamps so React's
-  // exhaustive-deps rule sees a real dependency yet we still benefit from
-  // structural change-detection via the joined string.
-  const updateKey = results.map((r) => r.dataUpdatedAt).join(",");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateKey is the structural fingerprint of `results`.
-  const lookup = useMemo(() => {
-    const map = new Map<number, CardWithNote>();
-    for (const r of results) {
-      for (const cwn of (r.data as CardWithNote[] | undefined) ?? []) {
-        map.set(cwn.card.id, cwn);
-      }
-    }
-    return map;
-  }, [updateKey]);
-  const cwn = lookup.get(locusCardId);
+function LocusCardBody({ locusCardId, showBack }: { locusCardId: number; showBack: boolean }) {
+  const { data: cwn, isLoading } = useCardWithNote(locusCardId);
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground">Chargement de la carte…</p>;
+  }
   if (!cwn) {
     return <p className="text-sm text-muted-foreground">Carte introuvable (id={locusCardId})</p>;
   }

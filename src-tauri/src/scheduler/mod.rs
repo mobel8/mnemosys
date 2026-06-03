@@ -171,6 +171,30 @@ pub fn from_kind<'a>(
     }
 }
 
+/// Same as [`from_kind`] but threads a per-deck `desired_retention` into the
+/// FSRS-6 adapter so the deck's own retention target actually drives the
+/// scheduled interval (P006).
+///
+/// Only FSRS-6 consumes `retention`; the deterministic algorithms (SM-2,
+/// Leitner, HLR, Memorize) don't model FSRS retention, so they ignore it and
+/// behave exactly like [`from_kind`]. `retention` is clamped into the
+/// FSRS-safe band by the engine, so any valid deck value is accepted.
+pub fn from_kind_with_retention<'a>(
+    kind: SchedulerKind,
+    fsrs: &'a crate::fsrs::CardScheduler,
+    retention: f32,
+) -> Box<dyn Scheduler + 'a> {
+    match kind {
+        SchedulerKind::Fsrs6 => {
+            Box::new(fsrs6_adapter::Fsrs6Adapter::with_retention(fsrs, retention))
+        }
+        SchedulerKind::Sm2 => Box::new(sm2::Sm2Scheduler),
+        SchedulerKind::Leitner => Box::new(leitner::LeitnerScheduler),
+        SchedulerKind::Hlr => Box::new(hlr::HlrScheduler),
+        SchedulerKind::Memorize => Box::new(memorize::MemorizeScheduler),
+    }
+}
+
 /// Days between `last_review` (unix seconds, may be `None`) and `now`
 /// (unix seconds). Clamped to 0 for new cards or future timestamps.
 /// Shared by every scheduler so the elapsed-days math stays consistent.

@@ -14,7 +14,7 @@
  * the controls doesn't re-hit the backend.
  */
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { ConfidenceRating } from "@/components/ConfidenceRating";
 import { Button } from "@/components/ui/button";
 import { formatInterval } from "@/lib/format";
@@ -47,29 +47,33 @@ interface RatingDef {
   className: string;
 }
 
+// P030 — French FSRS grade labels, aligned with HandsFreeReview
+// (Encore / Difficile / Bien / Facile). The `data-testid` keys on the
+// numeric rating (`rating-1`…`rating-4`) so it stays stable regardless of
+// the displayed (now localised) label.
 const RATINGS: readonly RatingDef[] = [
   {
     rating: 1,
-    label: "Again",
+    label: "Encore",
     hotkey: "1",
     className:
       "bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive",
   },
   {
     rating: 2,
-    label: "Hard",
+    label: "Difficile",
     hotkey: "2",
     className: "bg-warning text-warning-foreground hover:bg-warning/90 focus-visible:ring-warning",
   },
   {
     rating: 3,
-    label: "Good",
+    label: "Bien",
     hotkey: "3",
     className: "bg-success text-success-foreground hover:bg-success/90 focus-visible:ring-success",
   },
   {
     rating: 4,
-    label: "Easy",
+    label: "Facile",
     hotkey: "4",
     className: "bg-chart-2 text-background hover:bg-chart-2/90 focus-visible:ring-chart-2",
   },
@@ -89,6 +93,8 @@ export function ReviewControls({
   // point in spending IPC on a card the user might just hit Space and ignore.
   const showAnswer = phase === "answer" || phase === "submitting";
   const next = useNextStates(cardId, { enabled: showAnswer });
+  // P029 — drop the hover/tap scale micro-interaction for reduced-motion users.
+  const reduceMotion = useReducedMotion();
 
   if (phase === "question") {
     return (
@@ -137,8 +143,8 @@ export function ReviewControls({
           return (
             <motion.div
               key={r.rating}
-              whileHover={isSubmitting ? undefined : { scale: 1.02 }}
-              whileTap={isSubmitting ? undefined : { scale: 0.98 }}
+              whileHover={isSubmitting || reduceMotion ? undefined : { scale: 1.02 }}
+              whileTap={isSubmitting || reduceMotion ? undefined : { scale: 0.98 }}
               transition={{ duration: 0.1 }}
               className="flex"
             >
@@ -148,7 +154,7 @@ export function ReviewControls({
                 onClick={() => onRate(r.rating)}
                 aria-label={`${r.label} (touche ${r.hotkey})`}
                 aria-keyshortcuts={r.hotkey}
-                data-testid={`rating-${r.label.toLowerCase()}`}
+                data-testid={`rating-${r.rating}`}
                 className={cn(
                   "flex w-full flex-col items-center justify-center gap-1 rounded-md px-3 py-3 text-sm font-semibold shadow-sm transition-colors",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background",

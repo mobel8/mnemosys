@@ -12,6 +12,7 @@
  * from vitest's jsdom environment without exploding.
  */
 
+import { useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
   type ReactNode,
@@ -21,6 +22,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { queryKeys } from "@/lib/queries";
 import { type AppSettings, api } from "@/lib/tauri";
 
 export type Theme = "light" | "dark" | "system";
@@ -50,6 +52,7 @@ function applyThemeClass(theme: "light" | "dark") {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [theme, setThemeState] = useState<Theme>("system");
   const [systemTheme, setSystemTheme] = useState<"light" | "dark">(getSystemTheme);
 
@@ -89,15 +92,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     applyThemeClass(resolvedTheme);
   }, [resolvedTheme]);
 
-  const setTheme = useCallback(async (next: Theme) => {
-    setThemeState(next);
-    try {
-      const current = await api.settings.get();
-      await api.settings.save({ ...current, theme: next });
-    } catch {
-      /* outside Tauri — local-only update is fine */
-    }
-  }, []);
+  const setTheme = useCallback(
+    async (next: Theme) => {
+      setThemeState(next);
+      try {
+        const current = await api.settings.get();
+        const updated: AppSettings = { ...current, theme: next };
+        await api.settings.save(updated);
+        // Keep the shared `settings` query cache in sync: every other consumer
+        // reads the theme (and the rest of AppSettings) through
+        // `useSettingsQuery()`. Without this, the toggle would persist to disk
+        // but the cache would stay stale, so a later save by another section
+        // (which spreads its cached `query.data`) could clobber the new theme,
+        // and cache-driven UI (e.g. NeuroModesShell) would not reflect it.
+        queryClient.setQueryData<AppSettings>(queryKeys.settings, updated);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.settings });
+      } catch {
+        /* outside Tauri — local-only update is fine */
+      }
+    },
+    [queryClient],
+  );
 
   const value = useMemo<ThemeContextValue>(
     () => ({ theme, resolvedTheme, setTheme }),

@@ -34,6 +34,10 @@ vi.mock("@tanstack/react-router", () => ({
   ),
 }));
 
+vi.mock("@tauri-apps/api/core", () => ({
+  convertFileSrc: (p: string) => p,
+}));
+
 vi.mock("@/lib/queries", () => ({
   useDecks: () => ({
     data: [
@@ -53,6 +57,9 @@ vi.mock("@/lib/queries", () => ({
   useWordStatuses: () => ({ data: wordStatusRows, isLoading: false }),
   useSetWordStatus: () => ({ mutate: setStatusMutate, isPending: false }),
   useCreateCardsFromWords: () => ({ mutate: createCardsMutate, isPending: false }),
+  useCreateNote: () => ({ mutate: vi.fn(), isPending: false }),
+  useSynthesizeAudio: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useGenerateCardsFromText: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 import { ReadingImport, tokenize } from "@/components/ReadingImport";
@@ -98,14 +105,20 @@ describe("ReadingImport", () => {
     expect(stats).toHaveTextContent("0%");
   });
 
-  it("cycles a word's status and persists it on click", async () => {
+  it("cycles a word's status from the lookup popover and persists it", async () => {
     render(<ReadingImport />);
     analyzeText("bonjour");
 
     const word = await screen.findByTestId("reading-word");
     expect(word).toHaveAttribute("data-status", "new");
 
-    fireEvent.click(word);
+    // Clicking the word opens its accessible lookup popover (it no longer
+    // cycles the status directly — that moved into the popover footer so the
+    // definition / TTS / AI-fallback affordances are keyboard-reachable).
+    fireEvent.click(word.closest("button") as HTMLButtonElement);
+
+    const cycleBtn = await screen.findByTestId("cycle-status-button");
+    fireEvent.click(cycleBtn);
 
     // Optimistic flip to "learning" + a persisted mutation.
     await waitFor(() => {

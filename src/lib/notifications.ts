@@ -1,36 +1,66 @@
 /**
- * Best-effort local reminders for time-based implementation intentions
- * (Vague 21, Gollwitzer 1999). Reminding the learner of their « si 19:00
- * alors je révise » plan at the cued moment is the whole behavioural lever.
+ * Local reminders for time-based implementation intentions (Vague 21,
+ * Gollwitzer 1999). Reminding the learner of their « si 19:00 alors je révise »
+ * plan at the cued moment is the whole behavioural lever.
  *
- * Scheduling is intentionally *simple* (the spec calls for it): for every
- * enabled `time` plan we compute the delay until its next occurrence today
- * (or tomorrow if already past) and arm a `setTimeout`. When it fires we send
- * the notification and re-arm for the next day. A once-a-day master tick also
- * re-syncs everything so drift / day-rollover never strands a plan.
+ * Scheduling is delegated to the **OS** via `tauri-plugin-notification`'s
+ * native `schedule` field rather than in-memory JS timers. This matters: a
+ * `setTimeout` only survives while the webview process is alive, so a reminder
+ * armed at app start would never fire once the user closed (or the OS
+ * suspended) the app — i.e. exactly when the reminder is most useful. Native
+ * scheduling hands the trigger to the platform notification daemon, which
+ * delivers it whether or not Mnemosys is running.
+ *
+ *   - « every day » plans (no weekday filter) → one repeating daily interval.
+ *   - weekday-restricted plans → one repeating weekly interval *per* allowed
+ *     weekday (the plugin's `ScheduleInterval.weekday` targets a single day).
+ *
+ * Each scheduled OS notification carries a stable 32-bit integer id derived
+ * from the plan id, so a re-sync cancels the previous batch before arming the
+ * new one (idempotent, no duplicates).
  *
  * Hard rules:
  *   - Outside Tauri (jsdom, plain browser) every entry point is a silent
  *     no-op — `isTauri()` gates the whole module so tests never explode.
  *   - If the user denies notification permission, we stop trying (no spam,
  *     no thrown errors).
- *   - `setTimeout` is capped at ~24 days (2^31 ms); our delays are always
- *     < 48 h so we never overflow.
  */
 
 import { isTauri } from "@tauri-apps/api/core";
 import {
+  cancel,
   isPermissionGranted,
   requestPermission,
+  Schedule,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
 import type { StudyPlan } from "@/lib/tauri";
 
-/** Active timers, keyed by plan id, so a re-sync can cancel stale ones. */
-const timers = new Map<number, ReturnType<typeof setTimeout>>();
+/**
+ * OS notification ids armed by the most recent `scheduleNotifications` call,
+ * so the next call can cancel them before re-arming. Kept at module level
+ * (not inside a closure) so successive calls always reconcile against the
+ * *current* schedule rather than a stale snapshot.
+ */
+let scheduledIds: number[] = [];
 
-/** The daily master re-sync handle, if running. */
-let dailyTick: ReturnType<typeof setInterval> | null = null;
+/**
+ * A plan can map to several OS notifications (one per allowed weekday). We
+ * derive a unique 32-bit id per (plan, slot) pair: `planId * 8 + slot`, where
+ * `slot` is 0 for a daily plan or the ISO weekday (1..7) for a weekly one.
+ * Plan ids are small DB primary keys, so this never overflows a 32-bit int.
+ */
+function notificationId(planId: number, slot: number): number {
+  return (planId * 8 + slot) & 0x7fffffff;
+}
+
+/**
+ * Plugin `ScheduleInterval.weekday` is 1=Sunday … 7=Saturday, whereas our
+ * `days` use ISO weekdays (1=Mon … 7=Sun). Convert between the two.
+ */
+function isoToPluginWeekday(iso: number): number {
+  return (iso % 7) + 1;
+}
 
 /**
  * Parse `"HH:MM"` into `{ hours, minutes }`, or `null` when malformed. The
@@ -93,42 +123,83 @@ export function msUntilNextOccurrence(
   return 24 * 60 * 60 * 1000;
 }
 
-/** Cancel every armed timer (used on re-sync and teardown). */
-function clearAll(): void {
-  for (const handle of timers.values()) {
-    clearTimeout(handle);
+/** Cancel every OS notification armed by a previous sync. Best-effort. */
+async function cancelScheduled(): Promise<void> {
+  if (scheduledIds.length === 0) return;
+  const ids = scheduledIds;
+  scheduledIds = [];
+  try {
+    await cancel(ids);
+  } catch {
+    // The plugin can reject if a notification was already delivered/cleared;
+    // a failed cancel must never crash the app or block re-scheduling.
   }
-  timers.clear();
-}
-
-/** Arm a single `time` plan. Re-arms itself after firing for the next day. */
-function armPlan(plan: StudyPlan): void {
-  if (plan.trigger_type !== "time" || !plan.enabled) return;
-  const clock = parseClock(plan.trigger_value);
-  if (!clock) return;
-  const allowedDays = parseDays(plan.days);
-
-  const delay = msUntilNextOccurrence(clock.hours, clock.minutes, allowedDays);
-  const handle = setTimeout(() => {
-    try {
-      sendNotification({
-        title: "Mnemosys — c'est le moment",
-        body: plan.action,
-      });
-    } catch {
-      // Sending can throw if the webview revoked permission mid-session;
-      // swallow it — a missed reminder must never crash the app.
-    }
-    // Re-arm for the next occurrence.
-    armPlan(plan);
-  }, delay);
-  timers.set(plan.id, handle);
 }
 
 /**
- * (Re)schedule notifications for the given plans. Cancels any previously
- * armed timers first so calling this on every plan-list change is safe and
- * idempotent. No-op outside Tauri or when permission is unavailable/denied.
+ * Arm the native OS notification(s) for a single enabled `time` plan and
+ * return the ids armed (so the caller can track them for later cancellation).
+ *
+ *   - No weekday filter → one repeating *daily* interval at HH:MM.
+ *   - One or more weekdays → one repeating *weekly* interval per weekday.
+ *
+ * The OS notification daemon owns the trigger, so it fires even when Mnemosys
+ * is closed or suspended — unlike the old in-memory `setTimeout`.
+ */
+function armPlan(plan: StudyPlan): number[] {
+  if (plan.trigger_type !== "time" || !plan.enabled) return [];
+  const clock = parseClock(plan.trigger_value);
+  if (!clock) return [];
+  const allowedDays = parseDays(plan.days);
+
+  const send = (id: number, schedule: Schedule): number | null => {
+    try {
+      sendNotification({
+        id,
+        title: "Mnemosys — c'est le moment",
+        body: plan.action,
+        schedule,
+      });
+      return id;
+    } catch {
+      // Sending can throw if the webview revoked permission mid-session;
+      // swallow it — a missed reminder must never crash the app.
+      return null;
+    }
+  };
+
+  const armed: number[] = [];
+  if (allowedDays.length === 0) {
+    const id = send(
+      notificationId(plan.id, 0),
+      Schedule.interval({ hour: clock.hours, minute: clock.minutes, second: 0 }, true),
+    );
+    if (id !== null) armed.push(id);
+  } else {
+    for (const iso of allowedDays) {
+      if (!Number.isInteger(iso) || iso < 1 || iso > 7) continue;
+      const id = send(
+        notificationId(plan.id, iso),
+        Schedule.interval(
+          {
+            weekday: isoToPluginWeekday(iso),
+            hour: clock.hours,
+            minute: clock.minutes,
+            second: 0,
+          },
+          true,
+        ),
+      );
+      if (id !== null) armed.push(id);
+    }
+  }
+  return armed;
+}
+
+/**
+ * (Re)schedule OS notifications for the given plans. Cancels any previously
+ * armed notifications first so calling this on every plan-list change is safe
+ * and idempotent. No-op outside Tauri or when permission is unavailable/denied.
  *
  * Returns `true` when scheduling ran (Tauri + permission granted), `false`
  * when it short-circuited — handy for tests and callers that want to know.
@@ -148,32 +219,20 @@ export async function scheduleNotifications(plans: StudyPlan[]): Promise<boolean
   }
   if (!granted) return false;
 
-  clearAll();
+  // Reconcile against the *current* plan list: drop the previous batch, then
+  // arm the new one. No JS timers survive between calls, so there is no stale
+  // closure to leak a superseded plan set.
+  await cancelScheduled();
+  const armed: number[] = [];
   for (const plan of plans) {
-    armPlan(plan);
+    armed.push(...armPlan(plan));
   }
-
-  // Master daily re-sync: re-arm everything once a day so day-rollover and
-  // long-session drift can't strand a plan. Guard against double-arming.
-  if (dailyTick === null) {
-    dailyTick = setInterval(
-      () => {
-        clearAll();
-        for (const plan of plans) {
-          armPlan(plan);
-        }
-      },
-      24 * 60 * 60 * 1000,
-    );
-  }
+  scheduledIds = armed;
   return true;
 }
 
-/** Tear everything down (timers + daily tick). Safe to call anytime. */
-export function cancelAllNotifications(): void {
-  clearAll();
-  if (dailyTick !== null) {
-    clearInterval(dailyTick);
-    dailyTick = null;
-  }
+/** Cancel every OS notification we armed. Safe to call anytime. */
+export async function cancelAllNotifications(): Promise<void> {
+  if (!isTauri()) return;
+  await cancelScheduled();
 }
