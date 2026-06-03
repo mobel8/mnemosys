@@ -37,7 +37,6 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { AmbientPlayer } from "@/components/AmbientPlayer";
 import { ConfidenceRating } from "@/components/ConfidenceRating";
 import { CyclicSighing } from "@/components/CyclicSighing";
-import { FocusGuard } from "@/components/FocusGuard";
 import { HandsFreeReview } from "@/components/HandsFreeReview";
 import { MoodCheckIn } from "@/components/MoodCheckIn";
 import { PreQuestioning } from "@/components/PreQuestioning";
@@ -130,7 +129,6 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   // --- Vague 12 — cognitive features --------------------------------------
   const pretestModeEnabled = settings.data?.pretest_mode_enabled ?? false;
   const selfExplanationEnabled = settings.data?.self_explanation_enabled ?? false;
-  const focusGuardEnabled = settings.data?.focus_guard_enabled ?? false;
   // Vague 18 — context ambient sound (Godden & Baddeley). Independent of the
   // neuro master switch; gated only by its own setting.
   const ambientSound = settings.data?.ambient_sound ?? "none";
@@ -788,9 +786,6 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
           )}
         </div>
       )}
-
-      {/* Vague 12 — opt-in webcam focus guard (consent-gated, 100% local). */}
-      {focusGuardEnabled && <FocusGuard enabled={focusGuardEnabled} />}
 
       {/* Vague 18 — context ambient sound; plays for the active review, stops
           when the session ends (this branch unmounts) or the learner quits. */}
