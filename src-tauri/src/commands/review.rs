@@ -75,6 +75,10 @@ pub fn get_interleaved_due_cards(
     if limit == 0 {
         return Err(AppError::Validation("limit must be at least 1".to_string()));
     }
+    // P128: clamp the requested page so a stray huge `limit` from the client
+    // can't force an oversized allocation. 500 dwarfs any realistic single
+    // session yet keeps the in-memory prefetch (≤1024 rows) trivial.
+    let limit = limit.min(500);
     let now = chrono::Utc::now().timestamp();
     let conn = state.db.lock();
     state
@@ -196,9 +200,13 @@ pub fn submit_review(
 
     // White Hat gamification — best-effort: any failure here is swallowed so
     // the user's review is always recorded.
-    let correct = rating >= 2;
+    // P055: gamification deliberately treats Hard (≥2) as « not a lapse » (the
+    // learner didn't fully forget), which is a DIFFERENT signal from the FSRS
+    // « recall » (≥3) used by JOL / mastery / the session summary. Named so the
+    // threshold gap reads as intentional, not a bug.
+    let not_a_lapse = rating >= 2;
     let (user_stats, newly_unlocked) =
-        match update_gamification(&state, &tx, now, correct, updated_card.deck_id) {
+        match update_gamification(&state, &tx, now, not_a_lapse, updated_card.deck_id) {
             Ok((stats, unlocked)) => (Some(stats), unlocked),
             Err(e) => {
                 log::warn!("gamification update failed: {}", e);
@@ -229,20 +237,33 @@ fn update_gamification(
     state: &AppState,
     conn: &rusqlite::Connection,
     now_ts: i64,
-    correct: bool,
+    not_a_lapse: bool,
     deck_id: i64,
 ) -> AppResult<(UserStats, Vec<String>)> {
     let gamification = state.db.gamification(conn);
-    let stats = gamification.update_on_review(now_ts, correct)?;
+    let stats = gamification.update_on_review(now_ts, not_a_lapse)?;
 
-    let mastered: i64 = conn
+    // P063: counting mastered cards is a full table scan. Skip it entirely once
+    // the `master_100` badge is earned (achievements never un-earn), so the hot
+    // review path doesn't re-scan every card on every single review.
+    let master_100_unlocked = conn
         .query_row(
+            "SELECT 1 FROM achievements WHERE code = 'master_100' LIMIT 1",
+            [],
+            |_| Ok(()),
+        )
+        .is_ok();
+    let mastered: i64 = if master_100_unlocked {
+        100
+    } else {
+        conn.query_row(
             "SELECT COUNT(*) FROM cards
              WHERE state = 'review' AND suspended = 0 AND stability >= 90.0",
             [],
             |r| r.get(0),
         )
-        .unwrap_or(0);
+        .unwrap_or(0)
+    };
     let decks_count = state.db.decks(conn).count().unwrap_or(0);
 
     // Collect every code that's eligible *after* this review. Order matters

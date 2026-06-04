@@ -211,10 +211,10 @@ impl<'a> CardRepo<'a> {
             } else {
                 0
             };
-        let elapsed = card
-            .last_review
-            .map(|prev| (reviewed_at - prev).max(0) / 86_400)
-            .unwrap_or(0);
+        // P124: derive elapsed days through the ONE shared helper every
+        // scheduler uses, so `cards.elapsed_days` can't drift from the value
+        // the scheduler fed into FSRS and the one persisted on `reviews`.
+        let elapsed = crate::scheduler::elapsed_days_since(card.last_review, reviewed_at);
         let now = Utc::now().timestamp();
 
         self.conn.execute(
@@ -638,22 +638,28 @@ fn shuffle_in_place<T>(items: &mut [T]) {
     if len < 2 {
         return;
     }
-    let now = std::time::SystemTime::now()
+    // P128: seed from the FULL 128-bit nanosecond clock instead of folding
+    // seconds and sub-second nanos into a single u32. The old scheme discarded
+    // the high bits of the second-count, and `secs ^ nanos` could collide for
+    // readings a whole second apart — biasing the queue toward a handful of
+    // permutations. A 64-bit splitmix64 seed mixes the length in so two calls
+    // at the same instant on differently-sized inputs still diverge.
+    let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| (d.as_secs() ^ u64::from(d.subsec_nanos())) as u32)
-        .unwrap_or(0xDEAD_BEEF);
-    // Xor in the length so successive calls in the same nanosecond still
-    // produce different sequences for differently-sized inputs.
-    let mut state: u32 = now ^ (len as u32).wrapping_mul(0x9E37_79B9);
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0xDEAD_BEEF_CAFE_F00D);
+    let mut state: u64 = nanos ^ (len as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
     if state == 0 {
-        state = 0x1234_5678;
+        state = 0x1234_5678_9ABC_DEF0;
     }
-    let mut next = || -> u32 {
-        // Xorshift32 — fast, no deps, mixes well enough for our purpose.
-        state ^= state << 13;
-        state ^= state >> 17;
-        state ^= state << 5;
-        state
+    let mut next = || -> u64 {
+        // splitmix64 — single-register PRNG with excellent avalanche; ample
+        // for queue ordering and dependency-free.
+        state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
     };
     for i in (1..len).rev() {
         let j = (next() as usize) % (i + 1);
