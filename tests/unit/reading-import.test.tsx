@@ -14,7 +14,8 @@
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const setStatusMutate = vi.fn();
 const createCardsMutate = vi.fn();
@@ -56,6 +57,7 @@ vi.mock("@/lib/queries", () => ({
   }),
   useWordStatuses: () => ({ data: wordStatusRows, isLoading: false }),
   useSetWordStatus: () => ({ mutate: setStatusMutate, isPending: false }),
+  useCardsInDeck: () => ({ data: [], isLoading: false }),
   useCreateCardsFromWords: () => ({ mutate: createCardsMutate, isPending: false }),
   useCreateNote: () => ({ mutate: vi.fn(), isPending: false }),
   useSynthesizeAudio: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -63,6 +65,19 @@ vi.mock("@/lib/queries", () => ({
 }));
 
 import { ReadingImport, tokenize } from "@/components/ReadingImport";
+
+// Radix Select relies on Pointer Capture + scrollIntoView, absent from jsdom.
+beforeAll(() => {
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (!Element.prototype.setPointerCapture) {
+    Element.prototype.setPointerCapture = () => undefined;
+  }
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => undefined;
+  }
+});
 
 beforeEach(() => {
   setStatusMutate.mockReset();
@@ -135,10 +150,12 @@ describe("ReadingImport", () => {
   it("creates cards from the words marked learning", async () => {
     // Pre-seed one word as already "learning" so the button is enabled.
     wordStatusRows = [{ word: "gato", language: "en", status: "learning", updated_at: 0 }];
+    const user = userEvent.setup();
     render(<ReadingImport />);
 
-    // Pick the target deck.
-    fireEvent.change(screen.getByLabelText(/Deck cible/i), { target: { value: "3" } });
+    // Pick the target deck (now a Radix Select, not a native <select>).
+    await user.click(screen.getByLabelText(/Deck cible/i));
+    await user.click(await screen.findByRole("option", { name: "Spanish" }));
     analyzeText("gato perro");
 
     const createBtn = await screen.findByTestId("create-cards-button");

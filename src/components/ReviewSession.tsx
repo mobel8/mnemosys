@@ -21,15 +21,17 @@
  *   - Esc        : quit (with confirm in the progress bar)
  *   - ?          : show shortcut help
  *
- * We deliberately keep this stateful logic in the component rather than the
- * shared `useReviewSession` Zustand store: that store is read by the
- * sidebar pill (a different agent's surface area) and bloating it with a
- * full state machine + reviewed log would couple two unrelated concerns.
- * The lightweight store stays the source of truth for "is a session in
- * progress?", and we mirror `currentIndex`/`reviewedCount` into it so the
- * pill stays accurate.
+ * We deliberately keep this stateful logic (the live queue, cursor and
+ * reviewed log) in the component rather than the shared `useReviewSession`
+ * Zustand store. The store stays minimal — it only records *which deck* the
+ * active session is on — and is the single source of truth for the one
+ * question other surfaces ask: "is a session in progress?" (`deckId !== null`,
+ * read by MovementBreakReminder / DelayedJolPrompt). Mirroring the cursor /
+ * reviewed count there too only created a second source of truth that drifted
+ * out of sync (P122), so we don't.
  */
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Headphones } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -58,6 +60,7 @@ import {
 } from "@/components/ui/dialog";
 import { Toast, ToastDescription, ToastTitle } from "@/components/ui/toast";
 import {
+  queryKeys,
   useSaveSketch,
   useSettingsQuery,
   useSubmitReview,
@@ -65,13 +68,15 @@ import {
   useTodayWellness,
 } from "@/lib/queries";
 import { useReviewSession } from "@/lib/stores/review";
-import type { CardWithNote, Rating, TTSVoice, WellnessLog } from "@/lib/tauri";
+import { api, type CardWithNote, type Rating, type TTSVoice, type WellnessLog } from "@/lib/tauri";
 
 type Phase = "question" | "answer" | "submitting" | "done";
 
 interface ReviewSessionProps {
   deckId: number;
   cards: CardWithNote[];
+  /** P112 — libellé affiché dans la barre de progression unique (ex. « Session entrelacée »). */
+  sessionLabel?: string;
 }
 
 interface InlineToast {
@@ -81,8 +86,9 @@ interface InlineToast {
   variant?: "default" | "destructive";
 }
 
-export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
+export function ReviewSession({ deckId, cards: initial, sessionLabel }: ReviewSessionProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const submitReview = useSubmitReview();
   const suspendCard = useSuspendCard();
   const saveSketch = useSaveSketch();
@@ -94,6 +100,11 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>(cards.length === 0 ? "done" : "question");
   const [reviewed, setReviewed] = useState<ReviewedLog[]>([]);
+  // P103 — cards that are *still* due once this session's queue is exhausted
+  // (cards we just lapsed back into « learning », plus any that came due while
+  // we were reviewing). Fetched on the transition to `done` so the summary can
+  // offer a working « Continuer » CTA instead of forcing a quit + relaunch.
+  const [remainingDue, setRemainingDue] = useState<CardWithNote[]>([]);
   const [pendingRating, setPendingRating] = useState<Rating | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [toasts, setToasts] = useState<InlineToast[]>([]);
@@ -206,15 +217,21 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
 
   const startedAtRef = useRef<number>(Date.now());
   const cardShownAtRef = useRef<number>(Date.now());
+  // P096 — synchronous double-submit guard. `setPhase('submitting')` is async,
+  // so two synchronous invocations of the same rating hotkey (key auto-repeat,
+  // double-tap within one frame) both pass the `phase === 'answer'` check and
+  // fire `submitReview.mutate` twice → two reviews + two FSRS steps for one
+  // card. A ref flips synchronously, blocking the second call before React
+  // re-renders the disabled buttons. Cleared in every mutation settle path.
+  const submittingRef = useRef(false);
 
   const startSessionInStore = useReviewSession((s) => s.startSession);
-  const advanceInStore = useReviewSession((s) => s.advance);
   const resetStore = useReviewSession((s) => s.reset);
-  const markShown = useReviewSession((s) => s.markCardShown);
 
-  // Mirror the queue into the shared store on mount; tear it down on unmount.
-  // We deliberately ignore the dependency array warning — Zustand actions are
-  // stable refs and we want this effect to fire exactly once per session.
+  // Flag the active session in the shared store on mount (just the deckId —
+  // the live queue stays local, see P122); clear it on unmount. We deliberately
+  // ignore the dependency array warning — Zustand actions are stable refs and
+  // we want this effect to fire exactly once per session.
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional mount-only effect
   useEffect(() => {
     startSessionInStore(deckId, initial);
@@ -224,6 +241,55 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   }, []);
 
   const current = cards[currentIndex];
+
+  // P103 — once the queue is exhausted, fetch the cards that are *still* due
+  // for this deck (relapses + anything that came due mid-session) so the
+  // summary can surface a live « Continuer » CTA. Interleaved sessions
+  // (`deckId < 0`) have no canonical deck, so we skip the fetch there.
+  useEffect(() => {
+    if (phase !== "done" || deckId < 0) return;
+    let cancelled = false;
+    // `fetchQuery` reuses the `due-cards` cache key, which `useSubmitReview`
+    // already invalidates on every grade, so this picks up the post-session
+    // truth (relapses included) rather than the pre-session snapshot.
+    queryClient
+      .fetchQuery({
+        queryKey: queryKeys.dueCards(deckId, 100),
+        queryFn: () => api.review.dueCards(deckId, 100),
+      })
+      .then((due) => {
+        if (!cancelled) setRemainingDue(due);
+      })
+      .catch(() => {
+        // Best-effort: a failed fetch just means no « Continuer » CTA.
+        if (!cancelled) setRemainingDue([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, deckId, queryClient]);
+
+  // P103 — re-seed the session with the freshly-due cards without leaving the
+  // route. Resets the queue, cursor, reviewed log, per-card buffers and the
+  // session clock so the summary's stats stay scoped to the new run.
+  const handleContinue = useCallback(() => {
+    if (remainingDue.length === 0) return;
+    const next = remainingDue;
+    setRemainingDue([]);
+    setCards(next);
+    setCurrentIndex(0);
+    setReviewed([]);
+    setPendingRating(null);
+    setConfidence(null);
+    setConfidencePost(null);
+    sketchDataRef.current = null;
+    setTypedAnswer(null);
+    setSelfExplanationDone(false);
+    submittingRef.current = false;
+    startedAtRef.current = Date.now();
+    cardShownAtRef.current = Date.now();
+    setPhase("question");
+  }, [remainingDue]);
 
   const pushToast = useCallback((t: Omit<InlineToast, "id">) => {
     toastSeqRef.current += 1;
@@ -242,7 +308,6 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       } else {
         setPhase("question");
         cardShownAtRef.current = Date.now();
-        markShown();
       }
       return next;
     });
@@ -254,8 +319,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
     setTypedAnswer(null);
     // Reset the self-explanation gate for the next card.
     setSelfExplanationDone(false);
-    advanceInStore();
-  }, [advanceInStore, cards.length, markShown]);
+  }, [cards.length]);
 
   const handleFlip = useCallback(() => {
     if (phase !== "question" || !current) return;
@@ -279,6 +343,11 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
       if (selfExplanationEnabled && !selfExplanationDone && current.card.id % 5 === 0) {
         return;
       }
+      // P096 — synchronous re-entrancy guard (see `submittingRef`). Bail if a
+      // submit for this card is already in flight; otherwise claim the slot
+      // before any async state update so a second same-frame call can't pass.
+      if (submittingRef.current) return;
+      submittingRef.current = true;
       const reviewTimeMs = Math.max(0, Date.now() - cardShownAtRef.current);
       setPhase("submitting");
       setPendingRating(rating);
@@ -302,6 +371,8 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
         },
         {
           onSuccess: (result) => {
+            // P096 — release the synchronous guard now the review landed.
+            submittingRef.current = false;
             setReviewed((log) => [
               ...log,
               {
@@ -331,6 +402,8 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
             advanceToNext();
           },
           onError: (err) => {
+            // P096 — release the guard so the learner can retry the rating.
+            submittingRef.current = false;
             setPendingRating(null);
             setPhase("answer");
             pushToast({
@@ -388,10 +461,15 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   // the summary.
   const handleHandsFreeSubmit = useCallback(
     (cardId: number, rating: Rating, reviewTimeMs: number) => {
+      // P096 — same synchronous re-entrancy guard as `handleRate`: a fast
+      // double voice/keyboard grade must not submit the same card twice.
+      if (submittingRef.current) return;
+      submittingRef.current = true;
       submitReview.mutate(
         { cardId, rating, reviewTimeMs, confidence: null, confidencePost: null },
         {
           onSuccess: () => {
+            submittingRef.current = false;
             setReviewed((log) => [
               ...log,
               { rating, review_time_ms: reviewTimeMs, correct: rating >= 3 },
@@ -400,9 +478,9 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
             // past the cards already reviewed hands-free (otherwise the
             // classic UI replays them → duplicate reviews on re-grade).
             handsFreeGradedRef.current += 1;
-            advanceInStore();
           },
           onError: (err) => {
+            submittingRef.current = false;
             pushToast({
               title: "Échec de l'enregistrement",
               description: err.message,
@@ -412,7 +490,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
         },
       );
     },
-    [advanceInStore, pushToast, submitReview],
+    [pushToast, submitReview],
   );
 
   // Vague 23 — leave hands-free and resume the classic flip/rate UI. Skip the
@@ -456,37 +534,48 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
   const handleSuspend = useCallback(() => {
     if (!current || phase === "submitting" || phase === "done") return;
     const cardId = current.card.id;
-    // Optimistically remove from the local queue; the mutation will sync the
-    // backend + caches. If it fails we restore the card.
     const removed = current;
-    setCards((prev) => prev.filter((_c, idx) => idx !== currentIndex));
+    const indexAtSuspend = currentIndex;
+    // P097 — suspend is a card transition: reset the per-card buffers and
+    // re-arm the question phase *immediately*, the same way `advanceToNext`
+    // does. Without this a sketch / confidence / typed answer drawn for the
+    // suspended card would bleed onto the card that shifts into its slot, and
+    // a stale `answer` phase could briefly reveal that next card's verso.
+    setConfidence(null);
+    setConfidencePost(null);
+    sketchDataRef.current = null;
+    setTypedAnswer(null);
+    setSelfExplanationDone(false);
+    // Optimistically splice the card out of the live queue. `current` is the
+    // card at `currentIndex`, so `cards` is in sync here and the post-removal
+    // length is computed synchronously at call time (no deferred read of a
+    // stale `cards.length` from a closure). The spliced card keeps
+    // `currentIndex` pointing at the card that follows it; if that ran past
+    // the end the session is done.
+    const lengthAfter = cards.length - 1;
+    setCards((prev) => prev.filter((_c, idx) => idx !== indexAtSuspend));
+    if (indexAtSuspend >= lengthAfter) {
+      setPhase("done");
+    } else {
+      setPhase("question");
+      cardShownAtRef.current = Date.now();
+    }
     suspendCard.mutate(
       { id: cardId, suspended: true },
       {
         onSuccess: () => {
           pushToast({ title: "Carte suspendue" });
-          // The card was spliced out, so `currentIndex` now points at what
-          // used to be `currentIndex + 1`. If we just ran past the end, mark
-          // the session done.
-          setCurrentIndex((i) => {
-            const lengthAfter = cards.length - 1;
-            if (i >= lengthAfter) {
-              setPhase("done");
-              return i;
-            }
-            setPhase("question");
-            cardShownAtRef.current = Date.now();
-            markShown();
-            return i;
-          });
         },
         onError: (err) => {
-          // Roll back the optimistic splice.
+          // Roll back the optimistic splice so the card returns to its slot.
           setCards((prev) => {
             const next = prev.slice();
-            next.splice(currentIndex, 0, removed);
+            next.splice(indexAtSuspend, 0, removed);
             return next;
           });
+          // Re-show the restored card from its question face.
+          setPhase("question");
+          cardShownAtRef.current = Date.now();
           pushToast({
             title: "Suspension impossible",
             description: err.message,
@@ -495,7 +584,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
         },
       },
     );
-  }, [cards.length, current, currentIndex, markShown, phase, pushToast, suspendCard]);
+  }, [cards.length, current, currentIndex, phase, pushToast, suspendCard]);
 
   // NOTE: there is intentionally no "edit current card" hotkey. The only
   // editor route (`/decks/$deckId/new-card`) creates a *blank* note — it has
@@ -575,6 +664,8 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
         deckId={deckId}
         reviewed={reviewed}
         durationMs={Date.now() - startedAtRef.current}
+        remainingDue={remainingDue.length}
+        onContinue={remainingDue.length > 0 ? handleContinue : undefined}
       />
     );
   }
@@ -593,6 +684,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
           reviewedCount={0}
           onQuit={handleQuit}
           onHelp={() => setHelpOpen(true)}
+          label={sessionLabel}
         />
         <div className="flex flex-1 items-center justify-center px-4 py-8">
           <PreQuestioning
@@ -654,6 +746,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
           reviewedCount={reviewed.length}
           onQuit={handleQuit}
           onHelp={() => setHelpOpen(true)}
+          label={sessionLabel}
         />
         <HandsFreeReview
           cards={cards.slice(currentIndex)}
@@ -681,6 +774,7 @@ export function ReviewSession({ deckId, cards: initial }: ReviewSessionProps) {
         reviewedCount={reviewed.length}
         onQuit={handleQuit}
         onHelp={() => setHelpOpen(true)}
+        label={sessionLabel}
       />
 
       {/* Vague 23 — switch the current session into the audio/voice loop. */}

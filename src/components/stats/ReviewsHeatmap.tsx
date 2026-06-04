@@ -6,12 +6,13 @@
  * column is the partial week containing the start date and the last column
  * is the week containing today.
  *
- * Color buckets:
+ * Color buckets (graded `--success` token so the scale stays theme-aware and
+ * on-brand — opacity steps stand in for the old raw Tailwind green ramp):
  *   - 0     reviews → `bg-muted`
- *   - 1-10           → `bg-green-200`  / dark:bg-green-900
- *   - 11-50          → `bg-green-400`  / dark:bg-green-700
- *   - 51-100         → `bg-green-600`  / dark:bg-green-500
- *   - 100+           → `bg-green-800`  / dark:bg-green-300
+ *   - 1-10           → `bg-success/25`
+ *   - 11-50          → `bg-success/50`
+ *   - 51-100         → `bg-success/75`
+ *   - 100+           → `bg-success`
  *
  * Accessibility: the grid carries `role="img"` with an `aria-label`
  * summarising the year so screen readers don't have to crawl 365 cells.
@@ -79,12 +80,12 @@ function indexCounts(rows: { date: string; count: number }[] | undefined): Map<s
  */
 const BUCKETS = [
   { max: 0, className: "bg-muted", label: "aucune révision" },
-  { max: 10, className: "bg-green-200 dark:bg-green-900", label: "1 à 10 révisions" },
-  { max: 50, className: "bg-green-400 dark:bg-green-700", label: "11 à 50 révisions" },
-  { max: 100, className: "bg-green-600 dark:bg-green-500", label: "51 à 100 révisions" },
+  { max: 10, className: "bg-success/25", label: "1 à 10 révisions" },
+  { max: 50, className: "bg-success/50", label: "11 à 50 révisions" },
+  { max: 100, className: "bg-success/75", label: "51 à 100 révisions" },
   {
     max: Number.POSITIVE_INFINITY,
-    className: "bg-green-800 dark:bg-green-300",
+    className: "bg-success",
     label: "plus de 100 révisions",
   },
 ] as const;
@@ -201,7 +202,11 @@ export function ReviewsHeatmap() {
           <CalendarDays className="h-5 w-5 text-brand-500" />
           Activité sur 365 jours
         </CardTitle>
-        <CardDescription className={cn(error && "text-destructive")}>
+        <CardDescription
+          className={cn(error && "text-destructive")}
+          role={error ? "alert" : undefined}
+          aria-live={error ? "assertive" : undefined}
+        >
           {isLoading
             ? "Chargement…"
             : error

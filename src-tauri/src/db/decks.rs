@@ -64,13 +64,27 @@ pub struct DeckPatch {
 }
 
 /// Aggregated counts used by the deck dashboard.
+///
+/// P080 — `total_cards` counts *every* card (suspended included), while
+/// `new_cards` / `learning_cards` / `review_cards` only count active
+/// (`suspended = 0`) cards. To keep the total decomposable, `suspended_cards`
+/// is exposed as its own bucket so the UI can show
+/// `total = new + learning + review + suspended` (every active card is in
+/// exactly one of the three state buckets).
 #[derive(Debug, Clone, Serialize)]
 pub struct DeckStats {
     pub total_cards: i64,
     pub new_cards: i64,
     pub learning_cards: i64,
     pub review_cards: i64,
+    /// P080 — suspended cards, the missing summand of `total_cards`.
+    pub suspended_cards: i64,
     pub due_today: i64,
+    /// P057 — cards the Deck Podcast can actually voice (every non-occlusion
+    /// template). The UI gate uses this instead of `total_cards` so a deck of
+    /// occlusion-only cards no longer offers a podcast that backend-side yields
+    /// zero speakable cards.
+    pub podcastable_cards: i64,
 }
 
 /// Per-deck WaniKani-style mastery distribution.
@@ -99,6 +113,18 @@ impl DeckMastery {
     pub fn total(&self) -> i64 {
         self.apprentice + self.guru + self.master + self.enlightened + self.burned
     }
+}
+
+/// P081 — one deck plus its dashboard aggregates, materialised in a single
+/// query so the home grid can render `N` deck cards from one IPC round-trip
+/// instead of the previous `1 + 2N..3N` (`list` + per-card `stats` +
+/// `mastery`). See [`DeckRepo::list_with_stats`].
+#[derive(Debug, Clone, Serialize)]
+pub struct DeckWithStats {
+    #[serde(flatten)]
+    pub deck: Deck,
+    pub stats: DeckStats,
+    pub mastery: DeckMastery,
 }
 
 /// Vague 15 — Bloom mastery-learning gate status for one deck.
@@ -150,6 +176,72 @@ impl<'a> DeckRepo<'a> {
              ORDER BY name COLLATE NOCASE ASC",
         )?;
         let rows = stmt.query_map([], row_to_deck)?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// P081 — every deck plus its dashboard aggregates (stats + mastery
+    /// buckets) in a single query. Replaces the home grid's `1 + 2N..3N` IPC
+    /// pattern (`list` + per-deck `stats`/`mastery`) with one round-trip.
+    ///
+    /// A `LEFT JOIN` keeps decks with zero cards (their aggregates are all 0
+    /// via `COALESCE`), and the conditional sums mirror [`Self::stats`] /
+    /// [`Self::mastery`] exactly so the batch and per-deck endpoints agree.
+    pub fn list_with_stats(&self) -> AppResult<Vec<DeckWithStats>> {
+        let now = Utc::now().timestamp();
+        let mut stmt = self.conn.prepare(
+            "SELECT
+                 d.id, d.name, d.description, d.color, d.desired_retention,
+                 d.scheduler_kind, d.language_mode, d.prerequisite_deck_id,
+                 d.created_at, d.updated_at,
+                 -- stats (cols 10..16)
+                 COUNT(c.id),
+                 COALESCE(SUM(CASE WHEN c.state = 'new' AND c.suspended = 0 THEN 1 ELSE 0 END), 0),
+                 COALESCE(SUM(CASE WHEN c.state IN ('learning', 'relearning') AND c.suspended = 0 THEN 1 ELSE 0 END), 0),
+                 COALESCE(SUM(CASE WHEN c.state = 'review' AND c.suspended = 0 THEN 1 ELSE 0 END), 0),
+                 COALESCE(SUM(CASE WHEN c.suspended = 1 THEN 1 ELSE 0 END), 0),
+                 COALESCE(SUM(CASE WHEN c.suspended = 0 AND c.next_review IS NOT NULL AND c.next_review <= ?1 THEN 1 ELSE 0 END), 0),
+                 -- podcastable (col 16): every non-occlusion template (P057)
+                 COALESCE(SUM(CASE WHEN n.template <> 'occlusion' THEN 1 ELSE 0 END), 0),
+                 -- mastery (cols 17..22)
+                 COALESCE(SUM(CASE WHEN c.suspended = 0 AND (c.state IN ('new', 'learning', 'relearning') OR (c.state = 'review' AND (c.stability IS NULL OR c.stability < 7.0))) THEN 1 ELSE 0 END), 0),
+                 COALESCE(SUM(CASE WHEN c.suspended = 0 AND c.state = 'review' AND c.stability >= 7.0 AND c.stability < 30.0 THEN 1 ELSE 0 END), 0),
+                 COALESCE(SUM(CASE WHEN c.suspended = 0 AND c.state = 'review' AND c.stability >= 30.0 AND c.stability < 90.0 THEN 1 ELSE 0 END), 0),
+                 COALESCE(SUM(CASE WHEN c.suspended = 0 AND c.state = 'review' AND c.stability >= 90.0 AND c.stability < 180.0 THEN 1 ELSE 0 END), 0),
+                 COALESCE(SUM(CASE WHEN c.suspended = 0 AND c.state = 'review' AND c.stability >= 180.0 THEN 1 ELSE 0 END), 0)
+             FROM decks d
+             LEFT JOIN cards c ON c.deck_id = d.id
+             LEFT JOIN notes n ON n.id = c.note_id
+             GROUP BY d.id
+             ORDER BY d.name COLLATE NOCASE ASC",
+        )?;
+        let rows = stmt.query_map(params![now], |row| {
+            let deck = row_to_deck(row)?;
+            let stats = DeckStats {
+                total_cards: row.get(10)?,
+                new_cards: row.get(11)?,
+                learning_cards: row.get(12)?,
+                review_cards: row.get(13)?,
+                suspended_cards: row.get(14)?,
+                due_today: row.get(15)?,
+                podcastable_cards: row.get(16)?,
+            };
+            let mastery = DeckMastery {
+                apprentice: row.get(17)?,
+                guru: row.get(18)?,
+                master: row.get(19)?,
+                enlightened: row.get(20)?,
+                burned: row.get(21)?,
+            };
+            Ok(DeckWithStats {
+                deck,
+                stats,
+                mastery,
+            })
+        })?;
         let mut out = Vec::new();
         for r in rows {
             out.push(r?);
@@ -346,47 +438,44 @@ impl<'a> DeckRepo<'a> {
     }
 
     /// Aggregate card counts for the deck dashboard.
+    ///
+    /// P081 — a single conditional-aggregation pass over the deck's cards
+    /// replaces the previous five independent `COUNT(*)` round-trips. One
+    /// statement, one scan of the `idx_cards_deck` index.
     pub fn stats(&self, id: i64) -> AppResult<DeckStats> {
         // Confirm deck exists for a nice error.
         let _ = self.get(id)?;
         let now = Utc::now().timestamp();
 
-        let total_cards: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM cards WHERE deck_id = ?1",
-            params![id],
-            |r| r.get(0),
-        )?;
-        let new_cards: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM cards WHERE deck_id = ?1 AND state = 'new' AND suspended = 0",
-            params![id],
-            |r| r.get(0),
-        )?;
-        let learning_cards: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM cards
-             WHERE deck_id = ?1 AND state IN ('learning', 'relearning') AND suspended = 0",
-            params![id],
-            |r| r.get(0),
-        )?;
-        let review_cards: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM cards WHERE deck_id = ?1 AND state = 'review' AND suspended = 0",
-            params![id],
-            |r| r.get(0),
-        )?;
-        let due_today: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM cards
-             WHERE deck_id = ?1 AND suspended = 0
-               AND next_review IS NOT NULL AND next_review <= ?2",
+        let stats = self.conn.query_row(
+            "SELECT
+                 COUNT(*),
+                 SUM(CASE WHEN c.state = 'new' AND c.suspended = 0 THEN 1 ELSE 0 END),
+                 SUM(CASE WHEN c.state IN ('learning', 'relearning') AND c.suspended = 0 THEN 1 ELSE 0 END),
+                 SUM(CASE WHEN c.state = 'review' AND c.suspended = 0 THEN 1 ELSE 0 END),
+                 SUM(CASE WHEN c.suspended = 1 THEN 1 ELSE 0 END),
+                 SUM(CASE WHEN c.suspended = 0 AND c.next_review IS NOT NULL AND c.next_review <= ?2
+                          THEN 1 ELSE 0 END),
+                 SUM(CASE WHEN n.template <> 'occlusion' THEN 1 ELSE 0 END)
+             FROM cards c
+             LEFT JOIN notes n ON n.id = c.note_id
+             WHERE c.deck_id = ?1",
             params![id, now],
-            |r| r.get(0),
+            |r| {
+                Ok(DeckStats {
+                    total_cards: r.get(0)?,
+                    // `SUM` is NULL when zero rows match; coalesce to 0.
+                    new_cards: r.get::<_, Option<i64>>(1)?.unwrap_or(0),
+                    learning_cards: r.get::<_, Option<i64>>(2)?.unwrap_or(0),
+                    review_cards: r.get::<_, Option<i64>>(3)?.unwrap_or(0),
+                    suspended_cards: r.get::<_, Option<i64>>(4)?.unwrap_or(0),
+                    due_today: r.get::<_, Option<i64>>(5)?.unwrap_or(0),
+                    podcastable_cards: r.get::<_, Option<i64>>(6)?.unwrap_or(0),
+                })
+            },
         )?;
 
-        Ok(DeckStats {
-            total_cards,
-            new_cards,
-            learning_cards,
-            review_cards,
-            due_today,
-        })
+        Ok(stats)
     }
 
     /// Bucket the deck's cards into WaniKani-style stages based on FSRS
@@ -395,52 +484,40 @@ impl<'a> DeckRepo<'a> {
         // Confirm the deck exists for a nicer error.
         let _ = self.get(id)?;
 
-        // Single COUNT() per bucket — five round-trips total but each query
-        // is sub-millisecond on the indexed `deck_id` column.
-        let apprentice: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM cards
-             WHERE deck_id = ?1 AND suspended = 0
-               AND (state IN ('new', 'learning', 'relearning')
-                    OR (state = 'review' AND (stability IS NULL OR stability < 7.0)))",
+        // P081 — one conditional-aggregation pass replaces the previous five
+        // independent `COUNT(*)` round-trips. The bucket predicates are
+        // mutually exclusive and exhaustive over the active (`suspended = 0`)
+        // cards, so the five sums add up to the deck's active card count — see
+        // [`DeckMastery::total`] and the threshold docs above.
+        let mastery = self.conn.query_row(
+            "SELECT
+                 SUM(CASE WHEN state IN ('new', 'learning', 'relearning')
+                            OR (state = 'review' AND (stability IS NULL OR stability < 7.0))
+                          THEN 1 ELSE 0 END),
+                 SUM(CASE WHEN state = 'review' AND stability >= 7.0 AND stability < 30.0
+                          THEN 1 ELSE 0 END),
+                 SUM(CASE WHEN state = 'review' AND stability >= 30.0 AND stability < 90.0
+                          THEN 1 ELSE 0 END),
+                 SUM(CASE WHEN state = 'review' AND stability >= 90.0 AND stability < 180.0
+                          THEN 1 ELSE 0 END),
+                 SUM(CASE WHEN state = 'review' AND stability >= 180.0
+                          THEN 1 ELSE 0 END)
+             FROM cards
+             WHERE deck_id = ?1 AND suspended = 0",
             params![id],
-            |r| r.get(0),
-        )?;
-        let guru: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM cards
-             WHERE deck_id = ?1 AND suspended = 0 AND state = 'review'
-               AND stability >= 7.0 AND stability < 30.0",
-            params![id],
-            |r| r.get(0),
-        )?;
-        let master: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM cards
-             WHERE deck_id = ?1 AND suspended = 0 AND state = 'review'
-               AND stability >= 30.0 AND stability < 90.0",
-            params![id],
-            |r| r.get(0),
-        )?;
-        let enlightened: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM cards
-             WHERE deck_id = ?1 AND suspended = 0 AND state = 'review'
-               AND stability >= 90.0 AND stability < 180.0",
-            params![id],
-            |r| r.get(0),
-        )?;
-        let burned: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM cards
-             WHERE deck_id = ?1 AND suspended = 0 AND state = 'review'
-               AND stability >= 180.0",
-            params![id],
-            |r| r.get(0),
+            |r| {
+                Ok(DeckMastery {
+                    // `SUM` is NULL when zero rows match; coalesce to 0.
+                    apprentice: r.get::<_, Option<i64>>(0)?.unwrap_or(0),
+                    guru: r.get::<_, Option<i64>>(1)?.unwrap_or(0),
+                    master: r.get::<_, Option<i64>>(2)?.unwrap_or(0),
+                    enlightened: r.get::<_, Option<i64>>(3)?.unwrap_or(0),
+                    burned: r.get::<_, Option<i64>>(4)?.unwrap_or(0),
+                })
+            },
         )?;
 
-        Ok(DeckMastery {
-            apprentice,
-            guru,
-            master,
-            enlightened,
-            burned,
-        })
+        Ok(mastery)
     }
 
     /// Vague 15 — Bloom mastery-gating status for `id`.
@@ -735,6 +812,123 @@ mod tests {
             )
             .unwrap();
         assert_eq!(notes_after, 0, "deck delete must cascade to its notes");
+    }
+
+    /// Helper: create a basic note in `deck_id`, returning its card id.
+    fn mk_card(db: &Database, conn: &rusqlite::Connection, deck_id: i64) -> i64 {
+        let note = db
+            .notes(conn)
+            .create(
+                deck_id,
+                NoteTemplate::Basic,
+                json!({ "front": "f", "back": "b" }),
+                vec![],
+                None,
+            )
+            .unwrap();
+        conn.query_row(
+            "SELECT id FROM cards WHERE note_id = ?1",
+            params![note.id],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+
+    /// P080 regression — `total_cards` counts suspended cards too, so the
+    /// dashboard's decomposition must hold:
+    /// `total = new + learning + review + suspended`. Before the fix there was
+    /// no `suspended_cards` summand, so a deck with suspended cards showed a
+    /// total that didn't add up.
+    #[test]
+    fn stats_total_decomposes_with_suspended() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let deck = db
+            .decks(&conn)
+            .create("D", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+
+        // 2 new (untouched), 1 learning, 1 review, 1 suspended.
+        mk_card(&db, &conn, deck.id);
+        mk_card(&db, &conn, deck.id);
+        let learning = mk_card(&db, &conn, deck.id);
+        let review = mk_card(&db, &conn, deck.id);
+        let suspended = mk_card(&db, &conn, deck.id);
+
+        conn.execute(
+            "UPDATE cards SET state = 'learning' WHERE id = ?1",
+            params![learning],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE cards SET state = 'review', stability = 10.0 WHERE id = ?1",
+            params![review],
+        )
+        .unwrap();
+        db.cards(&conn).suspend(suspended, true).unwrap();
+
+        let stats = db.decks(&conn).stats(deck.id).unwrap();
+        assert_eq!(stats.total_cards, 5);
+        assert_eq!(stats.new_cards, 2);
+        assert_eq!(stats.learning_cards, 1);
+        assert_eq!(stats.review_cards, 1);
+        assert_eq!(stats.suspended_cards, 1);
+        // The whole point of P080: the total is fully decomposable.
+        assert_eq!(
+            stats.total_cards,
+            stats.new_cards + stats.learning_cards + stats.review_cards + stats.suspended_cards,
+            "total must decompose into new + learning + review + suspended"
+        );
+    }
+
+    /// P081 regression — the batch `list_with_stats` must agree, deck by deck,
+    /// with the per-deck `stats` / `mastery` endpoints it replaces.
+    #[test]
+    fn list_with_stats_matches_per_deck_endpoints() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let deck_a = db
+            .decks(&conn)
+            .create("Alpha", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+        // Empty deck — must still appear (LEFT JOIN) with all-zero aggregates.
+        let deck_b = db
+            .decks(&conn)
+            .create("Beta", None, "#ef4444", 0.9, None, None, None)
+            .unwrap();
+
+        // Populate Alpha: 1 new, 1 review (guru: stability in [7,30)), 1 suspended.
+        mk_card(&db, &conn, deck_a.id);
+        let guru = mk_card(&db, &conn, deck_a.id);
+        let suspended = mk_card(&db, &conn, deck_a.id);
+        conn.execute(
+            "UPDATE cards SET state = 'review', stability = 15.0 WHERE id = ?1",
+            params![guru],
+        )
+        .unwrap();
+        db.cards(&conn).suspend(suspended, true).unwrap();
+
+        let batch = db.decks(&conn).list_with_stats().unwrap();
+        assert_eq!(batch.len(), 2, "every deck must be present, even empty ones");
+
+        for entry in &batch {
+            let stats = db.decks(&conn).stats(entry.deck.id).unwrap();
+            let mastery = db.decks(&conn).mastery(entry.deck.id).unwrap();
+            assert_eq!(
+                entry.stats.total_cards, stats.total_cards,
+                "batch total must match per-deck stats"
+            );
+            assert_eq!(entry.stats.new_cards, stats.new_cards);
+            assert_eq!(entry.stats.review_cards, stats.review_cards);
+            assert_eq!(entry.stats.suspended_cards, stats.suspended_cards);
+            assert_eq!(entry.stats.due_today, stats.due_today);
+            assert_eq!(entry.mastery, mastery, "batch mastery must match per-deck");
+        }
+
+        // Spot-check the empty deck's zeros.
+        let beta = batch.iter().find(|e| e.deck.id == deck_b.id).unwrap();
+        assert_eq!(beta.stats.total_cards, 0);
+        assert_eq!(beta.mastery.total(), 0);
     }
 
     #[test]

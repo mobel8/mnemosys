@@ -6,11 +6,15 @@
  * discriminate the contrasts that are hardest for non-native (esp. French)
  * speakers of English.
  *
- * Transcriptions use broad IPA in the British (RP) tradition, which is the
- * convention most learner dictionaries (Oxford, Cambridge) follow. They are
- * deliberately *phonemic* (between slashes), not narrow phonetic detail.
- * Stress marks are omitted on monosyllables. The dataset is intentionally
- * modest but every entry is checked rather than vast and approximate.
+ * Transcriptions use broad IPA in the **General American (GA)** tradition, to
+ * stay consistent with the embedded dictionary (`dictionary.ts`) and the US TTS
+ * voice used across the Langues area (P114) — drilling a British /ɒ/ against a
+ * US voice would mislead the ear. They are deliberately *phonemic* (between
+ * slashes), not narrow phonetic detail: length marks are dropped (GA contrasts
+ * tense/lax by quality, not length), the LOT vowel is /ɑ/, and rhotic vowels
+ * keep their /r/. Stress marks are omitted on monosyllables. The dataset is
+ * intentionally modest but every entry is checked rather than vast and
+ * approximate.
  *
  * Nothing here is randomised at module load — the drill component performs all
  * random selection at runtime inside event handlers.
@@ -44,27 +48,27 @@ export interface Contrast {
  */
 export const CONTRASTS: Contrast[] = [
   {
-    id: "iː-ɪ",
-    label: "/iː/ vs /ɪ/ — voyelle tendue / relâchée",
+    id: "i-ɪ",
+    label: "/i/ vs /ɪ/ — voyelle tendue / relâchée",
     pairs: [
-      { a: "sheep", b: "ship", ipaA: "ʃiːp", ipaB: "ʃɪp" },
-      { a: "beat", b: "bit", ipaA: "biːt", ipaB: "bɪt" },
-      { a: "feet", b: "fit", ipaA: "fiːt", ipaB: "fɪt" },
-      { a: "leave", b: "live", ipaA: "liːv", ipaB: "lɪv" },
-      { a: "seat", b: "sit", ipaA: "siːt", ipaB: "sɪt" },
-      { a: "heel", b: "hill", ipaA: "hiːl", ipaB: "hɪl" },
+      { a: "sheep", b: "ship", ipaA: "ʃip", ipaB: "ʃɪp" },
+      { a: "beat", b: "bit", ipaA: "bit", ipaB: "bɪt" },
+      { a: "feet", b: "fit", ipaA: "fit", ipaB: "fɪt" },
+      { a: "leave", b: "live", ipaA: "liv", ipaB: "lɪv" },
+      { a: "seat", b: "sit", ipaA: "sit", ipaB: "sɪt" },
+      { a: "heel", b: "hill", ipaA: "hil", ipaB: "hɪl" },
     ],
   },
   {
-    id: "æ-e",
-    label: "/æ/ vs /e/ — « a » ouvert / « e » fermé",
+    id: "æ-ɛ",
+    label: "/æ/ vs /ɛ/ — « a » ouvert / « e » fermé",
     pairs: [
-      { a: "bad", b: "bed", ipaA: "bæd", ipaB: "bed" },
-      { a: "man", b: "men", ipaA: "mæn", ipaB: "men" },
-      { a: "had", b: "head", ipaA: "hæd", ipaB: "hed" },
-      { a: "sad", b: "said", ipaA: "sæd", ipaB: "sed" },
-      { a: "pan", b: "pen", ipaA: "pæn", ipaB: "pen" },
-      { a: "gas", b: "guess", ipaA: "ɡæs", ipaB: "ɡes" },
+      { a: "bad", b: "bed", ipaA: "bæd", ipaB: "bɛd" },
+      { a: "man", b: "men", ipaA: "mæn", ipaB: "mɛn" },
+      { a: "had", b: "head", ipaA: "hæd", ipaB: "hɛd" },
+      { a: "sad", b: "said", ipaA: "sæd", ipaB: "sɛd" },
+      { a: "pan", b: "pen", ipaA: "pæn", ipaB: "pɛn" },
+      { a: "gas", b: "guess", ipaA: "ɡæs", ipaB: "ɡɛs" },
     ],
   },
   {
@@ -80,24 +84,24 @@ export const CONTRASTS: Contrast[] = [
     ],
   },
   {
-    id: "ʌ-ɒ",
-    label: "/ʌ/ vs /ɒ/ — « cup » / « cop »",
+    id: "ʌ-ɑ",
+    label: "/ʌ/ vs /ɑ/ — « cup » / « cop »",
     pairs: [
-      { a: "cup", b: "cop", ipaA: "kʌp", ipaB: "kɒp" },
-      { a: "luck", b: "lock", ipaA: "lʌk", ipaB: "lɒk" },
-      { a: "nut", b: "not", ipaA: "nʌt", ipaB: "nɒt" },
-      { a: "duck", b: "dock", ipaA: "dʌk", ipaB: "dɒk" },
-      { a: "stuck", b: "stock", ipaA: "stʌk", ipaB: "stɒk" },
+      { a: "cup", b: "cop", ipaA: "kʌp", ipaB: "kɑp" },
+      { a: "luck", b: "lock", ipaA: "lʌk", ipaB: "lɑk" },
+      { a: "nut", b: "not", ipaA: "nʌt", ipaB: "nɑt" },
+      { a: "duck", b: "dock", ipaA: "dʌk", ipaB: "dɑk" },
+      { a: "stuck", b: "stock", ipaA: "stʌk", ipaB: "stɑk" },
     ],
   },
   {
-    id: "uː-ʊ",
-    label: "/uː/ vs /ʊ/ — « pool » / « pull »",
+    id: "u-ʊ",
+    label: "/u/ vs /ʊ/ — « pool » / « pull »",
     pairs: [
-      { a: "pool", b: "pull", ipaA: "puːl", ipaB: "pʊl" },
-      { a: "fool", b: "full", ipaA: "fuːl", ipaB: "fʊl" },
-      { a: "Luke", b: "look", ipaA: "luːk", ipaB: "lʊk" },
-      { a: "suit", b: "soot", ipaA: "suːt", ipaB: "sʊt" },
+      { a: "pool", b: "pull", ipaA: "pul", ipaB: "pʊl" },
+      { a: "fool", b: "full", ipaA: "ful", ipaB: "fʊl" },
+      { a: "Luke", b: "look", ipaA: "luk", ipaB: "lʊk" },
+      { a: "suit", b: "soot", ipaA: "sut", ipaB: "sʊt" },
     ],
   },
   {
@@ -108,18 +112,18 @@ export const CONTRASTS: Contrast[] = [
       { a: "thick", b: "sick", ipaA: "θɪk", ipaB: "sɪk" },
       { a: "thing", b: "sing", ipaA: "θɪŋ", ipaB: "sɪŋ" },
       { a: "mouth", b: "mouse", ipaA: "maʊθ", ipaB: "maʊs" },
-      { a: "path", b: "pass", ipaA: "pɑːθ", ipaB: "pɑːs" },
-      { a: "worth", b: "worse", ipaA: "wɜːθ", ipaB: "wɜːs" },
+      { a: "path", b: "pass", ipaA: "pæθ", ipaB: "pæs" },
+      { a: "worth", b: "worse", ipaA: "wɜrθ", ipaB: "wɜrs" },
     ],
   },
   {
     id: "ð-z",
     label: "/ð/ vs /z/ — « breathe » / « breeze »",
     pairs: [
-      { a: "breathe", b: "breeze", ipaA: "briːð", ipaB: "briːz" },
+      { a: "breathe", b: "breeze", ipaA: "brið", ipaB: "briz" },
       { a: "writhe", b: "rise", ipaA: "raɪð", ipaB: "raɪz" },
-      { a: "clothe", b: "close", ipaA: "kləʊð", ipaB: "kləʊz" },
-      { a: "teethe", b: "tease", ipaA: "tiːð", ipaB: "tiːz" },
+      { a: "clothe", b: "close", ipaA: "kloʊð", ipaB: "kloʊz" },
+      { a: "teethe", b: "tease", ipaA: "tið", ipaB: "tiz" },
     ],
   },
   {
@@ -127,31 +131,31 @@ export const CONTRASTS: Contrast[] = [
     label: "/ð/ vs /d/ — « they » / « day »",
     pairs: [
       { a: "they", b: "day", ipaA: "ðeɪ", ipaB: "deɪ" },
-      { a: "then", b: "den", ipaA: "ðen", ipaB: "den" },
-      { a: "those", b: "doze", ipaA: "ðəʊz", ipaB: "dəʊz" },
-      { a: "there", b: "dare", ipaA: "ðeə", ipaB: "deə" },
+      { a: "then", b: "den", ipaA: "ðɛn", ipaB: "dɛn" },
+      { a: "those", b: "doze", ipaA: "ðoʊz", ipaB: "doʊz" },
+      { a: "there", b: "dare", ipaA: "ðɛr", ipaB: "dɛr" },
     ],
   },
   {
     id: "v-w",
     label: "/v/ vs /w/ — « vest » / « west »",
     pairs: [
-      { a: "vest", b: "west", ipaA: "vest", ipaB: "west" },
+      { a: "vest", b: "west", ipaA: "vɛst", ipaB: "wɛst" },
       { a: "vine", b: "wine", ipaA: "vaɪn", ipaB: "waɪn" },
       { a: "veil", b: "wail", ipaA: "veɪl", ipaB: "weɪl" },
-      { a: "vary", b: "wary", ipaA: "ˈveəri", ipaB: "ˈweəri" },
-      { a: "verse", b: "worse", ipaA: "vɜːs", ipaB: "wɜːs" },
+      { a: "vary", b: "wary", ipaA: "ˈvɛri", ipaB: "ˈwɛri" },
+      { a: "verse", b: "worse", ipaA: "vɜrs", ipaB: "wɜrs" },
     ],
   },
   {
     id: "b-v",
     label: "/b/ vs /v/ — « berry » / « very »",
     pairs: [
-      { a: "berry", b: "very", ipaA: "ˈberi", ipaB: "ˈveri" },
-      { a: "bet", b: "vet", ipaA: "bet", ipaB: "vet" },
+      { a: "berry", b: "very", ipaA: "ˈbɛri", ipaB: "ˈvɛri" },
+      { a: "bet", b: "vet", ipaA: "bɛt", ipaB: "vɛt" },
       { a: "ban", b: "van", ipaA: "bæn", ipaB: "væn" },
-      { a: "boat", b: "vote", ipaA: "bəʊt", ipaB: "vəʊt" },
-      { a: "curb", b: "curve", ipaA: "kɜːb", ipaB: "kɜːv" },
+      { a: "boat", b: "vote", ipaA: "boʊt", ipaB: "voʊt" },
+      { a: "curb", b: "curve", ipaA: "kɜrb", ipaB: "kɜrv" },
     ],
   },
   {
@@ -159,22 +163,22 @@ export const CONTRASTS: Contrast[] = [
     label: "/l/ vs /r/ — « light » / « right »",
     pairs: [
       { a: "light", b: "right", ipaA: "laɪt", ipaB: "raɪt" },
-      { a: "lead", b: "read", ipaA: "liːd", ipaB: "riːd" },
-      { a: "lock", b: "rock", ipaA: "lɒk", ipaB: "rɒk" },
-      { a: "glass", b: "grass", ipaA: "ɡlɑːs", ipaB: "ɡrɑːs" },
-      { a: "collect", b: "correct", ipaA: "kəˈlekt", ipaB: "kəˈrekt" },
+      { a: "lead", b: "read", ipaA: "lid", ipaB: "rid" },
+      { a: "lock", b: "rock", ipaA: "lɑk", ipaB: "rɑk" },
+      { a: "glass", b: "grass", ipaA: "ɡlæs", ipaB: "ɡræs" },
+      { a: "collect", b: "correct", ipaA: "kəˈlɛkt", ipaB: "kəˈrɛkt" },
       { a: "play", b: "pray", ipaA: "pleɪ", ipaB: "preɪ" },
     ],
   },
   {
-    id: "ɪ-e",
-    label: "/ɪ/ vs /e/ — « bit » / « bet »",
+    id: "ɪ-ɛ",
+    label: "/ɪ/ vs /ɛ/ — « bit » / « bet »",
     pairs: [
-      { a: "bit", b: "bet", ipaA: "bɪt", ipaB: "bet" },
-      { a: "litter", b: "letter", ipaA: "ˈlɪtə", ipaB: "ˈletə" },
-      { a: "pin", b: "pen", ipaA: "pɪn", ipaB: "pen" },
-      { a: "tin", b: "ten", ipaA: "tɪn", ipaB: "ten" },
-      { a: "did", b: "dead", ipaA: "dɪd", ipaB: "ded" },
+      { a: "bit", b: "bet", ipaA: "bɪt", ipaB: "bɛt" },
+      { a: "litter", b: "letter", ipaA: "ˈlɪtər", ipaB: "ˈlɛtər" },
+      { a: "pin", b: "pen", ipaA: "pɪn", ipaB: "pɛn" },
+      { a: "tin", b: "ten", ipaA: "tɪn", ipaB: "tɛn" },
+      { a: "did", b: "dead", ipaA: "dɪd", ipaB: "dɛd" },
     ],
   },
 ];

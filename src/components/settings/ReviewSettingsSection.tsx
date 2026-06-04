@@ -11,7 +11,7 @@
  * agents that mutate settings don't get clobbered.
  */
 
-import { Loader2, Save } from "lucide-react";
+import { Headphones, Loader2, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -242,7 +242,7 @@ export function ReviewSettingsSection() {
           <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
             <div className="space-y-0.5">
               <Label htmlFor="type-the-answer-toggle" className="text-sm">
-                Type-the-answer
+                Saisie de la réponse
               </Label>
               <p className="text-xs text-muted-foreground">
                 Tape la réponse avant de retourner la carte (generation effect — Slamecka &amp; Graf
@@ -299,7 +299,7 @@ export function ReviewSettingsSection() {
           <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
             <div className="space-y-0.5">
               <Label htmlFor="sketch-toggle" className="text-sm">
-                Dessin avant flip (drawing effect)
+                Dessin avant le retournement (effet de dessin)
               </Label>
               <p className="text-xs text-muted-foreground">
                 Dessine ta réponse avant de retourner la carte (Wammes 2016, +30-50% rappel).
@@ -342,8 +342,8 @@ export function ReviewSettingsSection() {
               </Label>
               <p className="text-xs text-muted-foreground">
                 Réponds aux cartes basic à voix haute. La transcription OpenAI Whisper est comparée
-                à la réponse attendue via le même scoring fuzzy que Type-the-answer. Nécessite une
-                clé OpenAI configurée.
+                à la réponse attendue via la même comparaison approximative que la saisie de la
+                réponse. Nécessite une clé OpenAI configurée.
               </p>
             </div>
             <Switch
@@ -397,7 +397,7 @@ export function ReviewSettingsSection() {
           <div className="flex items-center justify-between gap-4 rounded-md border border-warning/30 bg-warning/5 px-4 py-3">
             <div className="space-y-0.5">
               <Label htmlFor="focus-guard-toggle" className="text-sm">
-                Focus Guard (webcam)
+                Garde-attention (webcam)
               </Label>
               <p className="text-xs text-muted-foreground">
                 Détecte le décrochage d'attention via la webcam pendant une session (Hutt 2024).
@@ -424,10 +424,13 @@ export function ReviewSettingsSection() {
                 Mode mains-libres (audio + voix)
               </Label>
               <p className="text-xs text-muted-foreground">
-                Ajoute un bouton 🎧 en session : la question est lue (TTS), tu réponds à voix haute,
-                la réponse est lue, puis tu notes à la voix (« encore / difficile / bien / facile »
-                via Whisper) ou via de gros boutons. Pensé pour réviser en marchant. Nécessite une
-                voix TTS (OpenAI/Piper) et, pour la notation vocale, une clé OpenAI.
+                {/* P110 — icône lucide en flux plutôt qu'un emoji brut. */}
+                Ajoute un bouton casque{" "}
+                <Headphones className="inline h-3.5 w-3.5 align-text-bottom" aria-hidden="true" />{" "}
+                en session : la question est lue (TTS), tu réponds à voix haute, la réponse est lue,
+                puis tu notes à la voix (« encore / difficile / bien / facile » via Whisper) ou via
+                de gros boutons. Pensé pour réviser en marchant. Nécessite une voix TTS
+                (OpenAI/Piper) et, pour la notation vocale, une clé OpenAI.
               </p>
             </div>
             <Switch

@@ -1,77 +1,46 @@
 /**
- * Ephemeral state for an in-progress review session.
+ * Ephemeral "is a review session in progress?" signal.
  *
- * Stays in memory only — when the user closes the review page the queue is
- * dropped (any partial progress is already persisted server-side because
- * each `submit_review` is its own transaction). Used by both the review
- * page and the sidebar "current session" pill.
+ * Stays in memory only — when the user closes the review page the signal is
+ * dropped (any partial progress is already persisted server-side because each
+ * `submit_review` is its own transaction).
+ *
+ * P122 — this store deliberately holds nothing more than the active session's
+ * `deckId`. The full live queue is owned by `<ReviewSession>` local state
+ * (which `suspend`, hands-free, and the rating flow all mutate), so mirroring
+ * `queue` / `currentIndex` / `reviewedCount` here only created a second source
+ * of truth that silently drifted out of sync (e.g. suspend removed a card
+ * locally but never advanced the store). The only live consumers —
+ * `MovementBreakReminder` and `DelayedJolPrompt` — just need to know whether a
+ * session is active, which `deckId !== null` answers reliably.
  */
 
 import { create } from "zustand";
 import type { CardWithNote } from "@/lib/tauri";
 
 interface ReviewSessionState {
+  /** Deck of the active session, or `null` when no session is in progress.
+   * `< 0` is the interleaved-session sentinel. This is the canonical
+   * "a session is in progress" signal: `deckId !== null`. */
   deckId: number | null;
-  /** FIFO queue of cards still to grade. */
-  queue: CardWithNote[];
-  /** Index inside `queue` of the card currently being graded. */
-  currentIndex: number;
-  /** Number of cards graded so far. */
-  reviewedCount: number;
-  /** Unix ms timestamp when the session started (used for review-time stats). */
+  /** Unix ms timestamp when the session started. */
   startedAt: number | null;
-  /** Unix ms timestamp when the *current* card was first shown. */
-  cardShownAt: number | null;
 
+  /** Begin a session for `deckId`. `cards` is accepted for call-site symmetry
+   * with the queue snapshot but is not retained (the queue lives in the
+   * session component). */
   startSession: (deckId: number | null, cards: CardWithNote[]) => void;
-  /** Mark the current card as graded and advance the pointer. */
-  advance: () => void;
   /** Reset everything (e.g. when leaving the review page). */
   reset: () => void;
-  /** Re-mark the current card's "shown at" timestamp (e.g. after flipping). */
-  markCardShown: () => void;
-}
-
-function initial() {
-  return {
-    deckId: null as number | null,
-    queue: [] as CardWithNote[],
-    currentIndex: 0,
-    reviewedCount: 0,
-    startedAt: null as number | null,
-    cardShownAt: null as number | null,
-  };
 }
 
 export const useReviewSession = create<ReviewSessionState>((set) => ({
-  ...initial(),
-  startSession(deckId, cards) {
-    const now = Date.now();
-    set({
-      deckId,
-      queue: cards,
-      currentIndex: 0,
-      reviewedCount: 0,
-      startedAt: now,
-      cardShownAt: now,
-    });
-  },
-  advance() {
-    set((s) => ({
-      currentIndex: s.currentIndex + 1,
-      reviewedCount: s.reviewedCount + 1,
-      cardShownAt: Date.now(),
-    }));
+  deckId: null,
+  startedAt: null,
+  startSession(deckId, _cards) {
+    set({ deckId, startedAt: Date.now() });
   },
   reset() {
-    set(initial());
-  },
-  markCardShown() {
-    set({ cardShownAt: Date.now() });
+    set({ deckId: null, startedAt: null });
   },
 }));
-
-/** Convenience selector: the card currently being graded, or `null` when done. */
-export function selectCurrentCard(state: ReviewSessionState): CardWithNote | null {
-  return state.queue[state.currentIndex] ?? null;
-}

@@ -10,7 +10,7 @@
  * for the MVP; Session 3+ will migrate them to the OS keychain.
  */
 
-import { AudioLines, Cpu, Key, Loader2, Trash2 } from "lucide-react";
+import { AudioLines, Cpu, Key, Loader2, Trash2, Volume2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -227,8 +227,11 @@ export function IntegrationsSection() {
                 value={openai}
                 onChange={(e) => setOpenai(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                Utilisée par le bouton 🔊 dans les cartes.
+              <p className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                {/* P110 — icône lucide en flux plutôt qu'un emoji brut. */}
+                Utilisée par le bouton
+                <Volume2 className="inline h-3.5 w-3.5" aria-label="lecture audio" />
+                dans les cartes.
               </p>
             </div>
           </div>
@@ -341,7 +344,7 @@ export function IntegrationsSection() {
             Synthèse vocale entièrement hors-ligne, gratuite et privée — aucune donnée envoyée.
             Télécharge le binaire <strong>Piper</strong> et un modèle de voix (<code>.onnx</code>)
             sur <code>github.com/OHF-Voice/piper1-gpl</code>, puis indique leurs chemins ci-dessous.
-            Une fois activé, le bouton 🔊 des cartes utilise Piper au lieu d'OpenAI.
+            Une fois activé, le bouton de lecture audio des cartes utilise Piper au lieu d'OpenAI.
           </p>
           <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
             <div className="space-y-0.5">
@@ -349,8 +352,8 @@ export function IntegrationsSection() {
                 Activer la synthèse vocale locale
               </Label>
               <p className="text-xs text-muted-foreground">
-                Route le bouton 🔊 vers Piper. Sans modèle valide, la lecture affiche une erreur
-                claire.
+                Route le bouton de lecture audio vers Piper. Sans modèle valide, la lecture affiche
+                une erreur claire.
               </p>
             </div>
             <Switch

@@ -13,6 +13,7 @@
  */
 
 import { TrendingUp } from "lucide-react";
+import { memo, useMemo } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -57,7 +58,7 @@ function shortWeek(label: string): string {
   return idx >= 0 ? label.slice(idx + 1) : label;
 }
 
-export function MasteryTimeline() {
+function MasteryTimelineImpl() {
   const { data, isLoading, error } = useMasteryTimeline(TIMELINE_WEEKS);
 
   const weeks = data?.weeks ?? [];
@@ -65,13 +66,18 @@ export function MasteryTimeline() {
 
   // Pivot {weeks, series[]} into recharts' row-per-week shape. Each tag becomes
   // a numeric key on the row; a `null` point stays null so the line gaps.
-  const rows: ChartRow[] = weeks.map((week, i) => {
-    const row: ChartRow = { week };
-    for (const s of series) {
-      row[s.tag] = s.points[i] ?? null;
-    }
-    return row;
-  });
+  // Memoised so recharts keeps a stable `rows` reference across re-renders.
+  const rows: ChartRow[] = useMemo(
+    () =>
+      weeks.map((week, i) => {
+        const row: ChartRow = { week };
+        for (const s of series) {
+          row[s.tag] = s.points[i] ?? null;
+        }
+        return row;
+      }),
+    [weeks, series],
+  );
 
   const hasSeries = series.length > 0;
   const enoughWeeks = weeks.length >= MIN_WEEKS_FOR_CHART;
@@ -83,7 +89,11 @@ export function MasteryTimeline() {
           <TrendingUp className="h-5 w-5 text-brand-500" />
           Évolution de la maîtrise
         </CardTitle>
-        <CardDescription>
+        <CardDescription
+          className={error ? "text-destructive" : undefined}
+          role={error ? "alert" : undefined}
+          aria-live={error ? "assertive" : undefined}
+        >
           {isLoading
             ? "Chargement…"
             : error
@@ -164,6 +174,13 @@ export function MasteryTimeline() {
     </Card>
   );
 }
+
+/**
+ * Memoised: the timeline takes no props and is pure over its query result, so
+ * a parent re-render (e.g. period change elsewhere on the page) shouldn't force
+ * the recharts subtree to rebuild.
+ */
+export const MasteryTimeline = memo(MasteryTimelineImpl);
 
 /** Loading placeholder mimicking the chart footprint with soft pulsing bars. */
 function ChartSkeleton() {

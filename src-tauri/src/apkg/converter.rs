@@ -38,10 +38,16 @@ pub struct ConversionStats {
     /// Notes whose parent deck had no Anki `cards` row pointing at them
     /// (orphan notes — common after a partial Anki export).
     pub cards_skipped_no_anki_card: usize,
+    /// P129 — notes whose sibling cards were spread across more than one
+    /// importable Mnemosys deck. Mnemosys has no per-card deck split, so we
+    /// collapse the note into a single (deterministically chosen) deck and
+    /// count it here so the UI can surface the lost placements.
+    pub cards_collapsed_multi_deck: usize,
 }
 
-/// Default per-deck swatch list. We index into it modulo the deck count so
-/// imports never collapse onto a single colour even on big shared decks.
+/// Default per-deck swatch list. We index into it modulo the number of decks
+/// we actually *create* (P129) — not the raw enumeration index — so colours
+/// stay sequential even when leading decks are skipped (Default / collision).
 const DECK_COLORS: &[&str] = &[
     "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#6b7280",
 ];
@@ -55,14 +61,17 @@ pub fn convert_to_mnemosys(db: &Database, anki: AnkiCollection) -> AppResult<Con
     let models_by_id: HashMap<i64, &AnkiModel> = anki.models.iter().map(|m| (m.id, m)).collect();
 
     // Anki notes with zero cards (orphans) are rare but not impossible.
-    // Build a quick `note_id -> Vec<deck_id>` index so we can both detect
-    // orphans and figure out the destination deck per note.
-    let mut notes_with_cards: HashMap<i64, Vec<i64>> = HashMap::new();
+    // Build a quick `note_id -> Vec<(ord, card_id, deck_id)>` index so we can
+    // both detect orphans and pick the destination deck *deterministically*
+    // (P129): the card with the lowest template ordinal wins, tie-broken by
+    // the lowest card id. Storing `ord`/`id` makes the choice independent of
+    // the parser's row order and of HashMap iteration order.
+    let mut notes_with_cards: HashMap<i64, Vec<(i64, i64, i64)>> = HashMap::new();
     for card in &anki.cards {
         notes_with_cards
             .entry(card.note_id)
             .or_default()
-            .push(card.deck_id);
+            .push((card.ord, card.id, card.deck_id));
     }
 
     // Map Anki deck_id → Mnemosys deck_id (filled as we create rows).
@@ -75,7 +84,11 @@ pub fn convert_to_mnemosys(db: &Database, anki: AnkiCollection) -> AppResult<Con
         .map(|d| d.name)
         .collect();
 
-    for (idx, anki_deck) in anki.decks.iter().enumerate() {
+    // P129 — colour index that only advances on an *actual* deck creation, so
+    // skipped decks (Default / name collision) don't punch holes in the
+    // sequence and collapse later decks onto the same swatch.
+    let mut created_count = 0usize;
+    for anki_deck in &anki.decks {
         // Anki always ships a built-in "Default" deck (id=1). Importing it
         // would clash with any user-created deck of the same name, so skip
         // unless the .apkg actually attaches notes to a renamed "Default".
@@ -86,7 +99,8 @@ pub fn convert_to_mnemosys(db: &Database, anki: AnkiCollection) -> AppResult<Con
             skipped_decks.push(anki_deck.name.clone());
             continue;
         }
-        let color = DECK_COLORS[idx % DECK_COLORS.len()];
+        let color = DECK_COLORS[created_count % DECK_COLORS.len()];
+        created_count += 1;
         let new_deck = db.decks(&conn).create(
             &anki_deck.name,
             anki_deck.description.as_deref(),
@@ -105,25 +119,49 @@ pub fn convert_to_mnemosys(db: &Database, anki: AnkiCollection) -> AppResult<Con
     };
 
     for note in &anki.notes {
-        let card_decks = match notes_with_cards.get(&note.id) {
-            Some(d) => d,
+        let cards = match notes_with_cards.get(&note.id) {
+            Some(c) => c,
             None => {
                 stats.cards_skipped_no_anki_card += 1;
                 continue;
             }
         };
 
-        // Anki notes can technically span multiple decks (one card per deck
-        // for sibling cards). We park them all in the first deck — Mnemosys
-        // doesn't have the same per-card deck split.
-        let target_deck_id = match deck_id_map.get(&card_decks[0]) {
-            Some(d) => *d,
+        // P129 — Anki notes can span multiple decks (one sibling card per
+        // deck). Mnemosys has no per-card deck split, so we collapse the note
+        // into a single destination. Pick it deterministically: among the
+        // cards whose Anki deck maps to a created Mnemosys deck, take the one
+        // with the lowest `(ord, card_id)`. This is stable regardless of row
+        // or HashMap iteration order.
+        let target_deck_id = match cards
+            .iter()
+            .filter_map(|(ord, card_id, anki_deck_id)| {
+                deck_id_map
+                    .get(anki_deck_id)
+                    .map(|mnemo_id| (*ord, *card_id, *mnemo_id))
+            })
+            .min_by_key(|(ord, card_id, _)| (*ord, *card_id))
+            .map(|(_, _, mnemo_id)| mnemo_id)
+        {
+            Some(d) => d,
             None => {
-                // Parent deck was skipped (duplicate name or "Default").
+                // Every card's parent deck was skipped (duplicate name or
+                // "Default") → the note has nowhere to land.
                 stats.notes_skipped += 1;
                 continue;
             }
         };
+
+        // Whether this note's importable cards resolve to more than one
+        // distinct Mnemosys deck. We only *count* the collapse once the note
+        // is actually imported (below): a note dropped for an unsupported
+        // model never placed anything, so reporting lost placements would lie.
+        let is_multi_deck = cards
+            .iter()
+            .filter_map(|(_, _, anki_deck_id)| deck_id_map.get(anki_deck_id).copied())
+            .collect::<HashSet<i64>>()
+            .len()
+            > 1;
 
         let model = match models_by_id.get(&note.model_id) {
             Some(m) => *m,
@@ -150,7 +188,14 @@ pub fn convert_to_mnemosys(db: &Database, anki: AnkiCollection) -> AppResult<Con
             // The learner can tag notes manually post-import.
             .create(target_deck_id, template, fields, note.tags.clone(), None)
         {
-            Ok(_) => stats.notes_imported += 1,
+            Ok(_) => {
+                stats.notes_imported += 1;
+                // P129 — only now is the collapse real: the note landed in one
+                // deck while sibling cards pointed at other importable decks.
+                if is_multi_deck {
+                    stats.cards_collapsed_multi_deck += 1;
+                }
+            }
             Err(AppError::Validation(_)) => stats.notes_skipped += 1,
             Err(e) => return Err(e),
         }

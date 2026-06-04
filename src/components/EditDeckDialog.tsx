@@ -40,6 +40,27 @@ interface EditDeckDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+/**
+ * P106 — readable French names for the deck palette swatches so the screen
+ * reader announces « Bleu », « Vert »… instead of an opaque hex/oklch code.
+ * Keyed by the exact `DECK_COLORS` values; an unknown color falls back to a
+ * neutral label rather than leaking the raw code.
+ */
+const COLOR_NAMES: Record<string, string> = {
+  "#3b82f6": "Bleu",
+  "#ef4444": "Rouge",
+  "#10b981": "Vert",
+  "#f59e0b": "Ambre",
+  "#8b5cf6": "Violet",
+  "#ec4899": "Rose",
+  "#06b6d4": "Cyan",
+  "#6b7280": "Gris",
+};
+
+function colorName(color: string): string {
+  return COLOR_NAMES[color] ?? "Couleur personnalisée";
+}
+
 export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps) {
   const [name, setName] = useState(deck.name);
   const [description, setDescription] = useState(deck.description ?? "");
@@ -139,23 +160,58 @@ export function EditDeckDialog({ deck, open, onOpenChange }: EditDeckDialogProps
           </div>
 
           <div className="space-y-2">
-            <Label>Couleur</Label>
-            <div className="grid grid-cols-8 gap-2">
-              {DECK_COLORS.map((c) => (
-                <button
-                  type="button"
-                  key={c}
-                  aria-label={`Couleur ${c}`}
-                  style={{ background: c }}
-                  className={cn(
-                    "h-8 w-8 rounded-full ring-2 ring-offset-2 ring-offset-background transition-all",
-                    color === c
-                      ? "ring-foreground"
-                      : "ring-transparent hover:ring-muted-foreground",
-                  )}
-                  onClick={() => setColor(c)}
-                />
-              ))}
+            {/* P106 — the swatch grid is a single radiogroup: only the selected
+                (or, when none matches, the first) swatch is tabbable, and the
+                arrow keys move the selection. Each swatch exposes a readable
+                aria-label and aria-checked so the screen reader knows which
+                colour is active. */}
+            <span id="edit-deck-color-label" className="text-sm font-medium">
+              Couleur
+            </span>
+            <div
+              role="radiogroup"
+              aria-labelledby="edit-deck-color-label"
+              className="grid grid-cols-8 gap-2"
+            >
+              {/* `color` is a free-form string; compare via `some` so the
+                  readonly literal tuple type doesn't reject the lookup. */}
+              {DECK_COLORS.map((c, index) => {
+                const selected = color === c;
+                const colorInPalette = DECK_COLORS.some((p) => p === color);
+                // Roving tabindex: keep exactly one swatch in the tab order.
+                // When the stored colour isn't in the palette, fall back to the
+                // first swatch so the group is still reachable by keyboard.
+                const tabbable = selected || (!colorInPalette && index === 0);
+                return (
+                  // biome-ignore lint/a11y/useSemanticElements: a styled color swatch can't be a native <input type="radio">; standard custom radiogroup pattern (parent role="radiogroup" at L172 + roving tabindex + aria-checked).
+                  <button
+                    type="button"
+                    key={c}
+                    role="radio"
+                    aria-checked={selected}
+                    aria-label={colorName(c)}
+                    tabIndex={tabbable ? 0 : -1}
+                    style={{ background: c }}
+                    className={cn(
+                      "h-8 w-8 rounded-full ring-2 ring-offset-2 ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-ring",
+                      selected ? "ring-foreground" : "ring-transparent hover:ring-muted-foreground",
+                    )}
+                    onClick={() => setColor(c)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+                      e.preventDefault();
+                      const delta = e.key === "ArrowRight" ? 1 : -1;
+                      const next = (index + delta + DECK_COLORS.length) % DECK_COLORS.length;
+                      const nextColor = DECK_COLORS[next];
+                      if (!nextColor) return;
+                      setColor(nextColor);
+                      const buttons =
+                        e.currentTarget.parentElement?.querySelectorAll("button[role='radio']");
+                      (buttons?.[next] as HTMLButtonElement | undefined)?.focus();
+                    }}
+                  />
+                );
+              })}
             </div>
           </div>
 

@@ -160,7 +160,13 @@ export function PalaceBuilder({ palaceId }: PalaceBuilderProps) {
         <DeckCardsSidebar
           decks={decks}
           selectedDeckId={selectedDeckId}
-          onSelectDeck={setSelectedDeckId}
+          onSelectDeck={(id) => {
+            // P086 — switching decks must clear any card staged for placement.
+            // The pending id belongs to the previous deck's card list; leaving
+            // it set would pin a now-hidden card on the next floor click.
+            setSelectedDeckId(id);
+            setPendingCardId(null);
+          }}
           pendingCardId={pendingCardId}
           onSelectCard={setPendingCardId}
           palace={palace}
@@ -312,10 +318,26 @@ function readField(fields: Record<string, unknown>, key: string): string | null 
 // ---------------------------------------------------------------------------
 
 function LociSidebar({ palace }: { palace: PalaceWithLoci }) {
-  const remove = useRemovePalaceLocus();
   const reorder = useReorderPalaceLoci();
+  const remove = useRemovePalaceLocus({
+    // P086 — surface failures (e.g. a double-click removing an already-deleted
+    // locus → NotFound) instead of swallowing them silently.
+    onError: (err) => {
+      toast({
+        title: "Suppression impossible",
+        description: err.message,
+      });
+    },
+  });
+
+  // P086 — a reorder/remove rewrites ordinals off the current query snapshot.
+  // While one is in flight the snapshot is stale, so a second rapid click would
+  // compute its swap from a now-outdated order and clobber the result. Lock the
+  // controls until the mutation settles and the query refetches.
+  const busy = reorder.isPending || remove.isPending;
 
   const moveBy = (idx: number, dir: -1 | 1) => {
+    if (busy) return;
     const next = idx + dir;
     if (next < 0 || next >= palace.loci.length) return;
     const newOrder = palace.loci.map((l) => l.id);
@@ -353,7 +375,7 @@ function LociSidebar({ palace }: { palace: PalaceWithLoci }) {
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
-                disabled={idx === 0}
+                disabled={idx === 0 || busy}
                 onClick={() => moveBy(idx, -1)}
                 aria-label="Monter dans l'ordre"
               >
@@ -364,7 +386,7 @@ function LociSidebar({ palace }: { palace: PalaceWithLoci }) {
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
-                disabled={idx === palace.loci.length - 1}
+                disabled={idx === palace.loci.length - 1 || busy}
                 onClick={() => moveBy(idx, 1)}
                 aria-label="Descendre dans l'ordre"
               >
@@ -375,7 +397,13 @@ function LociSidebar({ palace }: { palace: PalaceWithLoci }) {
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 text-destructive"
-                onClick={() => remove.mutate({ locusId: l.id, palaceId: palace.id })}
+                disabled={busy}
+                onClick={() => {
+                  // P086 — guard against a double-click firing a second remove
+                  // on an id the first call already deleted (silent NotFound).
+                  if (busy) return;
+                  remove.mutate({ locusId: l.id, palaceId: palace.id });
+                }}
                 aria-label="Supprimer ce locus"
               >
                 <Trash2 className="h-3 w-3" />

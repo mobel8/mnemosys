@@ -11,9 +11,38 @@
  * don't expose `componentDidCatch` / `getDerivedStateFromError`.
  */
 
-import { AlertTriangle, Home, RefreshCw } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import { AlertTriangle, FileText, Home, RefreshCw } from "lucide-react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+
+/**
+ * P091 — best-effort persistence of a caught render error to the backend log
+ * file (`tauri-plugin-log`, rotating file in `app_log_dir`). The `log_frontend_error`
+ * command writes one timestamped entry. Failures (running outside Tauri, or the
+ * command not yet registered) are swallowed: a logging hiccup must never mask
+ * the original error nor break the fallback UI.
+ */
+async function persistError(error: Error, componentStack: string | null): Promise<void> {
+  try {
+    await invoke("log_frontend_error", {
+      message: error.message,
+      stack: error.stack ?? null,
+      componentStack: componentStack ?? null,
+    });
+  } catch {
+    // No-op: outside Tauri, or command unavailable.
+  }
+}
+
+/** P091 — reveal the rotating log directory in the OS file manager. */
+async function openLogDir(): Promise<void> {
+  try {
+    await invoke("open_log_dir");
+  } catch {
+    // No-op: outside Tauri, or command unavailable.
+  }
+}
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -33,8 +62,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo) {
-    // Surface in the devtools console; Sentry/logging wiring lands in Session 3.
+    // Surface in the devtools console for live debugging…
     console.error("[ErrorBoundary]", error, info.componentStack);
+    // …and persist to the rotating backend log so a crash on a user's machine
+    // leaves a trace (P091). Fire-and-forget; never throws.
+    void persistError(error, info.componentStack ?? null);
   }
 
   reset = () => {
@@ -76,7 +108,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <Home className="h-4 w-4" />
             Retourner à l'accueil
           </Button>
+          {/* P091 — let the user surface the local log file to attach to a
+              bug report. No data ever leaves the machine automatically. */}
+          <Button variant="ghost" onClick={() => void openLogDir()}>
+            <FileText className="h-4 w-4" />
+            Ouvrir le dossier des logs
+          </Button>
         </div>
+        <p className="max-w-md text-xs text-muted-foreground">
+          Les détails de l'erreur sont enregistrés localement (aucun envoi automatique). Tu peux
+          ouvrir le dossier des logs pour les joindre à un signalement.
+        </p>
       </div>
     );
   }

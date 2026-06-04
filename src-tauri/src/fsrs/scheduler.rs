@@ -10,6 +10,8 @@
 //! consumer picks one. Our [`Rating`] therefore lives here only and is used
 //! to select the right branch out of [`NextStatesDTO`].
 
+use std::sync::Mutex;
+
 use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 
@@ -92,10 +94,35 @@ pub struct ReviewOutcome {
     pub scheduled_days: u32,
 }
 
+/// P062 — single-entry memo of the last [`CardScheduler::next_states_with_retention`]
+/// call. A graded card hits the engine twice in quick succession: the review UI
+/// previews the four outcomes (`preview_next_states`), then `submit_review`
+/// re-derives them to pick the chosen button — recomputing the same burn/ndarray
+/// pass the preview already produced. Caching the last `(inputs) -> outputs`
+/// pair turns that second pass into a cheap cache hit. The inputs flow through
+/// identically (same `card.stability`/`difficulty` cast, same `elapsed_days`,
+/// same per-deck retention), so an exact (bit-for-bit) key match is correct and
+/// avoids any float-tolerance fuzziness.
+#[derive(Clone)]
+struct NextStatesCache {
+    /// `None` = brand-new card; bit-pattern of the f32 stability/difficulty so
+    /// the key compares exactly regardless of NaN/precision concerns.
+    current_bits: Option<(u32, u32)>,
+    elapsed_days: u32,
+    /// Bit-pattern of the *clamped* retention actually fed to FSRS — two
+    /// distinct deck retentions that clamp to the same band must still hit.
+    clamped_retention_bits: u32,
+    states: NextStatesDTO,
+}
+
 /// FSRS scheduler — one instance per process (per parameter set) is enough.
 pub struct CardScheduler {
     fsrs: fsrs::FSRS,
     desired_retention: f32,
+    /// P062 — memo of the most recent `next_states` computation (see
+    /// [`NextStatesCache`]). Behind a `Mutex` for interior mutability since the
+    /// scheduler is shared `&self` behind `AppState`'s own mutex.
+    next_states_cache: Mutex<Option<NextStatesCache>>,
 }
 
 impl CardScheduler {
@@ -113,6 +140,7 @@ impl CardScheduler {
         Ok(Self {
             fsrs,
             desired_retention,
+            next_states_cache: Mutex::new(None),
         })
     }
 
@@ -158,12 +186,30 @@ impl CardScheduler {
         elapsed_days: u32,
         retention: f32,
     ) -> AppResult<NextStatesDTO> {
+        let clamped = Self::clamp_retention(retention);
+
+        // P062 — build the exact (bit-for-bit) cache key for this call and
+        // short-circuit if the previous call (typically the review preview)
+        // already computed the very same four states. Avoids a second
+        // burn/ndarray pass per graded card.
+        let current_bits = current.map(|m| (m.stability.to_bits(), m.difficulty.to_bits()));
+        let clamped_retention_bits = clamped.to_bits();
+        if let Ok(guard) = self.next_states_cache.lock() {
+            if let Some(hit) = guard.as_ref().filter(|c| {
+                c.current_bits == current_bits
+                    && c.elapsed_days == elapsed_days
+                    && c.clamped_retention_bits == clamped_retention_bits
+            }) {
+                return Ok(hit.states.clone());
+            }
+        }
+
         let curr = current.map(|m| m.to_fsrs());
         let ns = self
             .fsrs
-            .next_states(curr, Self::clamp_retention(retention), elapsed_days)
+            .next_states(curr, clamped, elapsed_days)
             .map_err(|e| AppError::Fsrs(e.to_string()))?;
-        Ok(NextStatesDTO {
+        let states = NextStatesDTO {
             again: NextStateDTO {
                 memory: MemoryStateDTO::from_fsrs(ns.again.memory),
                 interval_days: ns.again.interval,
@@ -180,7 +226,21 @@ impl CardScheduler {
                 memory: MemoryStateDTO::from_fsrs(ns.easy.memory),
                 interval_days: ns.easy.interval,
             },
-        })
+        };
+
+        // P062 — memoise this result for the imminent `submit_review` recompute.
+        // A poisoned lock just skips the cache (correctness is unaffected; we
+        // simply recompute), so we don't propagate the lock error.
+        if let Ok(mut guard) = self.next_states_cache.lock() {
+            *guard = Some(NextStatesCache {
+                current_bits,
+                elapsed_days,
+                clamped_retention_bits,
+                states: states.clone(),
+            });
+        }
+
+        Ok(states)
     }
 
     /// Apply a review and return the new memory state + days until next due.

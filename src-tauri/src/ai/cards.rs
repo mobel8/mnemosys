@@ -129,16 +129,23 @@ pub async fn generate_cards_from_pdf(
         return Ok(Vec::new());
     }
 
-    // Aim for an even spread but always give every chunk at least 3 cards
-    // — otherwise small chunks get starved on multi-page documents.
-    let cards_per_chunk = (max_cards / chunks.len() as u32).max(3);
-
+    // P075 — spread the budget across chunks WITHOUT overshooting `max_cards`.
+    // The old `(max/chunks).max(3)` requested up to `3 * chunks` cards (e.g. 12
+    // for max=5 over 4 chunks), front-loading the first pages and burning extra
+    // API tokens on cards we'd only truncate away. Instead we track the budget
+    // remaining and ask each chunk for `remaining / chunks_left` (rounded up,
+    // floored at 1), so coverage stays even and the total never exceeds the cap.
+    let chunk_count = chunks.len();
     let mut all_cards = Vec::with_capacity(max_cards as usize);
-    for chunk in chunks {
-        if all_cards.len() >= max_cards as usize {
+    for (i, chunk) in chunks.into_iter().enumerate() {
+        let remaining = (max_cards as usize).saturating_sub(all_cards.len());
+        if remaining == 0 {
             break;
         }
-        match generate_cards_from_text(client, &chunk, cards_per_chunk, language).await {
+        let chunks_left = (chunk_count - i) as u32;
+        // Ceil-divide the remaining budget over the chunks still to process.
+        let request = (remaining as u32).div_ceil(chunks_left).max(1);
+        match generate_cards_from_text(client, &chunk, request, language).await {
             Ok(cards) => all_cards.extend(cards),
             Err(e) => eprintln!("[ai] chunk skipped: {}", e),
         }
@@ -160,28 +167,178 @@ pub async fn generate_cards_from_pdf(
 pub(crate) fn parse_cards_response(response: &str) -> Result<Vec<GeneratedCard>, ClaudeError> {
     let cleaned = strip_code_fences(response.trim());
 
-    serde_json::from_str::<Vec<GeneratedCard>>(cleaned).map_err(|e| {
+    let mut cards = serde_json::from_str::<Vec<GeneratedCard>>(cleaned).map_err(|e| {
         // Truncate the preview — a runaway response shouldn't make the
         // error message itself unmanageable.
         let preview: String = response.chars().take(200).collect();
         ClaudeError::InvalidResponse(format!("Card JSON parse error: {} (got: {})", e, preview))
-    })
+    })?;
+
+    // P075 — the LLM can emit a card whose `fields` don't match its
+    // `template` (e.g. {template:"basic",fields:{text:…}}). That parses fine
+    // as a free `Value` but degrades to an empty front/back draft that the
+    // persistence layer silently rejects (counted as a failure). Drop cards
+    // whose fields don't satisfy the template's contract so the count the
+    // user sees reflects genuinely usable cards.
+    cards.retain(card_fields_match_template);
+    Ok(cards)
 }
 
-/// Remove ``` or ```json fences if the model wrapped the array. Idempotent.
-fn strip_code_fences(s: &str) -> &str {
+/// P075 — true when `card.fields` satisfies the contract for `card.template`:
+/// `basic` requires non-empty `front` + `back`; `cloze` requires a `text`
+/// carrying at least one `{{cN::…}}` deletion. Anything else is a malformed
+/// draft we'd only reject downstream, so we drop it here.
+fn card_fields_match_template(card: &GeneratedCard) -> bool {
+    // A nested `fn` (not a closure) so lifetime elision ties the borrowed
+    // `&str` output to the `&Value` input — a closure leaves the two elided
+    // lifetimes unrelated and fails to compile.
+    fn non_empty_str(v: Option<&serde_json::Value>) -> Option<&str> {
+        v.and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+    }
+    match card.template {
+        CardTemplate::Basic => {
+            non_empty_str(card.fields.get("front")).is_some()
+                && non_empty_str(card.fields.get("back")).is_some()
+        }
+        CardTemplate::Cloze => non_empty_str(card.fields.get("text"))
+            .map(text_has_cloze_deletion)
+            .unwrap_or(false),
+    }
+}
+
+/// P075 — detect a `{{cN::…}}` cloze deletion. Matches Anki's cloze syntax:
+/// `{{c` followed by at least one ASCII digit, then `::`, then a `}}` later.
+fn text_has_cloze_deletion(text: &str) -> bool {
+    let Some(after) = text.split("{{c").nth(1) else {
+        return false;
+    };
+    // After "{{c" we need: 1+ digits, then "::", then a closing "}}".
+    let digits_end = after.find(|c: char| !c.is_ascii_digit()).unwrap_or(0);
+    if digits_end == 0 {
+        return false;
+    }
+    let rest = &after[digits_end..];
+    rest.strip_prefix("::")
+        .map(|r| r.contains("}}"))
+        .unwrap_or(false)
+}
+
+/// Remove ``` / ```json fences if the model wrapped the JSON, then return the
+/// payload. `pub(crate)` so every AI JSON parser (cards, critic, podcast,
+/// elaboration) shares ONE robust implementation instead of drifting copies.
+///
+/// P074 — fixes two failure modes of the old per-module copies:
+///   1. A single-line fence (```` ```json [..] ``` ```` with no newline after
+///      the tag) left the `json ` token glued to the payload → serde failed.
+///      We now also strip a leading lowercase language token + whitespace when
+///      no newline follows the opening fence.
+///   2. As a last resort we extract the substring between the first opening
+///      bracket (`[` or `{`) and its matching last closing bracket, so a stray
+///      preamble/epilogue around otherwise-valid JSON still parses.
+///
+/// Idempotent: already-clean JSON passes through unchanged.
+pub(crate) fn strip_code_fences(s: &str) -> &str {
     let mut out = s.trim();
+
     // Strip an opening fence — accept ```json, ```JSON, ``` and lang tags.
     if let Some(rest) = out.strip_prefix("```") {
-        // Drop the language tag up to the first newline (if any).
-        let rest = match rest.find('\n') {
-            Some(nl) => &rest[nl + 1..],
-            None => rest,
+        out = match rest.find('\n') {
+            // Tag (if any) lives on the fence line; drop through the newline.
+            Some(nl) => rest[nl + 1..].trim_end(),
+            // No newline: the whole array sits on the fence line, e.g.
+            // "```json [..]". Strip a leading lowercase-ASCII language token
+            // (json, JSON-lower, …) plus the whitespace gluing it to the JSON.
+            None => {
+                let tag_len = rest
+                    .find(|c: char| !c.is_ascii_lowercase())
+                    .unwrap_or(rest.len());
+                rest[tag_len..].trim_start().trim_end()
+            }
         };
-        out = rest.trim_end();
     }
     if let Some(stripped) = out.strip_suffix("```") {
         out = stripped.trim_end();
     }
-    out.trim()
+    out = out.trim();
+
+    // Last-resort: carve out the JSON body if prose still surrounds it. We key
+    // off the first opening bracket and the matching kind of last closing
+    // bracket so both array and object payloads survive a chatty model.
+    if !(out.starts_with('[') || out.starts_with('{')) {
+        if let Some(start) = out.find(['[', '{']) {
+            let close = if out.as_bytes()[start] == b'[' { ']' } else { '}' };
+            if let Some(end) = out.rfind(close) {
+                if end > start {
+                    return out[start..=end].trim();
+                }
+            }
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strips_single_line_json_fence() {
+        // P074 — the regression: tag + payload on ONE line, no newline.
+        let raw = r#"```json [{"template":"basic","fields":{"front":"Q","back":"A"},"tags":[]}] ```"#;
+        let cards = parse_cards_response(raw).expect("single-line fence must parse");
+        assert_eq!(cards.len(), 1);
+    }
+
+    #[test]
+    fn strips_multiline_json_fence() {
+        let raw = "```json\n[{\"template\":\"basic\",\"fields\":{\"front\":\"Q\",\"back\":\"A\"},\"tags\":[]}]\n```";
+        let cards = parse_cards_response(raw).expect("multiline fence must parse");
+        assert_eq!(cards.len(), 1);
+    }
+
+    #[test]
+    fn extracts_json_from_surrounding_prose() {
+        // P074 — chatty model wraps the array in a preamble + epilogue.
+        let raw = "Voici les cartes :\n[{\"template\":\"basic\",\"fields\":{\"front\":\"Q\",\"back\":\"A\"},\"tags\":[]}]\nVoilà !";
+        let cards = parse_cards_response(raw).expect("prose-wrapped JSON must parse");
+        assert_eq!(cards.len(), 1);
+    }
+
+    #[test]
+    fn drops_card_whose_fields_mismatch_template() {
+        // P075 — basic card with cloze-shaped fields → empty draft → dropped.
+        let raw = r#"[
+            {"template":"basic","fields":{"text":"orphan"},"tags":[]},
+            {"template":"basic","fields":{"front":"Q","back":"A"},"tags":[]}
+        ]"#;
+        let cards = parse_cards_response(raw).expect("parse");
+        assert_eq!(cards.len(), 1, "the mismatched basic card must be dropped");
+        assert_eq!(cards[0].fields["front"], "Q");
+    }
+
+    #[test]
+    fn drops_cloze_without_deletion() {
+        // P075 — a "cloze" with plain text (no {{cN::}}) is unusable.
+        let raw = r#"[
+            {"template":"cloze","fields":{"text":"no deletion here"},"tags":[]},
+            {"template":"cloze","fields":{"text":"The {{c1::ATP}} is energy"},"tags":[]}
+        ]"#;
+        let cards = parse_cards_response(raw).expect("parse");
+        assert_eq!(cards.len(), 1);
+        assert!(text_has_cloze_deletion(
+            cards[0].fields["text"].as_str().unwrap()
+        ));
+    }
+
+    #[test]
+    fn cloze_deletion_detector() {
+        assert!(text_has_cloze_deletion("a {{c1::x}} b"));
+        assert!(text_has_cloze_deletion("{{c12::multi digit}}"));
+        assert!(!text_has_cloze_deletion("no cloze"));
+        assert!(!text_has_cloze_deletion("{{c::missing digit}}"));
+        assert!(!text_has_cloze_deletion("{{c1 missing colons}}"));
+        assert!(!text_has_cloze_deletion("{{c1::unterminated"));
+    }
 }

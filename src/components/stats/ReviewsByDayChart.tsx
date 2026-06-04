@@ -11,6 +11,7 @@
  */
 
 import { BarChart3 } from "lucide-react";
+import { memo, useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatDateLong, type Period, periodToDays } from "@/lib/date";
@@ -26,14 +27,16 @@ interface ChartDatum {
   count: number;
 }
 
-export function ReviewsByDayChart({ period }: ReviewsByDayChartProps) {
+function ReviewsByDayChartImpl({ period }: ReviewsByDayChartProps) {
   const days = periodToDays(period);
   const { data, isLoading, error } = useReviewsByDay(days);
 
-  const chartData: ChartDatum[] = (data ?? []).map((row) => ({
-    date: row.date,
-    count: row.count,
-  }));
+  // Memoised so recharts receives a stable array reference across re-renders
+  // (e.g. when a sibling chart re-queries) and keeps its change detection.
+  const chartData: ChartDatum[] = useMemo(
+    () => (data ?? []).map((row) => ({ date: row.date, count: row.count })),
+    [data],
+  );
 
   return (
     <Card className={cn("flex flex-col", error && "border-destructive/40")}>
@@ -111,6 +114,13 @@ export function ReviewsByDayChart({ period }: ReviewsByDayChartProps) {
   );
 }
 
+/**
+ * Re-render only when `period` changes — the chart is otherwise pure over its
+ * query result, so this stops a sibling re-render (or a parent state change)
+ * from reallocating the recharts subtree.
+ */
+export const ReviewsByDayChart = memo(ReviewsByDayChartImpl);
+
 function EmptyState() {
   return (
     <div className="flex h-[300px] flex-col items-center justify-center gap-4 text-center">
@@ -126,7 +136,10 @@ function EmptyState() {
 
 function ErrorState() {
   return (
-    <div className="flex h-[300px] items-center justify-center text-center text-sm text-destructive">
+    <div
+      role="alert"
+      className="flex h-[300px] items-center justify-center text-center text-sm text-destructive"
+    >
       Impossible de charger les révisions.
     </div>
   );

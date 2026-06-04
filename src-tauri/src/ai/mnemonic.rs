@@ -12,18 +12,20 @@
 
 use super::claude::{ClaudeClient, ClaudeError};
 
-/// System prompt. Keeps the model terse and on-task; the "no preamble" nudge
-/// avoids a "Voici une astuce :" wrapper we'd otherwise have to strip.
-const SYSTEM_PROMPT: &str = r#"Tu es un expert en techniques de mémorisation (mnémotechnie).
+/// System prompt. Kept LANGUAGE-NEUTRAL (English instructions) so the output
+/// language is driven solely by the request's `language` hint — P116: the old
+/// French-only prompt biased every mnemonic toward French even when the user
+/// picked en/es/de/… The "no preamble" nudge avoids a wrapper we'd strip.
+const SYSTEM_PROMPT: &str = r#"You are an expert in memorization techniques (mnemonics).
 
-Tu produis une aide mnémotechnique vivante et mémorable pour ancrer durablement
-une association à retenir : image mentale absurde, acronyme, ou association forte.
+You produce one vivid, memorable mnemonic aid to durably anchor an association:
+an absurd mental image, an acronym, or a strong association.
 
-Règles :
-1. 2 à 3 phrases maximum. Sois concret et frappant.
-2. Réponds UNIQUEMENT avec l'aide mnémotechnique — PAS de préambule, PAS de méta-commentaire.
-3. Reste dans la langue demandée.
-4. N'invente aucun fait : appuie-toi uniquement sur le contenu fourni.
+Rules:
+1. 2 to 3 sentences maximum. Be concrete and striking.
+2. Reply ONLY with the mnemonic aid — NO preamble, NO meta-commentary.
+3. Write the ENTIRE response in the requested output language, and only that language.
+4. Never invent facts: rely only on the supplied content.
 "#;
 
 /// Output cap. Three sentences fit comfortably; we leave headroom for a
@@ -46,17 +48,19 @@ pub async fn generate_mnemonic(
     let front = front.trim();
     let back = back.trim();
 
-    // Build the mapping line defensively: when `back` is empty (cloze), ask
-    // for an aid to remember the sentence itself rather than a "→ ()" arrow.
+    // P116 — frame the request in language-NEUTRAL English so only the
+    // `language` hint controls the output language. When `back` is empty
+    // (cloze), ask for an aid to remember the sentence itself rather than a
+    // "→ ()" arrow.
     let mapping = if back.is_empty() {
-        format!("Aide à retenir : « {front} »")
+        format!("Help memorize: « {front} »")
     } else {
-        format!("Aide à retenir que « {front} » → « {back} »")
+        format!("Help memorize that « {front} » → « {back} »")
     };
 
     let prompt = format!(
-        "{mapping}.\nLangue de sortie : {language}. \
-         Réponds UNIQUEMENT avec l'aide mnémotechnique (2-3 phrases max)."
+        "{mapping}.\nOutput language: {language}. \
+         Reply ONLY with the mnemonic aid (2-3 sentences max), written entirely in {language}."
     );
 
     let response = client

@@ -75,18 +75,21 @@ export default function IndexPage() {
             label="Révisions dues"
             value={String(today.data?.due_now ?? 0)}
             loading={today.isLoading}
+            error={today.isError}
             icon={ClipboardList}
           />
           <StatCard
             label="Nouvelles"
             value={String(today.data?.new_cards_today ?? 0)}
             loading={today.isLoading}
+            error={today.isError}
             icon={Sparkles}
           />
           <StatCard
             label="Rétention"
             value={`${Math.round((today.data?.retention_today ?? 0) * 100)}%`}
             loading={today.isLoading}
+            error={today.isError}
             icon={TrendingUp}
           />
         </div>
@@ -126,11 +129,17 @@ function StatCard({
   label,
   value,
   loading,
+  error,
   icon: Icon,
 }: {
   label: string;
   value: string;
   loading?: boolean;
+  /**
+   * When the underlying query failed, show a neutral « — » instead of the
+   * fallback `0` so we never present a fabricated value as real data.
+   */
+  error?: boolean;
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
@@ -144,6 +153,15 @@ function StatCard({
       <CardContent>
         {loading ? (
           <div className="h-8 w-16 animate-pulse rounded-lg bg-muted" />
+        ) : error ? (
+          <p
+            className="font-mono text-3xl font-semibold tabular-nums tracking-tight text-muted-foreground"
+            role="alert"
+            aria-label={`${label} : donnée indisponible`}
+            title="Donnée indisponible"
+          >
+            —
+          </p>
         ) : (
           <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight">{value}</p>
         )}

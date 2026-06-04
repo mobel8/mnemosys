@@ -16,6 +16,12 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    // Radix Select/Tabs interactions in jsdom (pointer events + open animation)
+    // can take several seconds; under full parallel load — especially on the
+    // single-ish-core CI runners — a single interaction occasionally exceeds the
+    // default 5 s and flakes. 20 s gives ample headroom without masking a real
+    // hang (a genuinely stuck test still fails, just later).
+    testTimeout: 20000,
     setupFiles: ["./tests/setup.ts"],
     include: ["tests/unit/**/*.{test,spec}.{ts,tsx}", "src/**/*.{test,spec}.{ts,tsx}"],
     exclude: ["node_modules", "dist", "src-tauri", "tests/e2e/**"],

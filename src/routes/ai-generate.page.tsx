@@ -13,8 +13,8 @@ export default function AiGenerateRoute() {
       <header>
         <h1 className="text-3xl font-semibold tracking-tight">Génération IA de cartes</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Colle un texte ou choisis un PDF, valide les cartes proposées par Claude, puis ajoute-les
-          au deck de ton choix.
+          Colle un texte ou choisis un PDF, valide les cartes proposées par l'IA (Claude ou Ollama
+          en local), puis ajoute-les au deck de ton choix.
         </p>
       </header>
 

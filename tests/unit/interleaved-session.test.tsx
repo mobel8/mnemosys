@@ -42,6 +42,9 @@ vi.mock("@/components/ui/use-toast", () => ({
 
 vi.mock("@/lib/queries", () => ({
   useDecks: () => ({ data: decksData, isLoading: false }),
+  // P126 — each deck row renders a due-count badge via <DeckDueBadge>, which
+  // reads useDeckStats. Stub it so the per-deck badge mounts without IPC.
+  useDeckStats: () => ({ data: undefined, isLoading: false }),
   useInterleavedDueCards: () => ({
     data: interleavedData,
     isLoading: interleavedIsLoading,

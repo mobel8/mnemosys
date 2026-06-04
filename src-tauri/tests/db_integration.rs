@@ -1217,8 +1217,10 @@ fn jol_predict_resolve_round_trip() {
     assert_eq!(p.card_id, card_id);
     assert_eq!(p.actual_correct, None);
 
+    // P058 — resolution now requires the horizon (7 days) to have elapsed:
+    // predicted_at (1_700_000_000) + 7*86400 = 1_700_604_800.
     let resolved = meta
-        .resolve_prediction(card_id, true, 1_700_000_500)
+        .resolve_prediction(card_id, true, 1_700_604_800)
         .expect("resolve");
     assert_eq!(resolved, 1);
 
@@ -1273,9 +1275,11 @@ fn jol_pending_filters_by_age_and_resolution() {
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].card_id, card_a);
 
-    // Now resolve the old one — pending list is empty.
+    // Now resolve the old one — pending list is empty. P058: resolution must
+    // be past the 7-day horizon (predicted_at = now - 90 min), so resolve well
+    // beyond it rather than at `now`.
     db.metacognition(&conn)
-        .resolve_prediction(card_a, true, now)
+        .resolve_prediction(card_a, true, now + 8 * 86400)
         .unwrap();
     assert!(db
         .metacognition(&conn)
@@ -1307,7 +1311,7 @@ fn calibration_stats_returns_buckets() {
                 .unwrap();
             // Each prediction has to be resolved → record then immediately
             // resolve it; the next record/resolve cycle picks the next-oldest.
-            meta.resolve_prediction(card_id, *ok, 1_700_000_100 + i as i64)
+            meta.resolve_prediction(card_id, *ok, 1_700_700_000 + i as i64)
                 .unwrap();
         }
     }
@@ -1341,7 +1345,7 @@ fn calibration_gamma_perfect_correlation() {
         {
             meta.record_prediction(card_id, *p, 7, 1_700_000_000 + i as i64)
                 .unwrap();
-            meta.resolve_prediction(card_id, *ok, 1_700_000_100 + i as i64)
+            meta.resolve_prediction(card_id, *ok, 1_700_700_000 + i as i64)
                 .unwrap();
         }
     }
@@ -1375,7 +1379,7 @@ fn calibration_gamma_inverse_correlation() {
         {
             meta.record_prediction(card_id, *p, 7, 1_700_000_000 + i as i64)
                 .unwrap();
-            meta.resolve_prediction(card_id, *ok, 1_700_000_100 + i as i64)
+            meta.resolve_prediction(card_id, *ok, 1_700_700_000 + i as i64)
                 .unwrap();
         }
     }

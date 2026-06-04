@@ -273,7 +273,8 @@ export default function MinimalPairsDrill() {
           </Select>
           {contrast && (
             <p className="text-xs text-muted-foreground">
-              {contrast.pairs.length} paires dans ce contraste.
+              {contrast.pairs.length} {contrast.pairs.length > 1 ? "paires" : "paire"} dans ce
+              contraste.
             </p>
           )}
         </CardContent>

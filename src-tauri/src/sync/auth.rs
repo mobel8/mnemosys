@@ -103,6 +103,20 @@ pub fn validate_https_url(raw: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// P090 — map a Supabase auth HTTP status to a short, controlled French
+/// message. The detailed body is logged backend-side and never reaches the UI,
+/// so we don't leak request fragments / attacker-controlled text into a toast.
+fn safe_auth_message(status: u16) -> String {
+    let msg = match status {
+        400 | 401 | 403 => "Identifiants Supabase invalides (e-mail ou mot de passe incorrect).",
+        422 => "Requête d'authentification refusée par Supabase.",
+        429 => "Trop de tentatives de connexion — réessaie plus tard.",
+        s if s >= 500 => "Service Supabase indisponible — réessaie plus tard.",
+        _ => "Échec de l'authentification Supabase.",
+    };
+    msg.to_string()
+}
+
 /// Raw response payload returned by `POST /auth/v1/token?grant_type=password`.
 #[derive(Debug, Deserialize)]
 struct TokenResponse {
@@ -154,12 +168,15 @@ pub async fn login(config: &SupabaseConfig, email: &str, password: &str) -> AppR
         .map_err(|e| AppError::Other(format!("supabase auth request failed: {}", e)))?;
 
     if !resp.status().is_success() {
+        // P090 — Supabase auth bodies can echo request fragments / internal
+        // detail; on a misconfigured (attacker-controlled) URL the body is
+        // fully attacker-controlled text rendered in a toast. Log the detail
+        // backend-side and surface only a short status-mapped message.
         let status = resp.status();
         let detail = resp.text().await.unwrap_or_default();
-        return Err(AppError::Validation(format!(
-            "supabase auth returned {}: {}",
-            status, detail
-        )));
+        let detail_preview: String = detail.chars().take(500).collect();
+        eprintln!("[sync] supabase auth {}: {}", status, detail_preview);
+        return Err(AppError::Validation(safe_auth_message(status.as_u16())));
     }
 
     let parsed: TokenResponse = resp
@@ -195,12 +212,13 @@ pub async fn refresh(config: &SupabaseConfig, refresh_token: &str) -> AppResult<
         .map_err(|e| AppError::Other(format!("supabase refresh failed: {}", e)))?;
 
     if !resp.status().is_success() {
+        // P090 — same hardening as `login`: log the raw detail, surface a
+        // short controlled message.
         let status = resp.status();
         let detail = resp.text().await.unwrap_or_default();
-        return Err(AppError::Validation(format!(
-            "supabase refresh returned {}: {}",
-            status, detail
-        )));
+        let detail_preview: String = detail.chars().take(500).collect();
+        eprintln!("[sync] supabase refresh {}: {}", status, detail_preview);
+        return Err(AppError::Validation(safe_auth_message(status.as_u16())));
     }
 
     let parsed: TokenResponse = resp

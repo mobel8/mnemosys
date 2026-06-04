@@ -12,7 +12,7 @@
  */
 
 import { Loader2, Moon, Save, Volume2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CHRONOTYPE_INFO, type Chronotype, ChronotypeQuiz } from "@/components/ChronotypeQuiz";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -90,11 +90,20 @@ function clamp(value: number, min: number, max: number) {
 
 export function NeuroModesSection() {
   const query = useSettingsQuery();
+  // P111 — la carte mêle deux paradigmes : le bloc « modes neuro » est un
+  // brouillon validé par le bouton « Sauvegarder », tandis que le chronotype et
+  // l'ambiance s'enregistrent immédiatement. On distingue les deux dans le toast
+  // de succès pour que le lien action→résultat reste lisible.
+  const autoSaveRef = useRef(false);
   const save = useSaveSettings({
     onSuccess: () => {
-      toast({ title: "Modes neuro mis à jour" });
+      toast({
+        title: autoSaveRef.current ? "Enregistré automatiquement" : "Modes neuro mis à jour",
+      });
+      autoSaveRef.current = false;
     },
     onError: (err) => {
+      autoSaveRef.current = false;
       toast({
         title: "Échec de la sauvegarde",
         description: err.message,
@@ -138,6 +147,8 @@ export function NeuroModesSection() {
   async function persistPatch(patch: Partial<AppSettings>) {
     const refreshed = await query.refetch();
     const base = refreshed.data ?? query.data ?? DEFAULTS;
+    // P111 — flag this write as an auto-save so onSuccess shows the right toast.
+    autoSaveRef.current = true;
     save.mutate({ ...base, ...patch });
   }
 
@@ -208,11 +219,14 @@ export function NeuroModesSection() {
           />
         </div>
 
-        {/* Mood/Sleep check-in */}
-        <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
+        {/* Mood/Sleep check-in. P111 — le bloc entier (libellé+description+contrôle)
+            est atténué quand le master switch est éteint, pas seulement le Switch. */}
+        <div
+          className={`flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3 transition-opacity ${masterOff ? "opacity-60" : ""}`}
+        >
           <div className="space-y-0.5">
             <Label htmlFor="mood-checkin" className="text-sm">
-              Mood / Sleep check-in pré-session
+              Bilan humeur / sommeil avant la session
             </Label>
             <p className="text-xs text-muted-foreground">
               5 questions rapides avant chaque session (humeur, sommeil, stress, hydratation,
@@ -230,11 +244,13 @@ export function NeuroModesSection() {
           />
         </div>
 
-        {/* Movement break interval */}
-        <div className="rounded-md border bg-muted/30 px-4 py-3">
+        {/* Movement break interval. P111 — bloc atténué quand master off. */}
+        <div
+          className={`rounded-md border bg-muted/30 px-4 py-3 transition-opacity ${masterOff ? "opacity-60" : ""}`}
+        >
           <div className="flex items-center justify-between gap-3">
             <Label htmlFor="movement-slider" className="text-sm">
-              Movement break toutes les{" "}
+              Pause mouvement toutes les{" "}
               <span className="font-semibold text-primary">{draft.movement_break_minutes}</span> min
             </Label>
             <span className="text-xs text-muted-foreground">10–60 min</span>
@@ -262,11 +278,13 @@ export function NeuroModesSection() {
           />
         </div>
 
-        {/* Cyclic sighing primer */}
-        <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
+        {/* Cyclic sighing primer. P111 — bloc atténué quand master off. */}
+        <div
+          className={`flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3 transition-opacity ${masterOff ? "opacity-60" : ""}`}
+        >
           <div className="space-y-0.5">
             <Label htmlFor="cyclic-sighing" className="text-sm">
-              Cyclic sighing primer (5 min)
+              Amorçage par soupirs cycliques (5 min)
             </Label>
             <p className="text-xs text-muted-foreground">
               Proposer la séquence respiratoire quand le stress est élevé (Spiegel, Cell Reports
@@ -298,6 +316,15 @@ export function NeuroModesSection() {
             )}
             Sauvegarder
           </Button>
+        </div>
+
+        {/* P111 — séparateur explicite : tout ce qui suit s'enregistre
+            immédiatement, sans passer par le bouton « Sauvegarder » ci-dessus. */}
+        <div className="flex items-center gap-3 border-t pt-4">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Enregistré automatiquement
+          </span>
+          <span className="h-px flex-1 bg-border" />
         </div>
 
         {/* Vague 18 — Chronotype calibration (saves immediately, independent of

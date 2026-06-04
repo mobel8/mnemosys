@@ -31,11 +31,19 @@ import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 import { WordLookupPopover } from "@/components/WordLookupPopover";
 import { type DictEntry, lookupLocal } from "@/lib/dictionary";
 import {
+  useCardsInDeck,
   useCreateCardsFromWords,
   useCreateNote,
   useDecks,
@@ -67,6 +75,24 @@ type LanguageValue = (typeof LANGUAGES)[number]["value"];
 
 /** Max characters accepted before we refuse to tokenise (perf guard). */
 const MAX_TEXT_CHARS = 20_000;
+
+/**
+ * Radix `<Select>` forbids an empty-string item value, so the "no deck chosen"
+ * state is carried by this sentinel and converted back to `null` on change.
+ */
+const NO_DECK = "__none__";
+
+/**
+ * Upper bound on existing cards fetched for duplicate detection (P078). A
+ * reading session yields a handful of new words; this caps the snapshot we
+ * scan for already-present fronts.
+ */
+const DEDUP_FETCH_LIMIT = 5000;
+
+/** Lower-case + trim a card front for case-insensitive duplicate matching. */
+function normalizeFront(value: string): string {
+  return value.trim().toLowerCase();
+}
 
 /** One parsed segment of the source text. */
 interface Token {
@@ -184,6 +210,20 @@ export function ReadingImport() {
   const generateCards = useGenerateCardsFromText();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Existing cards in the chosen deck, used to skip words already added so the
+  // reading flow doesn't re-create duplicates across overlapping texts (P078).
+  const existingCardsQuery = useCardsInDeck(deckId ?? -1, DEDUP_FETCH_LIMIT, 0, {
+    enabled: deckId !== null,
+  });
+  const existingFronts = useMemo(() => {
+    const set = new Set<string>();
+    for (const { note } of existingCardsQuery.data ?? []) {
+      const front = note.fields.front;
+      if (typeof front === "string") set.add(normalizeFront(front));
+    }
+    return set;
+  }, [existingCardsQuery.data]);
+
   // Tokenise the *submitted* text (not the live draft) so editing the
   // textarea doesn't re-render hundreds of word buttons on every keystroke.
   const tokens = useMemo(() => tokenize(text), [text]);
@@ -231,6 +271,18 @@ export function ReadingImport() {
     setStatus.mutate(
       { word, status: next, language },
       {
+        onSuccess: (saved) => {
+          // P121 — the server is now the authority for this word. Drop the
+          // override (only if it still equals what we persisted, so a rapid
+          // re-click that queued a newer status isn't clobbered) so the
+          // refetched value can never be masked indefinitely.
+          setOverrides((prev) => {
+            if (prev[word] !== saved.status) return prev;
+            const copy = { ...prev };
+            delete copy[word];
+            return copy;
+          });
+        },
         onError: (err) => {
           // Roll back the optimistic change on failure.
           setOverrides((prev) => {
@@ -391,15 +443,37 @@ export function ReadingImport() {
     [distinctWords, statusByWord],
   );
 
+  // Of those, the ones not already present in the deck (P078). The backend
+  // dedups within a single batch but not against existing cards, so we filter
+  // here to avoid re-minting words the learner already studied.
+  const wordsToCreate = useMemo(
+    () => learningWords.filter((w) => !existingFronts.has(normalizeFront(w))),
+    [learningWords, existingFronts],
+  );
+  const duplicateCount = learningWords.length - wordsToCreate.length;
+
   function handleCreateCards() {
-    if (deckId === null || learningWords.length === 0) return;
+    if (deckId === null || wordsToCreate.length === 0) return;
+    const skipped = duplicateCount;
+    // P079 — pre-fill the back from the embedded EN→FR dictionary (AI override
+    // wins) so common words land translated instead of « (à traduire) ». The
+    // array is positional vs `wordsToCreate`; an empty string falls back to the
+    // placeholder backend-side.
+    const translations = wordsToCreate.map((w) => entryOf(w)?.fr ?? "");
+    const glossed = translations.filter((t) => t.length > 0).length;
     createCards.mutate(
-      { deckId, words: learningWords },
+      { deckId, words: wordsToCreate, translations },
       {
         onSuccess: (count) => {
           toast({
             title: `${count} carte${count > 1 ? "s" : ""} créée${count > 1 ? "s" : ""}`,
-            description: "Front = mot, verso = « (à traduire) ». Édite-les dans le deck.",
+            description:
+              (glossed > 0
+                ? `${glossed} verso${glossed > 1 ? "s" : ""} pré-rempli${glossed > 1 ? "s" : ""} depuis le dictionnaire ; le reste sur « (à traduire) ».`
+                : "Front = mot, verso = « (à traduire) ». Édite-les dans le deck.") +
+              (skipped > 0
+                ? ` ${skipped} déjà présent${skipped > 1 ? "s" : ""} ignoré${skipped > 1 ? "s" : ""}.`
+                : ""),
           });
         },
         onError: (err) => {
@@ -415,7 +489,7 @@ export function ReadingImport() {
 
   const draftTooLong = draft.length > MAX_TEXT_CHARS;
   const canAnalyze = draft.trim().length > 0 && !draftTooLong;
-  const canCreateCards = deckId !== null && learningWords.length > 0 && !createCards.isPending;
+  const canCreateCards = deckId !== null && wordsToCreate.length > 0 && !createCards.isPending;
 
   return (
     <div className="space-y-6" data-testid="reading-import">
@@ -450,21 +524,21 @@ export function ReadingImport() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor={langSelectId}>Langue</Label>
-              <select
-                id={langSelectId}
+              <Select
                 value={language}
-                onChange={(e) => setLanguage(e.target.value as LanguageValue)}
-                className={cn(
-                  "flex h-9 w-full rounded-lg border border-input bg-card px-3 py-1.5 text-sm shadow-xs transition-colors",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                )}
+                onValueChange={(value) => setLanguage(value as LanguageValue)}
               >
-                {LANGUAGES.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id={langSelectId}>
+                  <SelectValue placeholder="Choisir une langue" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGUAGES.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">
                 Dictionnaire hors-ligne anglais → français. Pour une autre langue, les mots inconnus
                 utilisent la définition générée par l'IA.
@@ -472,22 +546,21 @@ export function ReadingImport() {
             </div>
             <div className="space-y-2">
               <Label htmlFor={deckSelectId}>Deck cible (pour les cartes)</Label>
-              <select
-                id={deckSelectId}
-                value={deckId ?? ""}
-                onChange={(e) => setDeckId(e.target.value === "" ? null : Number(e.target.value))}
-                className={cn(
-                  "flex h-9 w-full rounded-lg border border-input bg-card px-3 py-1.5 text-sm shadow-xs transition-colors",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                )}
+              <Select
+                value={deckId === null ? NO_DECK : String(deckId)}
+                onValueChange={(value) => setDeckId(value === NO_DECK ? null : Number(value))}
               >
-                <option value="">— Choisir un deck —</option>
-                {decks.map((deck) => (
-                  <option key={deck.id} value={deck.id}>
-                    {deck.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id={deckSelectId}>
+                  <SelectValue placeholder="— Choisir un deck —" />
+                </SelectTrigger>
+                <SelectContent>
+                  {decks.map((deck) => (
+                    <SelectItem key={deck.id} value={String(deck.id)}>
+                      {deck.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -613,7 +686,7 @@ export function ReadingImport() {
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4" />
-                    Créer {learningWords.length} carte{learningWords.length > 1 ? "s" : ""}
+                    Créer {wordsToCreate.length} carte{wordsToCreate.length > 1 ? "s" : ""}
                   </>
                 )}
               </Button>
@@ -622,9 +695,19 @@ export function ReadingImport() {
                   ? "Marque des mots « en cours » pour en faire des cartes."
                   : deckId === null
                     ? "Choisis d'abord un deck cible ci-dessus."
-                    : `${learningWords.length} mot${
-                        learningWords.length > 1 ? "s" : ""
-                      } « en cours » prêt${learningWords.length > 1 ? "s" : ""}.`}
+                    : wordsToCreate.length === 0
+                      ? `Les ${learningWords.length} mot${
+                          learningWords.length > 1 ? "s" : ""
+                        } « en cours » sont déjà dans ce deck.`
+                      : `${wordsToCreate.length} mot${
+                          wordsToCreate.length > 1 ? "s" : ""
+                        } « en cours » prêt${wordsToCreate.length > 1 ? "s" : ""}${
+                          duplicateCount > 0
+                            ? ` (${duplicateCount} déjà présent${duplicateCount > 1 ? "s" : ""} ignoré${
+                                duplicateCount > 1 ? "s" : ""
+                              })`
+                            : ""
+                        }.`}
               </span>
             </div>
             {decks.length === 0 && !decksQuery.isLoading && (

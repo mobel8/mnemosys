@@ -15,7 +15,7 @@
 import { Link } from "@tanstack/react-router";
 import confetti from "canvas-confetti";
 import { motion, useReducedMotion } from "framer-motion";
-import { PartyPopper } from "lucide-react";
+import { Inbox, PartyPopper } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,14 +77,26 @@ export function ReviewSummary({
   // P029 — respect the OS "reduce motion" preference: no confetti burst and
   // no slide-up entrance for users who opted out of non-essential animation.
   const reduceMotion = useReducedMotion();
+  const total = reviewed.length;
+  // P102 — a session where nothing was graded (queue empty, or every card got
+  // suspended) is not a win: skip the confetti and the celebratory copy below.
+  const isEmpty = total === 0;
   const firedRef = useRef(false);
   useEffect(() => {
     if (firedRef.current) return;
     firedRef.current = true;
-    if (!reduceMotion) fireConfetti();
-  }, [reduceMotion]);
+    // P102 — only celebrate when at least one card was actually reviewed.
+    if (!reduceMotion && !isEmpty) fireConfetti();
+  }, [reduceMotion, isEmpty]);
 
-  const total = reviewed.length;
+  // P109 — move focus to the summary heading when the screen mounts so screen
+  // reader / keyboard users land on the result instead of staying on the (now
+  // unmounted) rating row.
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
+
   const correct = reviewed.filter((r) => r.correct).length;
   const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
   const learnedNew = reviewed.filter((r) => r.rating >= 3).length;
@@ -98,19 +110,46 @@ export function ReviewSummary({
     >
       <Card className="w-full max-w-xl">
         <CardHeader className="text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-50 text-brand-500">
-            <PartyPopper className="h-7 w-7" aria-hidden />
-          </div>
-          <CardTitle className="mt-3 font-display text-2xl">Session terminée</CardTitle>
-          <CardDescription>Beau travail — voici ton récap.</CardDescription>
+          {/* P102 — neutral icon + copy when nothing was graded; celebratory
+              otherwise. */}
+          {isEmpty ? (
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <Inbox className="h-7 w-7" aria-hidden />
+            </div>
+          ) : (
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-50 text-brand-500">
+              <PartyPopper className="h-7 w-7" aria-hidden />
+            </div>
+          )}
+          {/* P109 — real heading, focused on mount, so SR/keyboard users land
+              on the result. `tabIndex={-1}` makes it programmatically
+              focusable without adding it to the tab order. */}
+          <CardTitle
+            as="h2"
+            ref={headingRef}
+            tabIndex={-1}
+            className="mt-3 font-display text-2xl outline-none"
+          >
+            {isEmpty ? "Aucune carte révisée" : "Session terminée"}
+          </CardTitle>
+          <CardDescription>
+            {isEmpty
+              ? "Cette session s'est terminée sans aucune révision."
+              : "Beau travail — voici ton récap."}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Stat label="Cartes" value={total.toString()} />
-            <Stat label="Précision" value={`${accuracy}%`} accent="success" />
-            <Stat label="Durée" value={formatElapsed(durationMs)} />
-            <Stat label="Mémorisées" value={`+${learnedNew}`} accent="brand" />
-          </div>
+          {/* P109 — expose the KPIs as a description list so each figure is
+              programmatically tied to its label (« Précision : 92% ») instead
+              of being linearised into orphaned label/value fragments. */}
+          {!isEmpty && (
+            <dl className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <Stat label="Cartes" value={total.toString()} />
+              <Stat label="Précision" value={`${accuracy}%`} accent="success" />
+              <Stat label="Durée" value={formatElapsed(durationMs)} />
+              <Stat label="Mémorisées" value={`+${learnedNew}`} accent="brand" />
+            </dl>
+          )}
 
           <div className="flex flex-col items-center gap-2 pt-2 sm:flex-row sm:justify-center">
             <Button asChild variant="outline">
@@ -150,8 +189,8 @@ function Stat({
 }) {
   return (
     <div className="rounded-lg border bg-muted/40 p-3 text-center">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div
+      <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd
         className={cn(
           "mt-1 font-display text-2xl font-semibold tabular-nums",
           accent === "success" && "text-success",
@@ -159,7 +198,7 @@ function Stat({
         )}
       >
         {value}
-      </div>
+      </dd>
     </div>
   );
 }

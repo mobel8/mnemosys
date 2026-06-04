@@ -255,6 +255,20 @@ impl SyncClient {
     }
 }
 
+/// P090 — map a PostgREST HTTP status to a short, controlled French message.
+/// The detailed body is logged backend-side and never reaches the UI toast.
+fn safe_sync_message(status: u16) -> String {
+    let msg = match status {
+        401 | 403 => "Synchronisation refusée : session expirée ou non autorisée.",
+        404 => "Ressource de synchronisation introuvable sur le serveur.",
+        409 => "Conflit de synchronisation côté serveur.",
+        429 => "Trop de requêtes de synchronisation — réessaie plus tard.",
+        s if s >= 500 => "Service de synchronisation indisponible — réessaie plus tard.",
+        _ => "Échec de la synchronisation avec le serveur.",
+    };
+    msg.to_string()
+}
+
 /// Helper: a 200 with no body (or `[]`) yields `Ok(vec![])`. Any non-2xx
 /// status is folded into `AppError::Other` so the orchestrator can surface
 /// it without leaking reqwest internals.
@@ -264,11 +278,13 @@ where
 {
     let status = resp.status();
     if !status.is_success() {
+        // P090 — PostgREST error bodies can echo SQL detail / row payloads and,
+        // on a misconfigured endpoint, attacker-controlled text. Log it
+        // backend-side and surface only a short status-mapped message.
         let detail = resp.text().await.unwrap_or_default();
-        return Err(AppError::Other(format!(
-            "supabase returned {}: {}",
-            status, detail
-        )));
+        let detail_preview: String = detail.chars().take(500).collect();
+        eprintln!("[sync] supabase rest {}: {}", status, detail_preview);
+        return Err(AppError::Other(safe_sync_message(status.as_u16())));
     }
     let body = resp
         .text()

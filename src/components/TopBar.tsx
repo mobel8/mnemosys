@@ -8,7 +8,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { StreakWidget } from "@/components/StreakWidget";
 import { Button } from "@/components/ui/button";
-import { useDecks } from "@/lib/queries";
+import { useDeck } from "@/lib/queries";
 
 interface Crumb {
   label: string;
@@ -62,15 +62,18 @@ function buildCrumbs(pathname: string, deckName?: string): Crumb[] {
 }
 
 export function TopBar() {
-  const router = useRouterState();
-  const pathname = router.location.pathname;
-  const decks = useDecks();
+  // P082: select only the pathname so the permanently-mounted TopBar doesn't
+  // re-render on every router pending/preload transition.
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const deckIdMatch = pathname.match(/^\/(?:decks|review)\/(\d+)/);
   const activeDeckId = deckIdMatch ? Number(deckIdMatch[1]) : null;
-  const activeDeck = activeDeckId ? decks.data?.find((d) => d.id === activeDeckId) : undefined;
+  // P082: fetch only the active deck (gated by `enabled`) rather than pulling
+  // the whole deck list inconditionally. Off the deck/review routes this query
+  // stays idle — the breadcrumb only ever needs the one deck's name.
+  const activeDeck = useDeck(activeDeckId ?? 0, { enabled: activeDeckId !== null });
 
-  const crumbs = buildCrumbs(pathname, activeDeck?.name);
+  const crumbs = buildCrumbs(pathname, activeDeck.data?.name);
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b bg-background/95 px-6 backdrop-blur">

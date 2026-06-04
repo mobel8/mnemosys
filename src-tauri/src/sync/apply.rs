@@ -46,6 +46,25 @@ pub fn lww_should_replace(remote_updated_at: i64, local_updated_at: i64) -> bool
     remote_updated_at > local_updated_at
 }
 
+/// P089 — bring a remote `desired_retention` into the valid `[0.5, 0.99]`
+/// window before it touches the DB.
+///
+/// The bound is enforced in Rust on the local create/update paths
+/// (`DeckRepo::create` / `update`), but `apply_decks` writes the value straight
+/// from the remote payload, bypassing that check. A malicious or buggy peer
+/// could ship `0.0`, `1.5` or `NaN`, which FSRS turns into absurd intervals (a
+/// `NaN` retention poisons every subsequent scheduling computation for the
+/// deck). `NaN` is mapped to the default `0.9` (it compares false to every
+/// bound, so a plain clamp would leave it untouched); finite values are clamped
+/// to the nearest legal bound. The DB-level CHECK in `schema.sql` is the
+/// belt-and-braces backstop for any future write path.
+fn sanitize_desired_retention(value: f64) -> f64 {
+    if value.is_nan() {
+        return 0.9;
+    }
+    value.clamp(0.5, 0.99)
+}
+
 /// Apply a remote deck batch to the local DB.
 ///
 /// Algorithm per row:
@@ -82,6 +101,8 @@ pub fn apply_decks(conn: &Connection, remote: &[RemoteDeck]) -> AppResult<MergeS
                 stats.skipped += 1;
             }
             (None, None) => {
+                // P089 — never persist a remote retention outside [0.5, 0.99].
+                let retention = sanitize_desired_retention(r.desired_retention);
                 conn.execute(
                     "INSERT INTO decks (name, description, color, desired_retention,
                                         created_at, updated_at, remote_id)
@@ -90,7 +111,7 @@ pub fn apply_decks(conn: &Connection, remote: &[RemoteDeck]) -> AppResult<MergeS
                         r.name,
                         r.description,
                         r.color,
-                        r.desired_retention,
+                        retention,
                         r.created_at,
                         r.updated_at,
                         r.id
@@ -100,6 +121,8 @@ pub fn apply_decks(conn: &Connection, remote: &[RemoteDeck]) -> AppResult<MergeS
             }
             (None, Some((local_id, local_updated))) => {
                 if lww_should_replace(r.updated_at, local_updated) {
+                    // P089 — same clamp on the update path.
+                    let retention = sanitize_desired_retention(r.desired_retention);
                     conn.execute(
                         "UPDATE decks SET name = ?1, description = ?2, color = ?3,
                                           desired_retention = ?4, updated_at = ?5
@@ -108,7 +131,7 @@ pub fn apply_decks(conn: &Connection, remote: &[RemoteDeck]) -> AppResult<MergeS
                             r.name,
                             r.description,
                             r.color,
-                            r.desired_retention,
+                            retention,
                             r.updated_at,
                             local_id
                         ],
@@ -381,4 +404,26 @@ pub fn write_cursor(conn: &Connection, finished_at: i64, user_id: Option<&str>) 
         params![finished_at, user_id],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// P089 — a remote retention is always brought into `[0.5, 0.99]` before it
+    /// can reach the DB, and NaN falls back to the 0.9 default rather than
+    /// slipping through a naive clamp (NaN compares false to every bound).
+    #[test]
+    fn sanitize_desired_retention_clamps_and_defaults_nan() {
+        // In-range values pass through untouched.
+        assert!((sanitize_desired_retention(0.9) - 0.9).abs() < 1e-9);
+        assert!((sanitize_desired_retention(0.5) - 0.5).abs() < 1e-9);
+        assert!((sanitize_desired_retention(0.99) - 0.99).abs() < 1e-9);
+        // Out-of-range values clamp to the nearest legal bound.
+        assert!((sanitize_desired_retention(0.0) - 0.5).abs() < 1e-9);
+        assert!((sanitize_desired_retention(1.5) - 0.99).abs() < 1e-9);
+        assert!((sanitize_desired_retention(-3.0) - 0.5).abs() < 1e-9);
+        // NaN maps to the default, never persisted as NaN.
+        assert!((sanitize_desired_retention(f64::NAN) - 0.9).abs() < 1e-9);
+    }
 }

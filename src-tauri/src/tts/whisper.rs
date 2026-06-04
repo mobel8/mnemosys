@@ -47,6 +47,30 @@ struct WhisperResponse {
     text: String,
 }
 
+/// Map a MIME type to the upload filename Whisper uses to pick a decoder.
+///
+/// P118 — browsers' `MediaRecorder` reports MIME types *with codec
+/// parameters* (e.g. `audio/webm;codecs=opus`, `audio/ogg;codecs=opus`).
+/// Matching the full string would miss those and fall through to the `.webm`
+/// default, mislabelling an Ogg recording as WebM. We split on the first `;`,
+/// trim, and lowercase so only the essence (`audio/webm`) drives the choice.
+fn filename_for_mime(mime_type: &str) -> &'static str {
+    let essence = mime_type
+        .split(';')
+        .next()
+        .unwrap_or(mime_type)
+        .trim()
+        .to_ascii_lowercase();
+    match essence.as_str() {
+        "audio/wav" | "audio/x-wav" => "recording.wav",
+        "audio/mp3" | "audio/mpeg" => "recording.mp3",
+        "audio/mp4" | "audio/m4a" => "recording.m4a",
+        "audio/ogg" => "recording.ogg",
+        "audio/webm" => "recording.webm",
+        _ => "recording.webm",
+    }
+}
+
 /// Thin client wrapping the configured `reqwest::Client`. Cheap to construct.
 pub struct WhisperClient {
     api_key: String,
@@ -88,13 +112,7 @@ impl WhisperClient {
         // Derive a plausible filename from the MIME so the API picks the
         // right decoder. The filename itself doesn't matter to Whisper, but
         // the extension is part of how the multipart layer guesses things.
-        let filename = match mime_type {
-            "audio/wav" | "audio/x-wav" => "recording.wav",
-            "audio/mp3" | "audio/mpeg" => "recording.mp3",
-            "audio/mp4" | "audio/m4a" => "recording.m4a",
-            "audio/ogg" => "recording.ogg",
-            _ => "recording.webm",
-        };
+        let filename = filename_for_mime(mime_type);
 
         let mut part = Part::bytes(audio_bytes).file_name(filename.to_string());
         part = part
@@ -182,5 +200,28 @@ mod tests {
             .await
             .expect_err("missing key must be reported first");
         assert!(matches!(err, WhisperError::NoApiKey));
+    }
+
+    /// P118 — a MIME type carrying codec parameters (what `MediaRecorder`
+    /// actually emits) must still resolve to the right extension instead of
+    /// silently falling through to the `.webm` default.
+    #[test]
+    fn filename_strips_codec_parameters() {
+        assert_eq!(filename_for_mime("audio/webm;codecs=opus"), "recording.webm");
+        assert_eq!(filename_for_mime("audio/ogg;codecs=opus"), "recording.ogg");
+        // Whitespace after the ';' is tolerated and matching is case-insensitive.
+        assert_eq!(filename_for_mime("AUDIO/WAV; charset=binary"), "recording.wav");
+    }
+
+    /// Bare MIME types keep mapping to their canonical extension, and an
+    /// unknown type still defaults to `.webm`.
+    #[test]
+    fn filename_maps_bare_mimes() {
+        assert_eq!(filename_for_mime("audio/wav"), "recording.wav");
+        assert_eq!(filename_for_mime("audio/mpeg"), "recording.mp3");
+        assert_eq!(filename_for_mime("audio/mp4"), "recording.m4a");
+        assert_eq!(filename_for_mime("audio/ogg"), "recording.ogg");
+        assert_eq!(filename_for_mime("audio/webm"), "recording.webm");
+        assert_eq!(filename_for_mime("application/octet-stream"), "recording.webm");
     }
 }

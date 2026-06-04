@@ -37,17 +37,20 @@ pub fn set_word_status(
         .set_word_status(&word, &status, &language)
 }
 
-/// Create one Basic card (front = word, back = placeholder) per distinct word
-/// in `words`, inside `deck_id`. Returns the number of cards created.
+/// Create one Basic card per distinct word in `words`, inside `deck_id`.
+/// `translations` is positional vs `words`: when `translations[i]` is non-empty
+/// it becomes the card's back, otherwise a placeholder is used (P079). Pass an
+/// empty vec to keep the legacy placeholder behaviour. Returns the count created.
 #[tauri::command]
 pub fn create_cards_from_words(
     state: State<'_, AppState>,
     deck_id: i64,
     words: Vec<String>,
+    translations: Vec<String>,
 ) -> AppResult<usize> {
     let conn = state.db.lock();
     state
         .db
         .reading(&conn)
-        .create_cards_from_words(deck_id, &words)
+        .create_cards_from_words(deck_id, &words, &translations)
 }

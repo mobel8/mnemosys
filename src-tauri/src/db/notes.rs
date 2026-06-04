@@ -216,6 +216,37 @@ impl<'a> NoteRepo<'a> {
         tags: Vec<String>,
         frequency_band: Option<String>,
     ) -> AppResult<Note> {
+        // Single-note path: open our own transaction, delegate to the
+        // BEGIN/COMMIT-free inner, then COMMIT. Bulk callers should instead
+        // drive one outer transaction around many `create_inner` calls (P064)
+        // so a 5 000-word import isn't 5 000 commits + fsyncs.
+        self.conn.execute_batch("BEGIN;")?;
+        match self.create_inner(deck_id, template, fields, tags, frequency_band) {
+            Ok(note_id) => {
+                self.conn.execute_batch("COMMIT;")?;
+                self.get(note_id)
+            }
+            Err(e) => {
+                let _ = self.conn.execute_batch("ROLLBACK;");
+                Err(e)
+            }
+        }
+    }
+
+    /// P064 — create a note + its derived cards **without** managing a
+    /// transaction. The caller MUST already hold an open transaction (a single
+    /// `create` wraps one around this; bulk importers wrap one around many) so
+    /// the whole batch is atomic and pays a single commit/fsync instead of one
+    /// per note. Returns the freshly-inserted note id; on any error the caller
+    /// is responsible for the ROLLBACK.
+    pub fn create_inner(
+        &self,
+        deck_id: i64,
+        template: NoteTemplate,
+        fields: serde_json::Value,
+        tags: Vec<String>,
+        frequency_band: Option<String>,
+    ) -> AppResult<i64> {
         validate_fields(template, &fields)?;
         validate_frequency_band(frequency_band.as_deref())?;
 
@@ -223,13 +254,7 @@ impl<'a> NoteRepo<'a> {
         let fields_str = serde_json::to_string(&fields)?;
         let tags_str = serde_json::to_string(&tags)?;
 
-        // Manual transaction: the borrow checker doesn't let us hand out
-        // both an &Connection (for CardRepo) and a Transaction at once on
-        // rusqlite 0.39, so we drive BEGIN/COMMIT directly. Any error path
-        // performs a best-effort ROLLBACK before bubbling up.
-        self.conn.execute_batch("BEGIN;")?;
-
-        let insert_res = self.conn.execute(
+        self.conn.execute(
             "INSERT INTO notes (deck_id, template, fields, tags, created_at, updated_at, frequency_band)
              VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6)",
             params![
@@ -240,24 +265,16 @@ impl<'a> NoteRepo<'a> {
                 now,
                 frequency_band
             ],
-        );
-        if let Err(e) = insert_res {
-            let _ = self.conn.execute_batch("ROLLBACK;");
-            return Err(e.into());
-        }
+        )?;
         let note_id = self.conn.last_insert_rowid();
 
         let card_ords = ords_for_template(template, &fields)?;
         let cards = CardRepo::new(self.conn);
         for ord in card_ords {
-            if let Err(e) = cards.create_for_note(note_id, deck_id, ord) {
-                let _ = self.conn.execute_batch("ROLLBACK;");
-                return Err(e);
-            }
+            cards.create_for_note(note_id, deck_id, ord)?;
         }
 
-        self.conn.execute_batch("COMMIT;")?;
-        self.get(note_id)
+        Ok(note_id)
     }
 
     /// Vague 10 — set or clear the `frequency_band` tag on an existing note.
@@ -278,17 +295,88 @@ impl<'a> NoteRepo<'a> {
         self.get(id)
     }
 
+    /// Update a note's `fields`, reconciling its derived cards so the card
+    /// arity always matches the edited content (P049).
+    ///
+    /// A cloze edit that adds `{{c3::…}}` or removes `{{c2::…}}`, or an
+    /// occlusion edit that adds/removes a mask, changes the *ordinal set* a
+    /// note should own. A bare `UPDATE notes` would leave the old cards behind:
+    /// an orphan card whose ordinal no longer renders anything, or a missing
+    /// card for a freshly-added ordinal that never enters the queue. We
+    /// therefore diff the expected ords against the live `cards` rows and, in
+    /// one transaction, create the missing ones + delete the stale ones. Cards
+    /// whose ordinal is unchanged keep their FSRS scheduling untouched.
     pub fn update_fields(&self, id: i64, fields: serde_json::Value) -> AppResult<Note> {
         let existing = self.get(id)?;
         validate_fields(existing.template, &fields)?;
 
         let now = Utc::now().timestamp();
         let fields_str = serde_json::to_string(&fields)?;
+
+        // The ordinal set the edited fields should own (sorted, unique).
+        let desired: BTreeSet<i64> =
+            ords_for_template(existing.template, &fields)?.into_iter().collect();
+
+        // Reconcile the fields write and the card add/remove in ONE
+        // transaction so a mid-reconciliation failure can't leave the note's
+        // cards desynced from its content. Best-effort ROLLBACK on any error.
+        self.conn.execute_batch("BEGIN;")?;
+        match self.update_fields_inner(id, existing.deck_id, &fields_str, now, &desired) {
+            Ok(()) => {
+                self.conn.execute_batch("COMMIT;")?;
+                self.get(id)
+            }
+            Err(e) => {
+                let _ = self.conn.execute_batch("ROLLBACK;");
+                Err(e)
+            }
+        }
+    }
+
+    /// P049 — body of [`Self::update_fields`], run inside the caller's
+    /// transaction: write the new `fields`, then bring the note's `cards` rows
+    /// in line with `desired` (create the new ordinals, delete the vanished
+    /// ones). Ordinals present in both sets are left alone so their scheduling
+    /// survives the edit.
+    fn update_fields_inner(
+        &self,
+        id: i64,
+        deck_id: i64,
+        fields_str: &str,
+        now: i64,
+        desired: &BTreeSet<i64>,
+    ) -> AppResult<()> {
         self.conn.execute(
             "UPDATE notes SET fields = ?1, updated_at = ?2 WHERE id = ?3",
             params![fields_str, now, id],
         )?;
-        self.get(id)
+
+        // Live ordinals currently materialised for this note.
+        let mut current: BTreeSet<i64> = BTreeSet::new();
+        {
+            let mut stmt = self
+                .conn
+                .prepare("SELECT card_ord FROM cards WHERE note_id = ?1")?;
+            let rows = stmt.query_map(params![id], |r| r.get::<_, i64>(0))?;
+            for r in rows {
+                current.insert(r?);
+            }
+        }
+
+        let cards = CardRepo::new(self.conn);
+        // Create cards for ordinals that the edit introduced.
+        for ord in desired.difference(&current) {
+            cards.create_for_note(id, deck_id, *ord)?;
+        }
+        // Delete cards whose ordinal the edit removed.
+        for ord in current.difference(desired) {
+            self.conn.execute(
+                "DELETE FROM cards WHERE note_id = ?1 AND card_ord = ?2",
+                params![id, ord],
+            )?;
+        }
+
+        Ok(())
     }
 
     pub fn delete(&self, id: i64) -> AppResult<()> {
@@ -895,6 +983,135 @@ mod tests {
             )
             .unwrap();
         assert_eq!(card_count, 1);
+    }
+
+    /// P049 — editing a cloze note's text must reconcile its cards: adding a
+    /// new `{{cN::}}` mints the matching card, removing one deletes the stale
+    /// card, and an unchanged ordinal keeps its row (and thus its scheduling).
+    #[test]
+    fn update_fields_reconciles_cloze_cards() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let deck = db
+            .decks(&conn)
+            .create("Cloze", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+
+        // Start with two cloze deletions → two cards (ords 1, 2).
+        let note = db
+            .notes(&conn)
+            .create(
+                deck.id,
+                NoteTemplate::Cloze,
+                json!({ "text": "The {{c1::capital}} of {{c2::France}} is Paris" }),
+                vec![],
+                None,
+            )
+            .unwrap();
+
+        let ords = |note_id: i64| -> Vec<i64> {
+            let mut stmt = conn
+                .prepare("SELECT card_ord FROM cards WHERE note_id = ?1 ORDER BY card_ord ASC")
+                .unwrap();
+            stmt.query_map(params![note_id], |r| r.get::<_, i64>(0))
+                .unwrap()
+                .map(|r| r.unwrap())
+                .collect()
+        };
+        assert_eq!(ords(note.id), vec![1, 2], "two cloze deletions → ords 1,2");
+
+        // The card for ord 1 — capture its id so we can prove it survives.
+        let ord1_id: i64 = conn
+            .query_row(
+                "SELECT id FROM cards WHERE note_id = ?1 AND card_ord = 1",
+                params![note.id],
+                |r| r.get(0),
+            )
+            .unwrap();
+
+        // Edit: drop {{c2}}, add {{c3}}. Expected ords become {1, 3}.
+        db.notes(&conn)
+            .update_fields(
+                note.id,
+                json!({ "text": "The {{c1::capital}} is {{c3::Paris}}, not Lyon" }),
+            )
+            .unwrap();
+        assert_eq!(
+            ords(note.id),
+            vec![1, 3],
+            "c2 card deleted, c3 card created, c1 retained"
+        );
+
+        // The unchanged ord-1 card keeps its identity (scheduling preserved).
+        let ord1_id_after: i64 = conn
+            .query_row(
+                "SELECT id FROM cards WHERE note_id = ?1 AND card_ord = 1",
+                params![note.id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            ord1_id, ord1_id_after,
+            "the retained ordinal's card row is reused, not recreated"
+        );
+    }
+
+    /// P049 — editing an occlusion note's mask list reconciles the per-mask
+    /// cards: removing masks deletes the trailing cards.
+    #[test]
+    fn update_fields_reconciles_occlusion_cards() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let deck = db
+            .decks(&conn)
+            .create("Bio", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+
+        let note = db
+            .notes(&conn)
+            .create(
+                deck.id,
+                NoteTemplate::Occlusion,
+                json!({
+                    "image_path": "/tmp/cell.png",
+                    "natural_width": 800,
+                    "natural_height": 600,
+                    "masks": [
+                        { "x": 1.0, "y": 1.0, "width": 10.0, "height": 10.0 },
+                        { "x": 2.0, "y": 2.0, "width": 10.0, "height": 10.0 },
+                        { "x": 3.0, "y": 3.0, "width": 10.0, "height": 10.0 }
+                    ]
+                }),
+                vec![],
+                None,
+            )
+            .unwrap();
+
+        let card_count = |note_id: i64| -> i64 {
+            conn.query_row(
+                "SELECT COUNT(*) FROM cards WHERE note_id = ?1",
+                params![note_id],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+        assert_eq!(card_count(note.id), 3);
+
+        // Shrink to a single mask → only ord 0 should survive.
+        db.notes(&conn)
+            .update_fields(
+                note.id,
+                json!({
+                    "image_path": "/tmp/cell.png",
+                    "natural_width": 800,
+                    "natural_height": 600,
+                    "masks": [
+                        { "x": 1.0, "y": 1.0, "width": 10.0, "height": 10.0 }
+                    ]
+                }),
+            )
+            .unwrap();
+        assert_eq!(card_count(note.id), 1, "two masks removed → two cards deleted");
     }
 
     #[test]

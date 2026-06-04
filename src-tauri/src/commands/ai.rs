@@ -575,9 +575,10 @@ mod tests {
         let prompt = build_image_prompt(&front, &back);
         assert!(prompt.contains("Capitale du Japon ?"));
         assert!(prompt.contains("Tokyo"));
-        assert!(prompt.contains("mnémotechnique"));
+        // P116 — the image prompt is now neutral English ("mnemonic"/"absurd").
+        assert!(prompt.contains("mnemonic"));
         // No-text guard so DALL·E doesn't render the answer as caption.
-        assert!(prompt.contains("sans aucun texte"));
+        assert!(prompt.contains("no text"));
     }
 
     #[test]

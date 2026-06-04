@@ -34,7 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
-import { useDecks, useInterleavedDueCards } from "@/lib/queries";
+import { useDeckStats, useDecks, useInterleavedDueCards } from "@/lib/queries";
 import type { CardWithNote } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +47,14 @@ export function InterleavedSession() {
   const navigate = useNavigate();
   const decksQuery = useDecks();
   const decks = useMemo(() => decksQuery.data ?? [], [decksQuery.data]);
+  // P126 — memoise the deck-id → name map so its identity is stable across
+  // renders. Passing a freshly-built `Object.fromEntries(...)` inline made the
+  // child's `taggedCards` useMemo re-clone the whole queue on every parent
+  // re-render; a stable reference lets that memo actually cache.
+  const deckLookup = useMemo<Record<number, string>>(
+    () => Object.fromEntries(decks.map((d) => [d.id, d.name])),
+    [decks],
+  );
   const [selectedDeckIds, setSelectedDeckIds] = useState<number[]>([]);
   const [limit, setLimit] = useState<number>(DEFAULT_LIMIT);
   /**
@@ -162,13 +170,7 @@ export function InterleavedSession() {
     // `<ReviewSession />` doesn't try to route back to a specific deck on
     // quit. The session itself reads each card's `card.deck_id` for any
     // per-card invalidation — the prop is only used for navigation back.
-    return (
-      <ReviewSessionInterleavedShell
-        cards={cards}
-        onQuit={handleBackToPicker}
-        deckLookup={Object.fromEntries(decks.map((d) => [d.id, d.name]))}
-      />
-    );
+    return <ReviewSessionInterleavedShell cards={cards} deckLookup={deckLookup} />;
   }
 
   // Phase 1 — picker.
@@ -264,7 +266,8 @@ export function InterleavedSession() {
                           className="inline-block h-3 w-3 shrink-0 rounded-full ring-1 ring-border"
                           style={{ background: deck.color }}
                         />
-                        <span className="truncate">{deck.name}</span>
+                        <span className="min-w-0 flex-1 truncate">{deck.name}</span>
+                        <DeckDueBadge deckId={deck.id} deckName={deck.name} />
                       </button>
                     </li>
                   );
@@ -321,18 +324,37 @@ export function InterleavedSession() {
 }
 
 /**
+ * P112 — « N dues » badge shown on each deck row in the picker, so the learner
+ * sees how many cards each deck would contribute *before* starting. Reads the
+ * deck's `due_today` from `useDeckStats`; renders nothing while loading or when
+ * the deck has zero due cards (an empty badge would just be noise).
+ */
+function DeckDueBadge({ deckId, deckName }: { deckId: number; deckName: string }) {
+  const stats = useDeckStats(deckId);
+  const due = stats.data?.due_today ?? 0;
+  if (stats.isLoading || due === 0) return null;
+  return (
+    <span
+      role="img"
+      className="ml-auto shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[0.6875rem] font-medium tabular-nums text-primary"
+      aria-label={`${due} carte${due > 1 ? "s" : ""} due${due > 1 ? "s" : ""} dans « ${deckName} »`}
+    >
+      {due} due{due > 1 ? "s" : ""}
+    </span>
+  );
+}
+
+/**
  * Tiny wrapper around `<ReviewSession />` that passes the per-card deck
- * name down via the existing `cards` prop and exposes a « back to picker »
- * exit. The real review state machine lives in `ReviewSession`; this shell
- * only annotates each card with the originating deck so the badge renders.
+ * name down via the existing `cards` prop. The real review state machine lives
+ * in `ReviewSession`; this shell only annotates each card with the originating
+ * deck so the badge renders. Exit is owned by `ReviewProgress` (P112).
  */
 function ReviewSessionInterleavedShell({
   cards,
-  onQuit,
   deckLookup,
 }: {
   cards: CardWithNote[];
-  onQuit: () => void;
   deckLookup: Record<number, string>;
 }) {
   // `ReviewSession` owns the review loop and doesn't expose a per-card
@@ -361,17 +383,13 @@ function ReviewSessionInterleavedShell({
   // navigation in `ReviewSession` (quit, edit, summary) detects the negative
   // id and routes back to the interleaved entry point instead of a concrete
   // `/decks/$deckId` page that wouldn't exist for a mixed queue.
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b px-6 py-2 text-xs text-muted-foreground">
-        <span>Session entrelacée — {cards.length} cartes</span>
-        <Button variant="ghost" size="sm" onClick={onQuit}>
-          Retour au sélecteur
-        </Button>
-      </div>
-      <div className="min-h-0 flex-1">
-        <ReviewSession deckId={-1} cards={taggedCards} />
-      </div>
-    </div>
-  );
+  //
+  // P112 — the previous shell stacked its own bordered bar (title + « Retour au
+  // sélecteur ») directly on top of `ReviewProgress`'s sticky bar, giving two
+  // collapsed borders and two redundant exits. We now hand off straight to
+  // `ReviewSession`: its `ReviewProgress` « Quitter » already routes back to
+  // `/review-interleaved` (`deckId < 0`), which re-mounts this picker. The
+  // « Session entrelacée » context is surfaced inside `ReviewProgress` via the
+  // optional `label` prop instead of a second bar.
+  return <ReviewSession deckId={-1} cards={taggedCards} sessionLabel="Session entrelacée" />;
 }

@@ -304,26 +304,42 @@ pub fn save_settings(
     settings: AppSettings,
 ) -> AppResult<()> {
     // Validate retention up-front so the persisted blob is always consistent.
+    // P031 — messages d'erreur en français (source de vérité = le backend).
     if !(0.7..=0.97).contains(&settings.desired_retention) {
         return Err(AppError::Validation(
-            "desired_retention must be in [0.7, 0.97]".into(),
+            "La rétention cible doit être comprise entre 0,7 et 0,97.".into(),
         ));
     }
     if !matches!(settings.theme.as_str(), "light" | "dark" | "system") {
         return Err(AppError::Validation(format!(
-            "invalid theme: {}",
+            "Thème invalide : {}",
             settings.theme
+        )));
+    }
+    // P067 — borner les quotas journaliers côté backend (source de vérité). Sans
+    // ce garde, un settings.json édité à la main ou un autre chemin de save
+    // accepterait 0 nouvelle carte/jour ou un plafond démesuré.
+    if !(1..=200).contains(&settings.daily_new_limit) {
+        return Err(AppError::Validation(format!(
+            "Le nombre de nouvelles cartes par jour doit être compris entre 1 et 200 (reçu : {}).",
+            settings.daily_new_limit
+        )));
+    }
+    if !(10..=1000).contains(&settings.daily_review_limit) {
+        return Err(AppError::Validation(format!(
+            "Le nombre de révisions par jour doit être compris entre 10 et 1000 (reçu : {}).",
+            settings.daily_review_limit
         )));
     }
     if !(10..=60).contains(&settings.movement_break_minutes) {
         return Err(AppError::Validation(format!(
-            "movement_break_minutes out of range (10-60): {}",
+            "L'intervalle des pauses mouvement doit être compris entre 10 et 60 min (reçu : {}).",
             settings.movement_break_minutes
         )));
     }
     if !(5..=120).contains(&settings.jol_delay_minutes) {
         return Err(AppError::Validation(format!(
-            "jol_delay_minutes out of range (5-120): {}",
+            "Le délai des prédictions de rappel (JOL) doit être compris entre 5 et 120 min (reçu : {}).",
             settings.jol_delay_minutes
         )));
     }
@@ -332,13 +348,13 @@ pub fn save_settings(
         "none" | "white" | "pink" | "brown" | "rain"
     ) {
         return Err(AppError::Validation(format!(
-            "invalid ambient_sound: {}",
+            "Ambiance sonore invalide : {}",
             settings.ambient_sound
         )));
     }
     if let Some(ct) = settings.chronotype.as_deref() {
         if !matches!(ct, "morning" | "intermediate" | "evening") {
-            return Err(AppError::Validation(format!("invalid chronotype: {}", ct)));
+            return Err(AppError::Validation(format!("Chronotype invalide : {}", ct)));
         }
     }
     // P043: a Supabase URL, when present, must be an `https://` endpoint with a

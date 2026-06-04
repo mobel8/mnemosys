@@ -21,8 +21,14 @@
 
 import { OrbitControls, Sky, Text } from "@react-three/drei";
 import { Canvas, type ThreeEvent, useFrame, useThree } from "@react-three/fiber";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+
+// P084 — the instance type behind drei's <OrbitControls> (three-stdlib's
+// OrbitControls). Derived from the component itself so we don't add a direct
+// dependency on `three-stdlib`, which is only a transitive dep of drei.
+type OrbitControlsImpl = ComponentRef<typeof OrbitControls>;
+
 import type { PalaceLocus, PalaceTemplate } from "@/lib/tauri";
 
 const EYE_HEIGHT = 1.7;
@@ -280,8 +286,11 @@ function LocusMarker({ locus, ordinal, highlighted, onClick }: LocusMarkerProps)
   useFrame(({ clock }) => {
     if (!ref.current) return;
     const t = clock.getElapsedTime();
-    // Subtle bob so loci read as living anchors, not props.
-    ref.current.position.y = locus.y + Math.sin(t * 1.5 + locus.id) * 0.08;
+    // P085 — bob the sphere in LOCAL space only. The parent <group> already
+    // sits at locus.y, so adding locus.y here again would double the height
+    // (sphere floats at ~2×) and desync it from the label. Keep the offset
+    // purely relative.
+    ref.current.position.y = Math.sin(t * 1.5 + locus.id) * 0.08;
   });
 
   return (
@@ -327,33 +336,92 @@ interface ControllerProps {
 function Controller({ mode, cameraTarget }: ControllerProps) {
   const { camera, gl } = useThree();
   const keys = useRef<{ [k: string]: boolean }>({});
-  // Track explicit camera target via OrbitControls' lookAt invocation.
-  const target = useRef(new THREE.Vector3(0, EYE_HEIGHT, 0));
+  // P084 — real OrbitControls ref so we can drive controls.target / .update()
+  // imperatively instead of mutating a Vector3 passed as a (non-reactive) prop.
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
+  // P085 — the canvas must be focused before WASD does anything, so a user
+  // typing elsewhere on the page never nudges the camera.
+  const focused = useRef(false);
+  // P084 — destination the camera lerps toward when the active locus changes.
+  // `null` when no teleport is in flight.
+  const desiredPos = useRef<THREE.Vector3 | null>(null);
+  const desiredTarget = useRef<THREE.Vector3 | null>(null);
 
   useEffect(() => {
+    const dom = gl.domElement;
+    dom.tabIndex = 0;
     const onDown = (e: KeyboardEvent) => {
       keys.current[e.code] = true;
     };
     const onUp = (e: KeyboardEvent) => {
       keys.current[e.code] = false;
     };
-    const dom = gl.domElement;
-    dom.tabIndex = 0;
-    window.addEventListener("keydown", onDown);
-    window.addEventListener("keyup", onUp);
+    const onFocus = () => {
+      focused.current = true;
+    };
+    const onBlur = () => {
+      focused.current = false;
+      // P085 — drop every held key on blur so a key released off-canvas can't
+      // stay "stuck" and drift the camera forever.
+      keys.current = {};
+    };
+    // P085 — attach key listeners to the canvas (not window): they only fire
+    // when the 3D view actually has focus, and clean up with the component.
+    dom.addEventListener("keydown", onDown);
+    dom.addEventListener("keyup", onUp);
+    dom.addEventListener("focus", onFocus);
+    dom.addEventListener("blur", onBlur);
     return () => {
-      window.removeEventListener("keydown", onDown);
-      window.removeEventListener("keyup", onUp);
+      dom.removeEventListener("keydown", onDown);
+      dom.removeEventListener("keyup", onUp);
+      dom.removeEventListener("focus", onFocus);
+      dom.removeEventListener("blur", onBlur);
     };
   }, [gl]);
 
+  // P084 — when the active locus changes, actually TELEPORT: stand the camera
+  // a short distance back from the locus and aim OrbitControls' target at it.
+  // We set a desired pose and let useFrame lerp toward it for a guided glide.
   useEffect(() => {
-    if (cameraTarget) {
-      target.current.set(cameraTarget[0], cameraTarget[1], cameraTarget[2]);
-    }
+    if (!cameraTarget) return;
+    const [lx, ly, lz] = cameraTarget;
+    const lookAt = new THREE.Vector3(lx, ly, lz);
+    // Stand back along +Z from the locus, at eye height, so the marker sits
+    // centred in view. A fixed offset keeps every stop framed consistently.
+    const stand = new THREE.Vector3(lx, EYE_HEIGHT, lz + 3.2);
+    desiredPos.current = stand;
+    desiredTarget.current = lookAt;
   }, [cameraTarget]);
 
   useFrame((_, delta) => {
+    const controls = controlsRef.current;
+
+    // P084 — glide toward the teleport pose set when the locus changed. Once
+    // close enough, snap and clear so manual look-around isn't fought by the lerp.
+    if (desiredPos.current && desiredTarget.current) {
+      const alpha = Math.min(1, delta * 6);
+      camera.position.lerp(desiredPos.current, alpha);
+      if (controls) {
+        controls.target.lerp(desiredTarget.current, alpha);
+        controls.update();
+      }
+      if (camera.position.distanceToSquared(desiredPos.current) < 0.0004) {
+        camera.position.copy(desiredPos.current);
+        if (controls) {
+          controls.target.copy(desiredTarget.current);
+          controls.update();
+        }
+        desiredPos.current = null;
+        desiredTarget.current = null;
+      }
+      camera.position.y = EYE_HEIGHT;
+      return;
+    }
+
+    // P085 — only walk in review mode AND when the canvas is focused. In build
+    // mode the camera is driven by OrbitControls drag/pan, not WASD.
+    if (mode !== "review" || !focused.current) return;
+
     // WASD / ZQSD walking. Movement stays horizontal — eye height is locked.
     const forward = new THREE.Vector3();
     camera.getWorldDirection(forward);
@@ -377,22 +445,27 @@ function Controller({ mode, cameraTarget }: ControllerProps) {
       moveDir.normalize().multiplyScalar(move);
       camera.position.x += moveDir.x;
       camera.position.z += moveDir.z;
-      camera.position.y = EYE_HEIGHT;
-    } else {
-      // Lock eye level even when OrbitControls drags vertically — feels
-      // less « space sim » and more « walking the rooms ».
-      camera.position.y = EYE_HEIGHT;
+      // Keep OrbitControls' target travelling with the camera so look-around
+      // stays anchored after walking.
+      if (controls) {
+        controls.target.x += moveDir.x;
+        controls.target.z += moveDir.z;
+        controls.update();
+      }
     }
+    // Lock eye level even when OrbitControls drags vertically — feels less
+    // « space sim » and more « walking the rooms ».
+    camera.position.y = EYE_HEIGHT;
   });
 
   return (
     <OrbitControls
+      ref={controlsRef}
       enablePan={mode === "build"}
       enableZoom={mode === "build"}
       maxPolarAngle={Math.PI / 2 + 0.05}
       minDistance={1}
       maxDistance={20}
-      target={target.current}
     />
   );
 }

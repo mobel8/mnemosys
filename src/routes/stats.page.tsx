@@ -21,7 +21,7 @@
 
 import { Link } from "@tanstack/react-router";
 import { BarChart3 } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { CalibrationDashboard } from "@/components/CalibrationDashboard";
 import { ConceptMastery } from "@/components/stats/ConceptMastery";
 import { MasteryTimeline } from "@/components/stats/MasteryTimeline";
@@ -70,16 +70,77 @@ export default function StatsPage() {
         <RetentionChart period={period} />
       </div>
 
-      <CalibrationDashboard />
+      {/*
+        P061 — these panels each trigger a full-history scan behind the single
+        DB Mutex (calibration γ/bias, BKT concept mastery, weekly retention
+        pivot, wellness log). Firing all of them on mount serialises behind the
+        KPI/heatmap queries that are actually visible. We gate each one behind
+        an IntersectionObserver so its query only runs once the panel is about
+        to scroll into view, keeping the above-the-fold data responsive.
+      */}
+      <DeferredPanel minHeight={280}>
+        <CalibrationDashboard />
+      </DeferredPanel>
 
-      <ConceptMastery />
+      <DeferredPanel minHeight={280}>
+        <ConceptMastery />
+      </DeferredPanel>
 
-      <MasteryTimeline />
+      <DeferredPanel minHeight={360}>
+        <MasteryTimeline />
+      </DeferredPanel>
 
-      <WellnessHistory />
+      <DeferredPanel minHeight={280}>
+        <WellnessHistory />
+      </DeferredPanel>
 
       {hasNoData && <NoDataCallout />}
     </div>
+  );
+}
+
+/**
+ * Mounts `children` only once the placeholder scrolls within `rootMargin` of
+ * the viewport, then keeps them mounted. Until then it reserves `minHeight` so
+ * the scrollbar stays stable and the panel doesn't pop the layout when it
+ * appears. This defers the heavy analytics queries each child fires (all
+ * serialised behind the DB Mutex) so they never compete with the above-the-fold
+ * KPI row + heatmap. If `IntersectionObserver` is unavailable, we render the
+ * children eagerly rather than hiding content.
+ */
+function DeferredPanel({ children, minHeight }: { children: ReactNode; minHeight: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(() => typeof IntersectionObserver === "undefined");
+
+  useEffect(() => {
+    if (visible) return;
+    const node = ref.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      // Start loading a little before the panel enters the viewport so the
+      // data is usually ready by the time the user scrolls to it.
+      { rootMargin: "200px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [visible]);
+
+  if (visible) return <>{children}</>;
+
+  return (
+    <div
+      ref={ref}
+      aria-hidden="true"
+      style={{ minHeight }}
+      className="animate-pulse rounded-xl border border-dashed bg-muted/30"
+    />
   );
 }
 

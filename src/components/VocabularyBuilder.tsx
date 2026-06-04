@@ -33,7 +33,8 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
 import { BANDS, type FreqWord, wordsInBand } from "@/lib/frequency-en";
-import { useCreateNote, useDecks } from "@/lib/queries";
+import { useCardsInDeck, useCreateNote, useDecks } from "@/lib/queries";
+import type { FrequencyBand } from "@/lib/tauri";
 
 /**
  * Optional local translation lookup, injected by the orchestrator. Returns the
@@ -58,6 +59,28 @@ const VOCAB_TAG = "vocab";
 /** How many preview badges to render before collapsing into a "+N" summary. */
 const PREVIEW_LIMIT = 120;
 
+/**
+ * Upper bound on existing cards fetched for duplicate detection. The frequency
+ * builder tops out at 500 words and decks rarely exceed a few thousand cards,
+ * so a single page comfortably covers the realistic case (P078).
+ */
+const DEDUP_FETCH_LIMIT = 5000;
+
+/**
+ * Map a Vocabulary-Builder band (`top_50`/`top_100`/`top_250`/`top_500`) onto
+ * the canonical `FrequencyBand` taxonomy used by `create_note` and the deck
+ * frequency-coverage card (P114). Every band the builder offers (rank ≤ 500)
+ * falls inside the « Top 1k » bucket — the finest published `FrequencyBand`
+ * available — so the generated cards now light up the coverage bar instead of
+ * landing in « Non taggé ».
+ */
+const BAND_TO_FREQUENCY_BAND: FrequencyBand = "top_1k";
+
+/** Lower-case + trim a card front for case-insensitive duplicate matching. */
+function normalizeFront(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 export default function VocabularyBuilder({ translate }: VocabularyBuilderProps) {
   const decksQuery = useDecks();
   const decks = useMemo(() => decksQuery.data ?? [], [decksQuery.data]);
@@ -69,6 +92,20 @@ export default function VocabularyBuilder({ translate }: VocabularyBuilderProps)
 
   const createNote = useCreateNote();
   const isCreating = createdProgress !== null;
+
+  // Existing cards in the chosen deck, used to skip words already added so the
+  // nested bands (top_50 ⊂ top_100 ⊂ …) don't re-create duplicates (P078).
+  const existingCardsQuery = useCardsInDeck(deckId ?? -1, DEDUP_FETCH_LIMIT, 0, {
+    enabled: deckId !== null,
+  });
+  const existingFronts = useMemo(() => {
+    const set = new Set<string>();
+    for (const { note } of existingCardsQuery.data ?? []) {
+      const front = note.fields.front;
+      if (typeof front === "string") set.add(normalizeFront(front));
+    }
+    return set;
+  }, [existingCardsQuery.data]);
 
   const deckSelectId = useId();
   const bandSelectId = useId();
@@ -95,17 +132,40 @@ export default function VocabularyBuilder({ translate }: VocabularyBuilderProps)
 
   const selectedDeck = useMemo(() => decks.find((d) => d.id === deckId) ?? null, [decks, deckId]);
 
-  const canCreate = deckId !== null && words.length > 0 && !isCreating && !decksQuery.isLoading;
+  // How many words in the band aren't already in the deck — drives the button
+  // label + hint so the learner sees the real number of cards they'll add.
+  const newWordCount = useMemo(() => {
+    if (deckId === null) return words.length;
+    let n = 0;
+    for (const { word } of words) {
+      if (!existingFronts.has(normalizeFront(word))) n += 1;
+    }
+    return n;
+  }, [words, existingFronts, deckId]);
+
+  const duplicateCount = words.length - newWordCount;
+
+  const canCreate = deckId !== null && newWordCount > 0 && !isCreating && !decksQuery.isLoading;
 
   async function handleCreate() {
     if (deckId === null || selectedBand === undefined || words.length === 0) return;
     const bandTag = `freq:${selectedBand.id}`;
+    // Skip words whose front already exists in the deck (P078). The set is a
+    // snapshot taken at click time; words minted during this run are added so a
+    // band can't duplicate itself even before the query refetches.
+    const alreadyPresent = new Set(existingFronts);
     let created = 0;
+    let skipped = 0;
     const failures: string[] = [];
     setCreatedProgress(0);
     try {
       // Sequential — see file header for the rationale.
       for (const { word } of words) {
+        const key = normalizeFront(word);
+        if (alreadyPresent.has(key)) {
+          skipped += 1;
+          continue;
+        }
         const back = translate?.(word)?.trim() ?? "";
         try {
           await createNote.mutateAsync({
@@ -113,7 +173,11 @@ export default function VocabularyBuilder({ translate }: VocabularyBuilderProps)
             template: "basic",
             fields: { front: word, back },
             tags: [VOCAB_TAG, bandTag],
+            // P114 — tag the canonical FrequencyBand so the deck's coverage
+            // card counts these cards instead of bucketing them as untagged.
+            frequencyBand: BAND_TO_FREQUENCY_BAND,
           });
+          alreadyPresent.add(key);
           created += 1;
           setCreatedProgress(created);
         } catch (err) {
@@ -124,13 +188,17 @@ export default function VocabularyBuilder({ translate }: VocabularyBuilderProps)
       setCreatedProgress(null);
     }
 
+    const plural = skipped > 1 ? "s" : "";
+    const skippedNote = skipped > 0 ? ` ${skipped} déjà présent${plural} ignoré${plural}.` : "";
+
     if (created > 0) {
       toast({
         title: `${created} carte${created > 1 ? "s" : ""} créée${created > 1 ? "s" : ""}`,
         description:
-          failures.length === 0
+          (failures.length === 0
             ? `Vocabulaire ajouté à « ${selectedDeck?.name ?? "le deck"} ».`
-            : `${failures.length} échec${failures.length > 1 ? "s" : ""} (voir console).`,
+            : `${failures.length} échec${failures.length > 1 ? "s" : ""} (voir console).`) +
+          skippedNote,
       });
       if (failures.length > 0) {
         console.warn("[vocab] some cards failed to create", failures);
@@ -142,6 +210,13 @@ export default function VocabularyBuilder({ translate }: VocabularyBuilderProps)
         variant: "destructive",
       });
       console.warn("[vocab] every card failed to create", failures);
+    } else if (skipped > 0) {
+      toast({
+        title: "Aucune nouvelle carte",
+        description: `Les ${skipped} mot${skipped > 1 ? "s" : ""} de cette tranche sont déjà dans « ${
+          selectedDeck?.name ?? "le deck"
+        } ».`,
+      });
     }
   }
 
@@ -255,15 +330,22 @@ export default function VocabularyBuilder({ translate }: VocabularyBuilderProps)
               {isCreating ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  Création… {createdProgress}/{words.length}
+                  Création… {createdProgress}/{newWordCount}
                 </>
               ) : (
                 <>
                   <Sparkles className="h-4 w-4" aria-hidden />
-                  Créer {words.length} carte{words.length > 1 ? "s" : ""}
+                  Créer {newWordCount} carte{newWordCount > 1 ? "s" : ""}
                 </>
               )}
             </Button>
+            {!isCreating && deckId !== null && duplicateCount > 0 && (
+              <span className="text-xs text-muted-foreground">
+                {duplicateCount} mot{duplicateCount > 1 ? "s" : ""} déjà présent
+                {duplicateCount > 1 ? "s" : ""} ser{duplicateCount > 1 ? "ont" : "a"} ignoré
+                {duplicateCount > 1 ? "s" : ""}.
+              </span>
+            )}
           </div>
         </CardContent>
       </Card>

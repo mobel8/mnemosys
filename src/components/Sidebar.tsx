@@ -86,8 +86,11 @@ const NAV_GROUPS: NavGroup[] = [
 const APP_VERSION = import.meta.env.PACKAGE_VERSION ?? "0.0.0-dev";
 
 export function Sidebar() {
-  const router = useRouterState();
-  const currentPath = router.location.pathname;
+  // P082: select only the pathname. The Sidebar is mounted permanently, so
+  // subscribing to the whole RouterState would re-render it on every pending /
+  // preload transition (defaultPreload='intent' fires on hover). The selector
+  // narrows the subscription to the single value the nav highlighting needs.
+  const currentPath = useRouterState({ select: (s) => s.location.pathname });
   const { resolvedTheme, setTheme } = useTheme();
 
   return (

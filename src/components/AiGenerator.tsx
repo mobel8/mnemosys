@@ -293,10 +293,12 @@ export function AiGenerator() {
       const nextDrafts = cards.map((c, i) => draftFromGenerated(c, i));
       setDrafts(nextDrafts);
       if (nextDrafts.length === 0) {
+        // Name the provider that actually ran so the message isn't misleading
+        // when local generation (Ollama) is in use instead of Claude.
+        const provider = useLocalAI && sourceTab === "text" ? "Le modèle local (Ollama)" : "Claude";
         toast({
           title: "Aucune carte générée",
-          description:
-            "Claude n'a rien renvoyé pour cette source. Essaie un texte plus long ou un autre extrait.",
+          description: `${provider} n'a rien renvoyé pour cette source. Essaie un texte plus long ou un autre extrait.`,
         });
         return;
       }
@@ -373,22 +375,51 @@ export function AiGenerator() {
     }
   }
 
-  /** Apply a critic's `suggestedFix` onto a draft, then clear its verdict. */
+  /**
+   * Apply a critic's `suggestedFix` onto a draft, then clear its verdict.
+   *
+   * The fix may switch the template (e.g. basic → cloze). We rebuild the draft
+   * fields **authoritatively from the fix's own template** so we never keep
+   * stale front/back when becoming a cloze (or a stale cloze text when becoming
+   * basic). If the fix is missing the key its template requires (a cloze
+   * without `text`, a basic without `front`/`back`), we refuse to apply it
+   * rather than silently persist an empty card.
+   */
   function applyCritiqueFix(id: string) {
+    const target = drafts.find((d) => d.id === id);
+    const fix = target?.critique?.suggestedFix;
+    if (!fix) return;
+
+    // Validate the fix carries the field(s) its template requires before
+    // touching the draft — an incomplete fix would yield an empty card.
+    const fixText = typeof fix.fields.text === "string" ? fix.fields.text : "";
+    const fixFront = typeof fix.fields.front === "string" ? fix.fields.front : "";
+    const fixBack = typeof fix.fields.back === "string" ? fix.fields.back : "";
+    const isValid =
+      fix.template === "cloze"
+        ? fixText.trim().length > 0
+        : fixFront.trim().length > 0 && fixBack.trim().length > 0;
+    if (!isValid) {
+      toast({
+        title: "Correction inapplicable",
+        description:
+          "La correction proposée est incomplète pour ce type de carte. La carte d'origine est conservée.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setDrafts((prev) =>
       prev.map((d) => {
         if (d.id !== id || !d.critique?.suggestedFix) return d;
-        const fix = d.critique.suggestedFix;
-        const fields = fix.fields;
-        const front = typeof fields.front === "string" ? fields.front : d.front;
-        const back = typeof fields.back === "string" ? fields.back : d.back;
-        const text = typeof fields.text === "string" ? fields.text : d.text;
         return {
           ...d,
           template: fix.template,
-          front: fix.template === "basic" ? front : d.front,
-          back: fix.template === "basic" ? back : d.back,
-          text: fix.template === "cloze" ? text : d.text,
+          // Rebuild fields from the fix's template, clearing the other shape's
+          // fields so a basic→cloze (or cloze→basic) switch leaves no stale data.
+          front: fix.template === "basic" ? fixFront : "",
+          back: fix.template === "basic" ? fixBack : "",
+          text: fix.template === "cloze" ? fixText : "",
           tags: Array.isArray(fix.tags) ? fix.tags : d.tags,
           // Drop the verdict once applied — the card now reflects the fix.
           critique: undefined,

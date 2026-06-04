@@ -8,6 +8,8 @@
 //! This module is intentionally short because the heavy lifting lives in
 //! [`super::delta`] and [`super::apply`].
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use chrono::Utc;
 
 use crate::db::Database;
@@ -17,21 +19,67 @@ use super::auth::SupabaseConfig;
 use super::client::SyncClient;
 use super::{apply, delta, SyncReport, SyncSession};
 
+/// P051 — process-wide « a sync is running » flag.
+///
+/// `run_cycle` opens a manual `BEGIN;` on the *single* SQLite connection shared
+/// by the whole process. Two cycles overlapping (a second window, a programmatic
+/// `invoke`, or a future auto-sync timer racing a manual one) would issue a
+/// nested `BEGIN;` and fail with "cannot start a transaction within a
+/// transaction" — possibly after the first cycle already pushed, leaving the DB
+/// and the remote out of step. The UI `isPending` guard is per-window and can't
+/// protect against this. A process-wide flag makes `run_cycle` mutually
+/// exclusive regardless of who calls it.
+static SYNC_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+
+/// RAII token that releases [`SYNC_IN_FLIGHT`] on every exit path (normal
+/// return, `?` early-return, or panic unwind), so a cycle that fails mid-flight
+/// never wedges all future syncs into a permanent "déjà en cours" state.
+struct SyncGuard;
+
+impl SyncGuard {
+    /// Acquire the process-wide lock, or report that a cycle is already running.
+    fn acquire() -> AppResult<Self> {
+        // `compare_exchange` is the atomic test-and-set: only the thread that
+        // flips false→true wins; every concurrent caller gets the Err arm.
+        if SYNC_IN_FLIGHT
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return Err(AppError::Validation(
+                "Une synchronisation est déjà en cours. Réessaie dans un instant.".into(),
+            ));
+        }
+        Ok(Self)
+    }
+}
+
+impl Drop for SyncGuard {
+    fn drop(&mut self) {
+        SYNC_IN_FLIGHT.store(false, Ordering::Release);
+    }
+}
+
 /// One end-to-end sync cycle for a configured + logged-in user.
 ///
 /// Pipeline:
 ///   1. Read the current cursor from `sync_state`.
-///   2. Extract local deltas (decks, notes, cards, reviews).
-///   3. Push them to Supabase (the client returns empty payloads until the
+///   2. Snapshot the new cursor (`finished_at`) BEFORE extraction (P050).
+///   3. Extract local deltas (decks, notes, cards, reviews).
+///   4. Push them to Supabase (the client returns empty payloads until the
 ///      project is live, which is fine — we just go through the motions).
-///   4. Pull remote deltas with the same cursor.
-///   5. Apply them in a single SQLite transaction.
-///   6. Bump `sync_state.last_sync_at` to `now()`.
+///   5. Pull remote deltas with the same cursor.
+///   6. Apply them in a single SQLite transaction.
+///   7. Bump `sync_state.last_sync_at` to the cursor snapshot.
 pub async fn run_cycle(
     db: &Database,
     config: &SupabaseConfig,
     session: &SyncSession,
 ) -> AppResult<SyncReport> {
+    // P051 — take the process-wide lock first. Held for the whole cycle (the
+    // guard drops at function end / on any `?` early-return), so a concurrent
+    // caller gets « déjà en cours » instead of a nested-transaction crash.
+    let _sync_guard = SyncGuard::acquire()?;
+
     // ---- 1. read cursor -----------------------------------------------------
     let since: i64 = {
         let conn = db.lock();
@@ -41,6 +89,17 @@ pub async fn run_cycle(
             |row| row.get(0),
         )?
     };
+
+    // P050 — snapshot the next cursor BEFORE extraction, not after the network
+    // I/O. The old code stamped `finished_at = now()` once push/pull had
+    // returned, so any local edit committed during that window carried an
+    // `updated_at` inside `(extraction, finished_at)`: it was missed this cycle
+    // (extracted with the *old* `since`) AND lost forever next cycle, because
+    // `updated_at > since` would be false once `since == finished_at`. Taking
+    // the snapshot up front guarantees `finished_at <= updated_at` for every
+    // such concurrent edit, so the next cycle re-extracts it (re-pushing an
+    // already-synced row is idempotent under LWW).
+    let finished_at = Utc::now().timestamp();
 
     // ---- 2. extract local deltas -------------------------------------------
     let (local_decks, local_notes, local_cards, local_reviews) = {
@@ -72,7 +131,7 @@ pub async fn run_cycle(
     // the transaction open on the shared connection, so every later DB op
     // (including the next sync's `BEGIN;`) would fail with "cannot start a
     // transaction within a transaction" and partial writes would linger.
-    let finished_at = Utc::now().timestamp();
+    // `finished_at` was snapshotted up front (P050).
     let (decks_stats, notes_stats, cards_stats, reviews_stats) = {
         let conn = db.lock();
         conn.execute_batch("BEGIN;")?;

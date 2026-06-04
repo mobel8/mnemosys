@@ -16,15 +16,31 @@
  * `natural_width` / `natural_height` alongside the masks so the review
  * surface can preserve aspect ratio without re-reading the file.
  *
- * Deliberately MVP: no drag-to-move existing masks, no resize handles, no
- * undo stack. The intended micro-workflow is "draw 5 masks, label them,
- * save" — anything richer can be added in a future pass.
+ * Authoring affordances:
+ *   - Mouse drag to draw, or keyboard (`Ajouter un masque` + arrows) to place
+ *     and nudge/resize masks (P023).
+ *   - `Ctrl/Cmd+Z` undoes the most recently added mask (P100).
+ *   - `Changer d'image` asks for confirmation when masks already exist, so a
+ *     stray click can't wipe the whole tracé silently (P100).
+ *
+ * Still MVP: no drag-to-move / resize *handles* on the overlays (resize is
+ * keyboard-only via Alt+arrows). Richer direct manipulation can come later.
  */
 
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { ImagePlus, Plus, Trash2 } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { ImagePlus, Plus, Trash2, Undo2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -109,6 +125,9 @@ export function OcclusionEditor({ deckId, onSaved }: OcclusionEditorProps) {
   // True while the file picker / copy command is in flight, so we can disable
   // the upload button instead of letting the user spam it.
   const [picking, setPicking] = useState(false);
+  // P100 — confirmation gate before « Changer d'image » discards existing
+  // masks. Only opened when at least one mask is present.
+  const [confirmChangeImage, setConfirmChangeImage] = useState(false);
 
   const imgRef = useRef<HTMLImageElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -210,6 +229,30 @@ export function OcclusionEditor({ deckId, onSaved }: OcclusionEditorProps) {
   const removeMask = useCallback((idx: number) => {
     setMasks((prev) => prev.filter((_, i) => i !== idx));
   }, []);
+
+  // P100 — undo the most recently added mask. Drops the last item in the list
+  // (masks are appended on draw / add), giving a cheap one-level undo without a
+  // full history stack.
+  const undoLastMask = useCallback(() => {
+    setMasks((prev) => (prev.length === 0 ? prev : prev.slice(0, -1)));
+  }, []);
+
+  // P100 — global Ctrl/Cmd+Z while an image is loaded. Skipped when the focus
+  // sits in a text field (the label / geometry inputs) so the browser's native
+  // text undo keeps working there.
+  useEffect(() => {
+    if (!imagePath) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+      e.preventDefault();
+      undoLastMask();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [imagePath, undoLastMask]);
 
   // --- P023 — keyboard-only mask authoring --------------------------------
 
@@ -389,7 +432,26 @@ export function OcclusionEditor({ deckId, onSaved }: OcclusionEditorProps) {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => void handlePick()}
+                onClick={undoLastMask}
+                disabled={masks.length === 0}
+                title="Annuler le dernier masque (Ctrl+Z)"
+              >
+                <Undo2 className="h-4 w-4" />
+                Annuler
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // P100 — guard the destructive reset behind a confirmation
+                  // when masks would be lost; otherwise pick straight away.
+                  if (masks.length > 0) {
+                    setConfirmChangeImage(true);
+                  } else {
+                    void handlePick();
+                  }
+                }}
                 disabled={picking}
               >
                 Changer d'image
@@ -398,8 +460,8 @@ export function OcclusionEditor({ deckId, onSaved }: OcclusionEditorProps) {
           </div>
           <p className="text-xs text-muted-foreground" id="occlusion-keyboard-help">
             Accessibilité : sélectionne un masque (Tab) puis déplace-le avec les flèches (Maj =
-            grands pas, Alt = redimensionner, Suppr = supprimer). Tu peux aussi saisir directement
-            X, Y, largeur et hauteur dans la liste ci-dessous.
+            grands pas, Alt = redimensionner, Suppr = supprimer). Ctrl+Z annule le dernier masque.
+            Tu peux aussi saisir directement X, Y, largeur et hauteur dans la liste ci-dessous.
           </p>
 
           <div
@@ -551,6 +613,32 @@ export function OcclusionEditor({ deckId, onSaved }: OcclusionEditorProps) {
           </div>
         </>
       )}
+
+      <AlertDialog open={confirmChangeImage} onOpenChange={setConfirmChangeImage}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Changer d'image ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Les {masks.length} masque{masks.length > 1 ? "s" : ""} déjà tracé
+              {masks.length > 1 ? "s" : ""} (et leurs labels) seront perdus. Cette action est
+              irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                setConfirmChangeImage(false);
+                void handlePick();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Changer d'image
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

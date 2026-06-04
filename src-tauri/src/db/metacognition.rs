@@ -9,8 +9,12 @@
 //!
 //! Schema (see `schema_v9.sql`):
 //!   - One row per learner self-prediction (`record_prediction`).
-//!   - `actual_correct` stays NULL until the *next* review of the same
-//!     card flips it to 0/1 (`resolve_prediction`).
+//!   - `actual_correct` stays NULL until the first review of the same card
+//!     that happens AT OR AFTER the prediction horizon flips it to 0/1
+//!     (`resolve_prediction`). P058 — a review before the horizon does not
+//!     resolve the JOL: "je m'en souviendrai dans 7 jours" must be scored
+//!     against a delayed recall, never an immediate one, or the calibration
+//!     γ/bias it feeds is corrupted.
 //!   - `pending_predictions` filters by both « unresolved » and « at
 //!     least N minutes old » so the UI can fire a delayed prompt without
 //!     scanning the full history.
@@ -140,18 +144,32 @@ impl<'a> MetacognitionRepo<'a> {
     /// Resolve the OLDEST unresolved prediction for `card_id` against the
     /// observed outcome. Used by `submit_review` as a best-effort hook;
     /// returns the number of rows updated (0 when nothing matched).
+    ///
+    /// P058 — a delayed JOL only carries signal once its prediction *horizon*
+    /// has elapsed. « Je m'en souviendrai dans 7 jours » must not be resolved
+    /// by a review 2 minutes later: that outcome measures immediate recall, not
+    /// the delayed recall the learner predicted, and feeding it into
+    /// `actual_correct` corrupts the γ/bias calibration the feature exists to
+    /// compute. So we only resolve the oldest prediction whose horizon has
+    /// already passed (`now >= predicted_at + horizon * 86400`). Predictions
+    /// still inside their horizon stay pending and are picked up by the first
+    /// review at or after the horizon. `actual_correct` therefore only ever
+    /// holds a genuine post-horizon outcome — calibration needs no extra
+    /// filtering downstream.
     pub fn resolve_prediction(&self, card_id: i64, correct: bool, now: i64) -> AppResult<usize> {
         // SQLite has no « UPDATE … LIMIT 1 » without a subselect, so we do
         // the lookup explicitly. Cheap thanks to the partial index on
-        // `actual_correct IS NULL`.
+        // `actual_correct IS NULL`. The `predicted_at + horizon*86400 <= now`
+        // guard excludes predictions whose delay window hasn't elapsed yet.
         let oldest_id: Option<i64> = self
             .conn
             .query_row(
                 "SELECT id FROM jol_predictions
                  WHERE card_id = ?1 AND actual_correct IS NULL
+                   AND predicted_at + prediction_horizon_days * 86400 <= ?2
                  ORDER BY predicted_at ASC
                  LIMIT 1",
-                params![card_id],
+                params![card_id, now],
                 |r| r.get(0),
             )
             .or_else(|e| match e {
@@ -205,64 +223,34 @@ impl<'a> MetacognitionRepo<'a> {
     /// bands surface as `count = 0` so the UI can render a stable axis
     /// regardless of how much data is in.
     pub fn calibration_stats(&self, deck_id: Option<i64>) -> AppResult<CalibrationStats> {
-        // 1) Load the (predicted, actual) pairs.
-        let pairs = self.resolved_pairs(deck_id)?;
-        let total_resolved = pairs.len() as i64;
+        // P060 — the calibration dashboard used to SELECT every resolved
+        // prediction (and every confidence_post review) into a Vec, then bucket
+        // / average / sample in Rust. For a power-user with tens of thousands of
+        // reviews that's a multi-megabyte allocation on a single Stats click,
+        // with a `to_vec()` clone on top for the γ sub-sample. We now push the
+        // O(N) work — bucketing, counts and means — into a single GROUP BY in
+        // SQLite, and only pull a bounded random sample (≤ GAMMA_SAMPLE rows)
+        // into memory for the O(K²) γ. Memory is now O(buckets + K), not O(N).
 
-        // 2) Bucket per 0.1 confidence band.
-        let mut buckets: Vec<CalibrationBucket> = (0..10)
-            .map(|i| CalibrationBucket {
-                band: (i as f64) / 10.0,
-                predicted: 0.0,
-                actual: 0.0,
-                count: 0,
-            })
-            .collect();
-        for (p, a) in &pairs {
-            let raw = (p * 10.0).floor() as isize;
-            let idx = raw.clamp(0, 9) as usize;
-            let b = &mut buckets[idx];
-            b.predicted += *p;
-            b.actual += if *a { 1.0 } else { 0.0 };
-            b.count += 1;
-        }
-        for b in buckets.iter_mut() {
-            if b.count > 0 {
-                b.predicted /= b.count as f64;
-                b.actual /= b.count as f64;
-            }
-        }
+        // 1) Prospective: per-band aggregates straight from SQL.
+        let bands = self.resolved_band_aggregates(deck_id)?;
+        let (buckets, total_resolved, bias) = buckets_and_bias_from_bands(&bands);
 
-        // 3) Bias = mean(predicted) - mean(actual).
-        let bias = if pairs.is_empty() {
-            0.0
-        } else {
-            let mean_p: f64 = pairs.iter().map(|(p, _)| *p).sum::<f64>() / total_resolved as f64;
-            let mean_a: f64 = pairs
-                .iter()
-                .map(|(_, a)| if *a { 1.0 } else { 0.0 })
-                .sum::<f64>()
-                / total_resolved as f64;
-            mean_p - mean_a
-        };
+        // 2) Prospective γ over a bounded random sample.
+        let gamma = goodman_kruskal_gamma(&self.resolved_gamma_sample(deck_id)?);
 
-        // 4) Goodman-Kruskal γ.
-        let gamma = goodman_kruskal_gamma(&pairs);
-
-        // 5) Retrospective calibration (Vague 22): confidence_post vs the same
+        // 3) Retrospective calibration (Vague 22): confidence_post vs the same
         //    review's Good/Easy outcome. Independent of the JOL predictions —
         //    it answers "once you'd seen the answer, did your confidence track
-        //    reality?" rather than "could you predict it in advance?".
-        let retro = self.retrospective_pairs(deck_id)?;
-        let total_post = retro.len() as i64;
+        //    reality?" rather than "could you predict it in advance?". Mean /
+        //    count come from SQL; γ from a bounded random sample.
+        let (total_post, retro_sum_conf, retro_sum_correct) =
+            self.retrospective_aggregate(deck_id)?;
         let (gamma_post, bias_post) = if total_post >= RETRO_MIN_SAMPLE {
-            let mean_p: f64 = retro.iter().map(|(p, _)| *p).sum::<f64>() / total_post as f64;
-            let mean_a: f64 = retro
-                .iter()
-                .map(|(_, a)| if *a { 1.0 } else { 0.0 })
-                .sum::<f64>()
-                / total_post as f64;
-            (Some(goodman_kruskal_gamma(&retro)), Some(mean_p - mean_a))
+            let mean_p = retro_sum_conf / total_post as f64;
+            let mean_a = retro_sum_correct as f64 / total_post as f64;
+            let sample = self.retrospective_gamma_sample(deck_id)?;
+            (Some(goodman_kruskal_gamma(&sample)), Some(mean_p - mean_a))
         } else {
             (None, None)
         };
@@ -280,51 +268,136 @@ impl<'a> MetacognitionRepo<'a> {
 
     // ---- internals ---------------------------------------------------------
 
-    /// Fetch the resolved (predicted, actual) pairs. Optionally filtered by
-    /// deck through the `cards` join.
-    fn resolved_pairs(&self, deck_id: Option<i64>) -> AppResult<Vec<(f64, bool)>> {
+    /// P060 — per-band aggregates for the prospective calibration histogram,
+    /// computed in SQLite (`GROUP BY` the 0.1-wide confidence band) so we never
+    /// materialise one Rust row per resolved prediction. Returns at most 10
+    /// rows: `(band_index, count, sum_predicted, sum_correct)`. `band_index` is
+    /// `min(floor(predicted_prob * 10), 9)` so `1.0` falls into the last bucket
+    /// — exactly the clamp the old Rust loop applied.
+    fn resolved_band_aggregates(&self, deck_id: Option<i64>) -> AppResult<Vec<BandAgg>> {
+        let map_row = |row: &Row<'_>| -> rusqlite::Result<BandAgg> {
+            Ok(BandAgg {
+                band_index: row.get::<_, i64>(0)?.clamp(0, 9) as usize,
+                count: row.get(1)?,
+                sum_predicted: row.get(2)?,
+                sum_correct: row.get(3)?,
+            })
+        };
         let mut out = Vec::new();
         if let Some(deck_id) = deck_id {
             let mut stmt = self.conn.prepare(
-                "SELECT j.predicted_prob, j.actual_correct
+                "SELECT MIN(CAST(j.predicted_prob * 10 AS INTEGER), 9) AS band,
+                        COUNT(*), SUM(j.predicted_prob), SUM(j.actual_correct)
                  FROM jol_predictions j
                  INNER JOIN cards c ON c.id = j.card_id
-                 WHERE j.actual_correct IS NOT NULL AND c.deck_id = ?1",
+                 WHERE j.actual_correct IS NOT NULL AND c.deck_id = ?1
+                 GROUP BY band",
             )?;
-            let rows = stmt.query_map(params![deck_id], |row| {
-                let p: f64 = row.get(0)?;
-                let a: i64 = row.get(1)?;
-                Ok((p, a != 0))
-            })?;
-            for r in rows {
+            for r in stmt.query_map(params![deck_id], map_row)? {
                 out.push(r?);
             }
         } else {
             let mut stmt = self.conn.prepare(
-                "SELECT predicted_prob, actual_correct
+                "SELECT MIN(CAST(predicted_prob * 10 AS INTEGER), 9) AS band,
+                        COUNT(*), SUM(predicted_prob), SUM(actual_correct)
                  FROM jol_predictions
-                 WHERE actual_correct IS NOT NULL",
+                 WHERE actual_correct IS NOT NULL
+                 GROUP BY band",
             )?;
-            let rows = stmt.query_map([], |row| {
-                let p: f64 = row.get(0)?;
-                let a: i64 = row.get(1)?;
-                Ok((p, a != 0))
-            })?;
-            for r in rows {
+            for r in stmt.query_map([], map_row)? {
                 out.push(r?);
             }
         }
         Ok(out)
     }
 
-    /// Fetch retrospective `(confidence, correct)` pairs from `reviews`
-    /// (Vague 22). `confidence` is `reviews.confidence_post` normalised from
-    /// the 1-5 scale to `[0, 1]` via `(c - 1) / 4`; `correct` is `rating >= 3`
-    /// (Good/Easy), matching the Good/Easy=correct mapping used when resolving
-    /// JOL predictions. Rows without a `confidence_post` are excluded.
-    /// Optionally filtered by deck through the `cards` join.
-    fn retrospective_pairs(&self, deck_id: Option<i64>) -> AppResult<Vec<(f64, bool)>> {
+    /// P060 — a bounded uniform random sample of resolved `(predicted, actual)`
+    /// pairs for the O(K²) γ. `ORDER BY RANDOM() LIMIT GAMMA_SAMPLE` does the
+    /// sampling in SQLite, so we pull at most `GAMMA_SAMPLE` rows into memory
+    /// instead of the whole table plus a `to_vec()` clone. When the resolved
+    /// set is already ≤ GAMMA_SAMPLE this returns every row (the sort is a
+    /// no-op-sized heap), so the γ is exact for small histories.
+    fn resolved_gamma_sample(&self, deck_id: Option<i64>) -> AppResult<Vec<(f64, bool)>> {
+        let map_row = |row: &Row<'_>| -> rusqlite::Result<(f64, bool)> {
+            let p: f64 = row.get(0)?;
+            let a: i64 = row.get(1)?;
+            Ok((p, a != 0))
+        };
         let mut out = Vec::new();
+        if let Some(deck_id) = deck_id {
+            let mut stmt = self.conn.prepare(
+                "SELECT j.predicted_prob, j.actual_correct
+                 FROM jol_predictions j
+                 INNER JOIN cards c ON c.id = j.card_id
+                 WHERE j.actual_correct IS NOT NULL AND c.deck_id = ?1
+                 ORDER BY RANDOM() LIMIT ?2",
+            )?;
+            for r in stmt.query_map(params![deck_id, GAMMA_SAMPLE], map_row)? {
+                out.push(r?);
+            }
+        } else {
+            let mut stmt = self.conn.prepare(
+                "SELECT predicted_prob, actual_correct
+                 FROM jol_predictions
+                 WHERE actual_correct IS NOT NULL
+                 ORDER BY RANDOM() LIMIT ?1",
+            )?;
+            for r in stmt.query_map(params![GAMMA_SAMPLE], map_row)? {
+                out.push(r?);
+            }
+        }
+        Ok(out)
+    }
+
+    /// P060 — retrospective sample size and running sums, computed in SQL so the
+    /// dashboard never loads one Rust row per `confidence_post` review just to
+    /// average. Returns `(count, sum_normalised_confidence, sum_correct)` where
+    /// the normalised confidence is `(clamp(confidence_post, 1, 5) - 1) / 4` and
+    /// `correct` is `rating >= 3` — identical to the old per-row mapping. Rows
+    /// without a `confidence_post` are excluded by the partial index predicate.
+    fn retrospective_aggregate(&self, deck_id: Option<i64>) -> AppResult<(i64, f64, i64)> {
+        // SUM(...) is NULL over an empty set, so columns 1 and 2 are read as
+        // Option and coalesced below; COUNT(*) is never NULL.
+        let map_row = |row: &Row<'_>| -> rusqlite::Result<(i64, Option<f64>, Option<i64>)> {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        };
+        // `(MIN(MAX(c,1),5) - 1) / 4.0` clamps confidence_post into [1,5] then
+        // normalises to [0,1] exactly as the Rust `c.clamp(1, 5)` did. The
+        // `* 1.0` forces REAL division. SUM over an empty set is NULL, so the
+        // sums are read as Option and coalesced to 0.
+        let (count, sum_conf, sum_correct): (i64, Option<f64>, Option<i64>) =
+            if let Some(deck_id) = deck_id {
+                self.conn.query_row(
+                    "SELECT COUNT(*),
+                            SUM((MIN(MAX(r.confidence_post, 1), 5) - 1) / 4.0),
+                            SUM(CASE WHEN r.rating >= 3 THEN 1 ELSE 0 END)
+                     FROM reviews r
+                     INNER JOIN cards c ON c.id = r.card_id
+                     WHERE r.confidence_post IS NOT NULL AND c.deck_id = ?1",
+                    params![deck_id],
+                    map_row,
+                )?
+            } else {
+                self.conn.query_row(
+                    "SELECT COUNT(*),
+                            SUM((MIN(MAX(confidence_post, 1), 5) - 1) / 4.0),
+                            SUM(CASE WHEN rating >= 3 THEN 1 ELSE 0 END)
+                     FROM reviews
+                     WHERE confidence_post IS NOT NULL",
+                    [],
+                    map_row,
+                )?
+            };
+        Ok((count, sum_conf.unwrap_or(0.0), sum_correct.unwrap_or(0)))
+    }
+
+    /// P060 — bounded random sample of retrospective `(confidence, correct)`
+    /// pairs for the retrospective γ (Vague 22). `confidence` is
+    /// `reviews.confidence_post` normalised from 1-5 to `[0, 1]` via
+    /// `(clamp(c,1,5) - 1) / 4`; `correct` is `rating >= 3` (Good/Easy). Caps at
+    /// `GAMMA_SAMPLE` rows via `ORDER BY RANDOM() LIMIT`. Rows without a
+    /// `confidence_post` are excluded.
+    fn retrospective_gamma_sample(&self, deck_id: Option<i64>) -> AppResult<Vec<(f64, bool)>> {
         let map_row = |row: &Row<'_>| -> rusqlite::Result<(f64, bool)> {
             let c: i64 = row.get(0)?;
             let rating: i64 = row.get(1)?;
@@ -333,31 +406,86 @@ impl<'a> MetacognitionRepo<'a> {
             let norm = ((c.clamp(1, 5) - 1) as f64) / 4.0;
             Ok((norm, rating >= 3))
         };
+        let mut out = Vec::new();
         if let Some(deck_id) = deck_id {
             let mut stmt = self.conn.prepare(
                 "SELECT r.confidence_post, r.rating
                  FROM reviews r
                  INNER JOIN cards c ON c.id = r.card_id
-                 WHERE r.confidence_post IS NOT NULL AND c.deck_id = ?1",
+                 WHERE r.confidence_post IS NOT NULL AND c.deck_id = ?1
+                 ORDER BY RANDOM() LIMIT ?2",
             )?;
-            let rows = stmt.query_map(params![deck_id], map_row)?;
-            for r in rows {
+            for r in stmt.query_map(params![deck_id, GAMMA_SAMPLE], map_row)? {
                 out.push(r?);
             }
         } else {
             let mut stmt = self.conn.prepare(
                 "SELECT confidence_post, rating
                  FROM reviews
-                 WHERE confidence_post IS NOT NULL",
+                 WHERE confidence_post IS NOT NULL
+                 ORDER BY RANDOM() LIMIT ?1",
             )?;
-            let rows = stmt.query_map([], map_row)?;
-            for r in rows {
+            for r in stmt.query_map(params![GAMMA_SAMPLE], map_row)? {
                 out.push(r?);
             }
         }
         Ok(out)
     }
 }
+
+/// P060 — one row of the SQL `GROUP BY band` aggregate: how many resolved
+/// predictions landed in this 0.1-wide confidence band, plus the running sums
+/// the dashboard needs (mean predicted, empirical recall).
+struct BandAgg {
+    band_index: usize,
+    count: i64,
+    sum_predicted: f64,
+    sum_correct: i64,
+}
+
+/// P060 — fold the (≤ 10) SQL band aggregates into the always-10-entry bucket
+/// histogram, the total resolved count, and the global bias = mean(predicted) -
+/// mean(actual). Empty bands surface as `count = 0` so the UI axis stays
+/// stable. Bias is `0.0` when there is no data, matching the old behaviour.
+fn buckets_and_bias_from_bands(bands: &[BandAgg]) -> (Vec<CalibrationBucket>, i64, f64) {
+    let mut buckets: Vec<CalibrationBucket> = (0..10)
+        .map(|i| CalibrationBucket {
+            band: (i as f64) / 10.0,
+            predicted: 0.0,
+            actual: 0.0,
+            count: 0,
+        })
+        .collect();
+
+    let mut total: i64 = 0;
+    let mut sum_predicted = 0.0;
+    let mut sum_correct: i64 = 0;
+    for agg in bands {
+        let b = &mut buckets[agg.band_index];
+        b.count = agg.count;
+        if agg.count > 0 {
+            b.predicted = agg.sum_predicted / agg.count as f64;
+            b.actual = agg.sum_correct as f64 / agg.count as f64;
+        }
+        total += agg.count;
+        sum_predicted += agg.sum_predicted;
+        sum_correct += agg.sum_correct;
+    }
+
+    let bias = if total == 0 {
+        0.0
+    } else {
+        sum_predicted / total as f64 - sum_correct as f64 / total as f64
+    };
+    (buckets, total, bias)
+}
+
+/// P060 — the maximum number of `(predicted, actual)` pairs pulled into memory
+/// for a γ computation. The caller samples this many rows in SQL
+/// (`ORDER BY RANDOM() LIMIT GAMMA_SAMPLE`), so the O(K²) pair scan below runs
+/// against a bounded slice and a learner with tens of thousands of predictions
+/// neither allocates a huge Vec nor stalls the stats dashboard.
+const GAMMA_SAMPLE: i64 = 500;
 
 /// Goodman-Kruskal γ over `(predicted, actual)` pairs.
 ///
@@ -367,48 +495,21 @@ impl<'a> MetacognitionRepo<'a> {
 ///       Nd = discordant pairs (predicted_i > predicted_j AND actual_i < actual_j).
 /// Ties on either dimension are ignored — the classical formula.
 ///
-/// Returns `0.0` when there are no informative pairs. For large N
-/// (`> SAMPLING_THRESHOLD`) we shuffle-sample to keep the call O(K²) with
-/// a fixed K so a learner with thousands of predictions doesn't stall the
-/// stats dashboard.
+/// Returns `0.0` when there are no informative pairs. The input is expected to
+/// be already bounded to at most [`GAMMA_SAMPLE`] pairs (sampling happens in
+/// SQL, see [`MetacognitionRepo::resolved_gamma_sample`]), so this operates
+/// directly on the borrowed slice with no allocation — O(K²) over a fixed K.
 fn goodman_kruskal_gamma(pairs: &[(f64, bool)]) -> f64 {
-    const SAMPLING_THRESHOLD: usize = 500;
     if pairs.len() < 2 {
         return 0.0;
     }
 
-    let working: Vec<(f64, bool)> = if pairs.len() > SAMPLING_THRESHOLD {
-        // P059: a *uniform random* sub-sample. A strided slice of the
-        // chronologically-ordered pairs biases γ toward temporally-clustered
-        // runs (early vs late learning); a partial Fisher-Yates shuffle picks
-        // SAMPLING_THRESHOLD pairs with equal probability. Dependency-free LCG
-        // seeded by the wall clock — sampling quality, not cryptography.
-        let mut shuffled = pairs.to_vec();
-        let n = shuffled.len();
-        let mut seed: u64 = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos() as u64)
-            .unwrap_or(0x9e37_79b9_7f4a_7c15)
-            | 1;
-        for i in 0..SAMPLING_THRESHOLD.min(n) {
-            seed = seed
-                .wrapping_mul(6_364_136_223_846_793_005)
-                .wrapping_add(1_442_695_040_888_963_407);
-            let j = i + (seed >> 33) as usize % (n - i);
-            shuffled.swap(i, j);
-        }
-        shuffled.truncate(SAMPLING_THRESHOLD);
-        shuffled
-    } else {
-        pairs.to_vec()
-    };
-
     let mut nc: i64 = 0;
     let mut nd: i64 = 0;
-    for i in 0..working.len() {
-        for j in (i + 1)..working.len() {
-            let (pi, ai) = working[i];
-            let (pj, aj) = working[j];
+    for i in 0..pairs.len() {
+        for j in (i + 1)..pairs.len() {
+            let (pi, ai) = pairs[i];
+            let (pj, aj) = pairs[j];
             if (pi - pj).abs() < f64::EPSILON {
                 continue; // tied on prediction
             }
@@ -553,6 +654,64 @@ mod tests {
         );
         // The prospective fields are independent and untouched (no JOLs here).
         assert_eq!(stats.total_resolved, 0);
+    }
+
+    /// P058 — a delayed JOL must NOT be resolved by a review that happens
+    /// before its prediction horizon has elapsed; only the first review at or
+    /// after `predicted_at + horizon*86400` resolves it, and only that
+    /// post-horizon outcome reaches the calibration stats.
+    #[test]
+    fn resolve_respects_prediction_horizon() {
+        const DAY: i64 = 86_400;
+        let db = Database::for_test();
+        let card_id = seed_card(&db);
+        let conn = db.lock();
+        let meta = MetacognitionRepo::new(&conn);
+
+        let predicted_at = 1_700_000_000;
+        let horizon_days = 7;
+        meta.record_prediction(card_id, 0.9, horizon_days, predicted_at)
+            .expect("record");
+
+        // A review 2 minutes later is INSIDE the horizon → no resolution. The
+        // immediate outcome (here a failure) must not pollute the delayed JOL.
+        let immediate = predicted_at + 120;
+        assert_eq!(
+            meta.resolve_prediction(card_id, false, immediate).unwrap(),
+            0,
+            "a pre-horizon review must not resolve a delayed JOL"
+        );
+        // Still pending, still unresolved → calibration sees nothing yet.
+        assert_eq!(
+            meta.calibration_stats(None).unwrap().total_resolved,
+            0,
+            "an unresolved prediction must not feed calibration"
+        );
+
+        // A review one second before the horizon end is still too early.
+        let just_before = predicted_at + horizon_days * DAY - 1;
+        assert_eq!(
+            meta.resolve_prediction(card_id, false, just_before).unwrap(),
+            0,
+            "resolution must wait until predicted_at + horizon*86400"
+        );
+
+        // The first review AT/after the horizon resolves it, and that outcome
+        // (correct) is the one calibration records.
+        let after_horizon = predicted_at + horizon_days * DAY;
+        assert_eq!(
+            meta.resolve_prediction(card_id, true, after_horizon).unwrap(),
+            1,
+            "the first post-horizon review must resolve the JOL"
+        );
+        let stats = meta.calibration_stats(None).unwrap();
+        assert_eq!(stats.total_resolved, 1);
+        // Predicted 0.9, resolved correct → bias ≈ 0.9 - 1.0 = -0.1.
+        assert!(
+            (stats.bias - (0.9 - 1.0)).abs() < 1e-9,
+            "calibration must use the post-horizon outcome, got bias {}",
+            stats.bias
+        );
     }
 
     #[test]

@@ -12,6 +12,7 @@
  */
 
 import { LineChart as LineChartIcon } from "lucide-react";
+import { memo, useMemo } from "react";
 import {
   CartesianGrid,
   Line,
@@ -41,16 +42,22 @@ interface ChartDatum {
   correct: number;
 }
 
-export function RetentionChart({ period }: RetentionChartProps) {
+function RetentionChartImpl({ period }: RetentionChartProps) {
   const days = periodToDays(period);
   const { data, isLoading, error } = useRetentionByDay(days);
 
-  const chartData: ChartDatum[] = (data ?? []).map((row) => ({
-    date: row.date,
-    rate: row.rate,
-    total: row.total,
-    correct: row.correct,
-  }));
+  // Memoised so recharts keeps a stable array reference across re-renders and
+  // doesn't discard its change detection on every parent update.
+  const chartData: ChartDatum[] = useMemo(
+    () =>
+      (data ?? []).map((row) => ({
+        date: row.date,
+        rate: row.rate,
+        total: row.total,
+        correct: row.correct,
+      })),
+    [data],
+  );
 
   const enoughData = chartData.length >= MIN_DAYS_FOR_CHART;
   const latestRate = chartData.at(-1)?.rate;
@@ -155,6 +162,12 @@ export function RetentionChart({ period }: RetentionChartProps) {
   );
 }
 
+/**
+ * Re-render only when `period` changes — pure over its query result otherwise,
+ * so a sibling re-render won't reallocate the recharts subtree.
+ */
+export const RetentionChart = memo(RetentionChartImpl);
+
 function EmptyState() {
   return (
     <div className="flex h-[300px] flex-col items-center justify-center gap-4 text-center">
@@ -171,7 +184,10 @@ function EmptyState() {
 
 function ErrorState() {
   return (
-    <div className="flex h-[300px] items-center justify-center text-center text-sm text-destructive">
+    <div
+      role="alert"
+      className="flex h-[300px] items-center justify-center text-center text-sm text-destructive"
+    >
       Impossible de charger la rétention.
     </div>
   );

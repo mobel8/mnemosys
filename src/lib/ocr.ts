@@ -73,7 +73,30 @@ interface TessBlock {
 
 /** One cached worker per language, keyed by `OcrLang`. */
 const workerPromises = new Map<OcrLang, Promise<Worker>>();
+
+/**
+ * Progress callback scoped to the *currently running* OCR job. The worker
+ * logger is registered once at creation and lives for the worker's whole
+ * lifetime, so it must read the active callback indirectly (a module field)
+ * rather than capturing one. We re-point this field for each job; a stale
+ * callback from a previous job is never invoked because runs are serialised
+ * (see `ocrChain`) and the field is reset in `recognizeOnce`'s `finally`.
+ */
 let progressCb: ((p: number) => void) | null = null;
+
+/**
+ * Serialises OCR runs. `runOcr` chains onto the previous run so a second call
+ * waits for the first to finish before re-pointing `progressCb` — two
+ * concurrent runs can no longer cross-drive each other's progress UI.
+ */
+let ocrChain: Promise<unknown> = Promise.resolve();
+
+/**
+ * Number of recognitions currently in flight. `terminateOcr` refuses to free
+ * the workers while this is > 0 (terminating mid-recognition rejects the
+ * pending promise and can wedge the worker), deferring teardown to the caller.
+ */
+let inFlight = 0;
 
 async function getWorker(lang: OcrLang): Promise<Worker> {
   let promise = workerPromises.get(lang);
@@ -111,7 +134,26 @@ export async function runOcr(
   onProgress?: (fraction: number) => void,
   lang: OcrLang = DEFAULT_OCR_LANG,
 ): Promise<OcrResult> {
-  progressCb = onProgress ?? null;
+  // Serialise runs: chain onto the previous run so two concurrent callers
+  // never share/overwrite `progressCb` while both are recognising. We swallow
+  // the predecessor's outcome (`.catch`) — a failed prior run must not reject
+  // this one before it even starts.
+  const run = ocrChain
+    .catch(() => undefined)
+    .then(() => recognizeOnce(image, onProgress ?? null, lang));
+  // Keep the chain alive regardless of this run's outcome.
+  ocrChain = run.catch(() => undefined);
+  return run;
+}
+
+/** Single serialised recognition pass — only one runs at a time. */
+async function recognizeOnce(
+  image: string | File | Blob,
+  onProgress: ((fraction: number) => void) | null,
+  lang: OcrLang,
+): Promise<OcrResult> {
+  progressCb = onProgress;
+  inFlight += 1;
   try {
     let effectiveLang = lang;
     let worker: Worker;
@@ -147,12 +189,27 @@ export async function runOcr(
 
     return { text: data.text, lines, words, lang: effectiveLang };
   } finally {
+    inFlight -= 1;
     progressCb = null;
   }
 }
 
-/** Free every cached worker (and its WASM memory) when the page unmounts. */
+/**
+ * Free every cached worker (and its WASM memory) when the page unmounts.
+ *
+ * If a recognition is still in flight (e.g. the user navigated away mid-OCR),
+ * terminating now would reject the pending `recognize` promise and can wedge
+ * the worker. We defer teardown until the active run settles by chaining onto
+ * `ocrChain`, so the in-flight recognition completes first and the worker is
+ * freed cleanly afterwards.
+ */
 export async function terminateOcr(): Promise<void> {
+  if (inFlight > 0) {
+    // Defer: let the running recognition finish, then tear down.
+    const deferred = ocrChain.catch(() => undefined).then(() => terminateOcr());
+    ocrChain = deferred.catch(() => undefined);
+    return deferred;
+  }
   const pending = Array.from(workerPromises.values());
   workerPromises.clear();
   await Promise.all(

@@ -58,6 +58,10 @@ pub fn create_note(
         .create(deck_id, template, fields, tags, frequency_band)
 }
 
+/// Update a note's fields. P049: [`NoteRepo::update_fields`] reconciles the
+/// derived cards in the same transaction, so editing a cloze/occlusion note's
+/// arity (adding/removing a `{{cN::}}` marker or a mask) creates the missing
+/// cards and drops the orphaned ones — no manual card surgery needed here.
 #[tauri::command]
 pub fn update_note(
     state: State<'_, AppState>,

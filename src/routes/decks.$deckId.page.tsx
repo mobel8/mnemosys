@@ -191,10 +191,15 @@ export default function DeckDetailPage() {
 
         <TabsContent value="cards" className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="deck-card-search" className="sr-only">
+              Rechercher dans les notes
+            </label>
             <Input
+              id="deck-card-search"
               type="search"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
+              aria-label="Rechercher dans les notes"
               placeholder="Rechercher dans les notes (min. 2 caractères)…"
               className="max-w-sm"
             />

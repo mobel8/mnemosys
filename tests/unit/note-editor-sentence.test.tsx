@@ -12,7 +12,7 @@
 
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mutateMock = vi.fn();
 const toastMock = vi.fn();
@@ -36,6 +36,19 @@ vi.mock("@/lib/queries", () => ({
 }));
 
 import { NoteEditor } from "@/components/NoteEditor";
+
+// Radix Select relies on Pointer Capture + scrollIntoView, absent from jsdom.
+beforeAll(() => {
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (!Element.prototype.setPointerCapture) {
+    Element.prototype.setPointerCapture = () => undefined;
+  }
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => undefined;
+  }
+});
 
 beforeEach(() => {
   mutateMock.mockReset();
@@ -88,7 +101,9 @@ describe("NoteEditor — Phrase tab", () => {
     await user.type(screen.getByLabelText(/Phrase \(langue cible\)/), "Hallo Welt");
     await user.type(screen.getByLabelText("Traduction"), "Bonjour le monde");
     await user.type(screen.getByLabelText(/Indice \/ note/), "salutation");
-    await user.selectOptions(screen.getByLabelText("Bande de fréquence"), "top_100");
+    // Frequency band is now a Radix <Select> (P071) — open it, pick the option.
+    await user.click(screen.getByLabelText("Bande de fréquence"));
+    await user.click(await screen.findByRole("option", { name: "Top 100" }));
     await user.click(getSubmitButton());
     expect(mutateMock).toHaveBeenCalledWith(
       expect.objectContaining({

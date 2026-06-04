@@ -5,7 +5,11 @@ CREATE TABLE decks (
     name TEXT NOT NULL UNIQUE,
     description TEXT,
     color TEXT NOT NULL DEFAULT '#3b82f6',
-    desired_retention REAL NOT NULL DEFAULT 0.9,
+    -- P089: bound retention at the DB level so EVERY write path (local
+    -- create/update AND sync/apply from a remote payload) is defended, not
+    -- just the Rust validation in DeckRepo. NaN fails `BETWEEN`, so it is
+    -- rejected too.
+    desired_retention REAL NOT NULL DEFAULT 0.9 CHECK(desired_retention BETWEEN 0.5 AND 0.99),
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );

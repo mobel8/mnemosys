@@ -164,28 +164,14 @@ fn validate_and_align(
 ///
 /// Pulled out so it's unit-testable without an HTTP call.
 pub(super) fn parse_critique_response(response: &str) -> Result<Vec<CardCritique>, ClaudeError> {
-    let cleaned = strip_code_fences(response.trim());
+    // P074 — reuse the single robust fence-stripper from `cards` instead of a
+    // drifting private copy that mishandled single-line fences.
+    let cleaned = super::cards::strip_code_fences(response.trim());
 
     serde_json::from_str::<Vec<CardCritique>>(cleaned).map_err(|e| {
         let preview: String = response.chars().take(200).collect();
         ClaudeError::InvalidResponse(format!("Critique JSON parse error: {e} (got: {preview})"))
     })
-}
-
-/// Remove ``` or ```json fences if the model wrapped the array. Idempotent.
-fn strip_code_fences(s: &str) -> &str {
-    let mut out = s.trim();
-    if let Some(rest) = out.strip_prefix("```") {
-        let rest = match rest.find('\n') {
-            Some(nl) => &rest[nl + 1..],
-            None => rest,
-        };
-        out = rest.trim_end();
-    }
-    if let Some(stripped) = out.strip_suffix("```") {
-        out = stripped.trim_end();
-    }
-    out.trim()
 }
 
 #[cfg(test)]

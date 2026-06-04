@@ -177,6 +177,12 @@ fn fetch_deck_cards(state: &AppState, deck_id: i64) -> AppResult<(String, Vec<(S
     let limit = MAX_CARDS_PER_PODCAST as i64;
     let rows = stmt.query_map(rusqlite::params![deck_id, limit], |r| r.get::<_, String>(0))?;
 
+    // P057 — extract speakable text from EVERY non-occlusion template, not just
+    // basic/cloze. Previously a deck made of Phrase/Médecine/Réfutation cards
+    // returned 0 podcastable cards and failed « deck must contain at least 3
+    // cards », even though the UI gate counted them. The SQL already excludes
+    // `occlusion` (no text to read); we now mirror that exact set here so the
+    // backend's podcastable set matches the count surfaced by `DeckStats`.
     let mut cards = Vec::new();
     for row in rows {
         let fields_json = match row {
@@ -187,25 +193,78 @@ fn fetch_deck_cards(state: &AppState, deck_id: i64) -> AppResult<(String, Vec<(S
             Ok(v) => v,
             Err(_) => continue,
         };
+        let s = |k: &str| {
+            value
+                .get(k)
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string()
+        };
 
-        // Basic / basic_reverse: { front, back }
-        if let (Some(front), Some(back)) = (
-            value.get("front").and_then(|v| v.as_str()),
-            value.get("back").and_then(|v| v.as_str()),
-        ) {
-            let f = front.trim();
-            let b = back.trim();
-            if !f.is_empty() {
-                cards.push((f.to_string(), b.to_string()));
-                continue;
-            }
+        // basic / basic_reverse: { front, back }
+        if !s("front").is_empty() {
+            cards.push((s("front"), s("back")));
+            continue;
         }
-        // Cloze: { text }
-        if let Some(text) = value.get("text").and_then(|v| v.as_str()) {
-            let t = text.trim();
-            if !t.is_empty() {
-                cards.push((t.to_string(), String::new()));
+        // sentence / bidirectional: { source, target }
+        if !s("source").is_empty() {
+            cards.push((s("source"), s("target")));
+            continue;
+        }
+        // illness_script: { condition, epidemiology, pathophysiology, clinical, management }
+        if !s("condition").is_empty() {
+            let sections = ["epidemiology", "pathophysiology", "clinical", "management"];
+            let back = sections
+                .iter()
+                .map(|k| s(k))
+                .filter(|t| !t.is_empty())
+                .collect::<Vec<_>>()
+                .join(" \u{2014} ");
+            cards.push((s("condition"), back));
+            continue;
+        }
+        // refutation: { misconception, correct, explanation }
+        if !s("misconception").is_empty() {
+            let mut back = s("correct");
+            let expl = s("explanation");
+            if !expl.is_empty() {
+                if !back.is_empty() {
+                    back.push(' ');
+                }
+                back.push_str(&expl);
             }
+            cards.push((s("misconception"), back));
+            continue;
+        }
+        // worked_example: { problem, steps[], answer }
+        if !s("problem").is_empty() {
+            let steps = value
+                .get("steps")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str())
+                        .map(|t| t.trim())
+                        .filter(|t| !t.is_empty())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+                .unwrap_or_default();
+            let answer = s("answer");
+            let back = if steps.is_empty() {
+                answer
+            } else if answer.is_empty() {
+                steps
+            } else {
+                format!("{steps} {answer}")
+            };
+            cards.push((s("problem"), back));
+            continue;
+        }
+        // cloze: { text } (front only — the deletion is read aloud as-is)
+        if !s("text").is_empty() {
+            cards.push((s("text"), String::new()));
         }
     }
 

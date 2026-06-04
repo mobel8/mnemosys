@@ -213,6 +213,13 @@ fn decode_b64_png(s: &str) -> Option<Vec<u8>> {
 ///
 /// When `back` is empty (cloze cards carry the whole sentence in `front`) the
 /// prompt asks for an image of the sentence itself rather than a "→ ()" arrow.
+///
+/// P116 — the instruction framing is LANGUAGE-NEUTRAL English (DALL·E 3's
+/// best-supported prompt language); the old hard-French wording biased the
+/// generator. The card's own text (`front`/`back`) is embedded verbatim as the
+/// scene subject — that's inherent to the card and stays in its own language —
+/// while we explicitly forbid rendering any text/letters in the picture, so the
+/// output is a purely visual aid regardless of the user's chosen language.
 pub fn build_image_prompt(front: &str, back: &str) -> String {
     let front = front.trim();
     let back = back.trim();
@@ -222,8 +229,8 @@ pub fn build_image_prompt(front: &str, back: &str) -> String {
         format!("« {front} » → « {back} »")
     };
     format!(
-        "Image mnémotechnique absurde et mémorable représentant : {subject}. \
-         Style illustration vivante et frappante, une seule scène, sans aucun texte ni lettres."
+        "An absurd, memorable mnemonic image representing: {subject}. \
+         Vivid, striking illustration style, a single scene, with absolutely no text or letters."
     )
 }
 
@@ -237,7 +244,8 @@ mod tests {
         assert!(p.contains("Capitale du Japon ?"));
         assert!(p.contains("Tokyo"));
         assert!(p.contains("→"));
-        assert!(p.contains("absurde"));
+        // P116 — framing is now neutral English ("absurd"), card text verbatim.
+        assert!(p.contains("absurd"));
     }
 
     #[test]

@@ -307,23 +307,23 @@ impl<'a> PalaceRepo<'a> {
             ));
         }
 
-        // Apply the new ordinals inside a transaction so a mid-loop error
-        // never leaves half the rows reordered.
-        self.conn.execute_batch("SAVEPOINT reorder_loci")?;
+        // P087 — wrap the reordering in a real transaction instead of a manual
+        // SAVEPOINT/RELEASE pair. A `Transaction` from `unchecked_transaction`
+        // rolls back automatically when dropped (only `commit()` persists it),
+        // so an error on any UPDATE — or on commit itself — can never leave a
+        // half-applied reorder, nor an open savepoint that would poison every
+        // later query on this shared connection. The tx derefs to `Connection`,
+        // so the same `execute` calls work unchanged.
+        let tx = self.conn.unchecked_transaction()?;
         for (idx, locus_id) in new_order.iter().enumerate() {
             let new_ord = (idx as i64) + 1;
-            if let Err(e) = self.conn.execute(
+            tx.execute(
                 "UPDATE palace_loci SET ordinal = ?1 WHERE id = ?2 AND palace_id = ?3",
                 params![new_ord, locus_id, palace_id],
-            ) {
-                let _ = self.conn.execute_batch("ROLLBACK TO reorder_loci");
-                return Err(AppError::Database(format!(
-                    "reorder_loci update failed: {}",
-                    e
-                )));
-            }
+            )
+            .map_err(|e| AppError::Database(format!("reorder_loci update failed: {}", e)))?;
         }
-        self.conn.execute_batch("RELEASE reorder_loci")?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -545,5 +545,54 @@ mod tests {
         assert!((only.x - 4.0).abs() < 1e-9);
         assert!((only.y - 1.7).abs() < 1e-9);
         assert!((only.z - 2.5).abs() < 1e-9);
+    }
+
+    // P087 — a successful reorder must commit and leave NO open transaction on
+    // the shared connection (the old manual SAVEPOINT could leak one). We prove
+    // both: the ordinals are rewritten, and a fresh write right after still
+    // succeeds (it would error with "cannot start a transaction within a
+    // transaction" had the savepoint leaked).
+    #[test]
+    fn reorder_commits_and_leaves_connection_clean() {
+        let db = Database::for_test();
+        let card_id = seed_deck_and_card(&db);
+        let conn = db.lock();
+        let repo = PalaceRepo::new(&conn);
+        let p = repo.create("House", None, "house", 1_700_000_000).unwrap();
+        db.notes(&conn)
+            .create(
+                1,
+                NoteTemplate::Basic,
+                json!({ "front": "Q2", "back": "A2" }),
+                vec![],
+                None,
+            )
+            .unwrap();
+        let card_id_2 = db
+            .cards(&conn)
+            .list_in_deck(1, 10, 0)
+            .unwrap()
+            .into_iter()
+            .find(|c| c.card.id != card_id)
+            .unwrap()
+            .card
+            .id;
+        let l1 = repo
+            .add_locus(p.id, card_id, 0.0, 0.0, 0.0, None, 1_700_000_001)
+            .unwrap();
+        let l2 = repo
+            .add_locus(p.id, card_id_2, 1.0, 0.0, 0.0, None, 1_700_000_002)
+            .unwrap();
+
+        repo.reorder_loci(p.id, &[l2.id, l1.id]).unwrap();
+        let refreshed = repo.get(p.id).unwrap();
+        assert_eq!(refreshed.loci[0].id, l2.id);
+        assert_eq!(refreshed.loci[0].ordinal, 1);
+        assert_eq!(refreshed.loci[1].id, l1.id);
+        assert_eq!(refreshed.loci[1].ordinal, 2);
+
+        // No transaction should remain open — a new one must start cleanly.
+        conn.unchecked_transaction()
+            .expect("connection should be free of an open transaction after reorder");
     }
 }

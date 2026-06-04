@@ -184,7 +184,11 @@ export interface DeckStats {
   new_cards: number;
   learning_cards: number;
   review_cards: number;
+  /** P080 — suspended cards, the missing summand of `total_cards`. */
+  suspended_cards: number;
   due_today: number;
+  /** P057 — cards the Deck Podcast can voice (every non-occlusion template). */
+  podcastable_cards: number;
 }
 
 export interface Note {
@@ -1234,8 +1238,8 @@ export const api = {
      * Create one Basic card (front = word, back = « (à traduire) ») per
      * distinct word in `words`, inside `deckId`. Returns the count created.
      */
-    createCardsFromWords: (deckId: number, words: string[]) =>
-      invoke<number>("create_cards_from_words", { deckId, words }),
+    createCardsFromWords: (deckId: number, words: string[], translations: string[] = []) =>
+      invoke<number>("create_cards_from_words", { deckId, words, translations }),
   },
   plans: {
     /** Every study plan, newest first. */

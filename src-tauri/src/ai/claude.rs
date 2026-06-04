@@ -95,6 +95,19 @@ impl From<ClaudeError> for AppError {
     }
 }
 
+/// P090 — map an upstream HTTP status to a short, controlled French message.
+/// The detailed (and potentially sensitive / attacker-controlled) body is
+/// logged backend-side and never reaches the UI toast.
+fn safe_api_message(status: u16) -> &'static str {
+    match status {
+        401 | 403 => "clé API Anthropic invalide ou non autorisée",
+        429 => "quota Claude dépassé — réessaie plus tard",
+        s if s >= 500 => "service Claude indisponible — réessaie plus tard",
+        400 => "requête refusée par Claude (contenu ou format invalide)",
+        _ => "erreur de l'API Claude",
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Client
 // ---------------------------------------------------------------------------
@@ -174,16 +187,18 @@ impl ClaudeClient {
 
         let status = resp.status();
         if !status.is_success() {
-            // Surface the raw body — Anthropic embeds a JSON `{"type":
-            // "error", "error": {"type": "...", "message": "..."}}` which is
-            // already human-readable enough for our top-level toast.
-            let body = resp
-                .text()
-                .await
-                .unwrap_or_else(|_| "<no body>".to_string());
+            // P090 — never surface the upstream body verbatim to the UI: an
+            // Anthropic error body can carry request fragments / org / quota
+            // detail, and on an attacker-controlled endpoint it is fully
+            // attacker-controlled text rendered in a toast. Read it for the
+            // backend log only, then return a short status-mapped message.
+            let code = status.as_u16();
+            let body = resp.text().await.unwrap_or_default();
+            let body_preview: String = body.chars().take(500).collect();
+            eprintln!("[ai] Claude API {code}: {body_preview}");
             return Err(ClaudeError::Api {
-                status: status.as_u16(),
-                message: body,
+                status: code,
+                message: safe_api_message(code).to_string(),
             });
         }
 

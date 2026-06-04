@@ -155,28 +155,74 @@ impl<'a> ReadingRepo<'a> {
         })
     }
 
-    /// Mint one Basic note (front = word, back = placeholder) per distinct
-    /// word in `words`, inside `deck_id`. Returns how many notes were created.
+    /// Mint one Basic note (front = word, back = translation or placeholder)
+    /// per distinct word in `words`, inside `deck_id`. Returns how many notes
+    /// were created.
+    ///
+    /// `translations` is a parallel slice (Vague 17, P079): when a word at
+    /// index `i` has a non-empty `translations[i]`, that gloss becomes the
+    /// verso instead of the `(à traduire)` placeholder. The front-end fills it
+    /// from its embedded English→French dictionary (`lookupLocal`) so reading
+    /// cards land pre-translated for common words, exactly like the
+    /// Vocabulary Builder — no more hand-retranslating « new = nouveau ». Pass
+    /// an empty slice (or shorter than `words`) to fall back to the
+    /// placeholder for the un-glossed tail.
     ///
     /// Words are normalised + deduplicated first; blank inputs are skipped.
-    /// Card creation goes through [`NoteRepo::create`] so the derived `cards`
-    /// row and the FTS index land exactly as they would for a hand-typed card.
-    /// A single failed insert aborts the batch (the whole call is one logical
-    /// action), surfacing the underlying error to the caller.
-    pub fn create_cards_from_words(&self, deck_id: i64, words: &[String]) -> AppResult<usize> {
+    /// Card creation goes through [`NoteRepo::create_inner`] so the derived
+    /// `cards` row and the FTS index land exactly as they would for a
+    /// hand-typed card. P064: the WHOLE batch runs inside ONE transaction —
+    /// a 5 000-word import pays a single commit/fsync instead of one per note,
+    /// and a failure mid-batch rolls every note back (the call is documented
+    /// as one logical action, so it must also be atomic).
+    pub fn create_cards_from_words(
+        &self,
+        deck_id: i64,
+        words: &[String],
+        translations: &[String],
+    ) -> AppResult<usize> {
+        self.conn.execute_batch("BEGIN;")?;
+        match self.create_cards_from_words_inner(deck_id, words, translations) {
+            Ok(created) => {
+                self.conn.execute_batch("COMMIT;")?;
+                Ok(created)
+            }
+            Err(e) => {
+                let _ = self.conn.execute_batch("ROLLBACK;");
+                Err(e)
+            }
+        }
+    }
+
+    /// P064 — body of [`Self::create_cards_from_words`], run inside the
+    /// caller's transaction. Delegates to [`NoteRepo::create_inner`] (no
+    /// per-note BEGIN/COMMIT) so the batch commits once.
+    fn create_cards_from_words_inner(
+        &self,
+        deck_id: i64,
+        words: &[String],
+        translations: &[String],
+    ) -> AppResult<usize> {
         let mut seen = std::collections::BTreeSet::new();
         let mut created = 0usize;
         let notes = NoteRepo::new(self.conn);
-        for raw in words {
+        for (i, raw) in words.iter().enumerate() {
             let normalized = normalize_word(raw);
             if normalized.is_empty() || !seen.insert(normalized.clone()) {
                 continue;
             }
+            // P079 — prefer the supplied gloss; fall back to the placeholder
+            // when it's missing or blank.
+            let back = translations
+                .get(i)
+                .map(|t| t.trim())
+                .filter(|t| !t.is_empty())
+                .unwrap_or(TRANSLATION_PLACEHOLDER);
             let fields = serde_json::json!({
                 "front": normalized,
-                "back": TRANSLATION_PLACEHOLDER,
+                "back": back,
             });
-            notes.create(
+            notes.create_inner(
                 deck_id,
                 NoteTemplate::Basic,
                 fields,
@@ -283,12 +329,67 @@ mod tests {
             "banana".to_string(),
         ];
         let n = repo
-            .create_cards_from_words(deck_id, &words)
+            .create_cards_from_words(deck_id, &words, &[])
             .expect("create");
         assert_eq!(n, 2, "only two distinct non-blank words become cards");
 
         // The notes really landed in the deck.
         let notes = db.notes(&conn).list_in_deck(deck_id, 50, 0).expect("list");
         assert_eq!(notes.len(), 2);
+    }
+
+    /// P079 — a supplied translation becomes the verso; a missing/blank one
+    /// falls back to the placeholder. The slice is positional w.r.t. `words`.
+    #[test]
+    fn create_cards_uses_supplied_translations() {
+        let db = Database::for_test();
+        let deck_id = seed_deck(&db);
+        let conn = db.lock();
+        let repo = ReadingRepo::new(&conn);
+
+        let words = vec!["new".to_string(), "xyzzy".to_string()];
+        // "new" gets a gloss; "xyzzy" has a blank slot → placeholder.
+        let translations = vec!["nouveau".to_string(), "   ".to_string()];
+        let n = repo
+            .create_cards_from_words(deck_id, &words, &translations)
+            .expect("create");
+        assert_eq!(n, 2);
+
+        let notes = db.notes(&conn).list_in_deck(deck_id, 50, 0).expect("list");
+        let back_of = |word: &str| -> String {
+            notes
+                .iter()
+                .find(|note| note.fields.get("front").and_then(|v| v.as_str()) == Some(word))
+                .and_then(|note| note.fields.get("back").and_then(|v| v.as_str()))
+                .unwrap_or_default()
+                .to_string()
+        };
+        assert_eq!(back_of("new"), "nouveau", "supplied gloss wins");
+        assert_eq!(
+            back_of("xyzzy"),
+            TRANSLATION_PLACEHOLDER,
+            "blank gloss falls back to the placeholder"
+        );
+    }
+
+    /// P064 — a failure mid-batch rolls the whole batch back (the call is one
+    /// logical action). Feeding a non-existent deck makes `create_for_note`'s
+    /// FK insert fail, so no note from the batch must survive.
+    #[test]
+    fn create_cards_is_atomic_on_failure() {
+        let db = Database::for_test();
+        let conn = db.lock();
+        let repo = ReadingRepo::new(&conn);
+
+        let words = vec!["alpha".to_string(), "beta".to_string()];
+        // deck_id = 999_999 doesn't exist → the cards FK violation aborts.
+        let result = repo.create_cards_from_words(999_999, &words, &[]);
+        assert!(result.is_err(), "an invalid deck must fail the batch");
+
+        // Nothing leaked: zero notes were committed.
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM notes", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0, "a failed batch leaves no notes behind");
     }
 }

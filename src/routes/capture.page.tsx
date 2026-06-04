@@ -34,6 +34,13 @@ interface DraftCard {
   template: "cloze" | "basic";
   fields: Record<string, string>;
   preview: string;
+  /**
+   * Source line this draft was built from. Kept so that, on a partial
+   * creation failure, we can rebuild the editable text with only the lines
+   * whose cards weren't persisted — re-clicking « Créer » then retries the
+   * failures without duplicating the cards that already succeeded.
+   */
+  sourceLine: string;
 }
 
 /**
@@ -67,7 +74,7 @@ function buildCards(lines: string[], mode: CardMode): DraftCard[] {
         // Splice by exact index so only the chosen token is masked, even when
         // it also appears as a substring of another word on the line.
         const text = `${line.slice(0, index)}{{c1::${word}}}${line.slice(index + word.length)}`;
-        return { template: "cloze", fields: { text }, preview: text };
+        return { template: "cloze", fields: { text }, preview: text, sourceLine: line };
       })
       .filter((c): c is DraftCard => c !== null);
   }
@@ -79,7 +86,12 @@ function buildCards(lines: string[], mode: CardMode): DraftCard[] {
       const front = parts[0]?.trim() ?? "";
       const back = parts.slice(1).join(" ").trim();
       if (!front || !back) return null;
-      return { template: "basic", fields: { front, back }, preview: `${front} → ${back}` };
+      return {
+        template: "basic",
+        fields: { front, back },
+        preview: `${front} → ${back}`,
+        sourceLine: line,
+      };
     })
     .filter((c): c is DraftCard => c !== null);
 }
@@ -100,7 +112,16 @@ export default function CapturePage() {
   const [ocrLang, setOcrLang] = useState<OcrLang>(DEFAULT_OCR_LANG);
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => () => void terminateOcr(), []);
+  // Guards state updates / toasts that resolve after the component unmounts
+  // (e.g. the user navigates away while an OCR recognition is still in flight).
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      void terminateOcr();
+    };
+  }, []);
 
   const loadFile = useCallback((file: File) => {
     if (!file.type.startsWith("image/")) return;
@@ -143,7 +164,18 @@ export default function CapturePage() {
     setBusy(true);
     setProgress(0);
     try {
-      const result = await runOcr(imageUrl, setProgress, ocrLang);
+      // Scope progress updates to a mounted component — the OCR run can resolve
+      // after the page unmounts.
+      const result = await runOcr(
+        imageUrl,
+        (p) => {
+          if (mountedRef.current) setProgress(p);
+        },
+        ocrLang,
+      );
+      // Bail out silently if we unmounted while recognition was running:
+      // touching state or toasting now would warn / leak.
+      if (!mountedRef.current) return;
       setOcr(result);
       setText(result.text.trim());
       if (result.lang !== ocrLang) {
@@ -161,13 +193,14 @@ export default function CapturePage() {
         });
       }
     } catch (err) {
+      if (!mountedRef.current) return;
       toast({
         title: "Échec de l'OCR",
         description: err instanceof Error ? err.message : String(err),
         variant: "destructive",
       });
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   }, [imageUrl, toast, ocrLang]);
 
@@ -182,28 +215,58 @@ export default function CapturePage() {
     if (!id || drafts.length === 0) return;
     setCreating(true);
     let ok = 0;
+    // Lines whose card failed to persist — kept so a retry only re-creates
+    // those, never the ones that already succeeded (would otherwise duplicate).
+    const failedLines: string[] = [];
+    let lastError: unknown = null;
     try {
+      // Resilient loop: a single failure no longer aborts the batch. We catch
+      // per card, keep going, and aggregate the outcome at the end (mirrors
+      // AiGenerator.handleCreateAll).
       for (const draft of drafts) {
-        await createNote.mutateAsync({
-          deckId: id,
-          template: draft.template,
-          fields: draft.fields,
-          tags: ["capture"],
-        });
-        ok += 1;
+        try {
+          await createNote.mutateAsync({
+            deckId: id,
+            template: draft.template,
+            fields: draft.fields,
+            tags: ["capture"],
+          });
+          ok += 1;
+        } catch (err) {
+          failedLines.push(draft.sourceLine);
+          lastError = err;
+        }
       }
+    } finally {
+      setCreating(false);
+    }
+
+    if (failedLines.length === 0) {
+      // Full success — clear everything so the user starts fresh.
       toast({ title: `${ok} carte${ok > 1 ? "s" : ""} créée${ok > 1 ? "s" : ""}` });
       setImageUrl(null);
       setOcr(null);
       setText("");
-    } catch (err) {
+      return;
+    }
+
+    // Partial (or total) failure. Shrink the editable text down to the lines
+    // that failed so re-clicking « Créer » retries only those — the already
+    // persisted cards won't be recreated.
+    const remaining = failedLines.join("\n");
+    setText(remaining);
+    if (ok > 0) {
       toast({
         title: `Créées : ${ok}/${drafts.length}`,
-        description: err instanceof Error ? err.message : String(err),
+        description: `${failedLines.length} échec${failedLines.length > 1 ? "s" : ""} conservé${failedLines.length > 1 ? "s" : ""} dans le texte — corrige et relance la création.`,
         variant: "destructive",
       });
-    } finally {
-      setCreating(false);
+    } else {
+      toast({
+        title: "Aucune carte créée",
+        description: lastError instanceof Error ? lastError.message : String(lastError),
+        variant: "destructive",
+      });
     }
   }, [deckId, drafts, createNote, toast]);
 

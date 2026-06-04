@@ -140,6 +140,17 @@ export function ReviewControls({
                     ? intervals.good.interval_days
                     : intervals.easy.interval_days;
           const isPending = pendingRating === r.rating;
+          // P105 — describe the whole button to screen readers: the grade, the
+          // planned next interval (or its loading / error state), and the
+          // shortcut. The visual chip below only ever showed `…` / `—` /
+          // `7 j`, none of which a SR announced beyond the bare label.
+          const intervalAria = isPending
+            ? "enregistrement en cours"
+            : next.isError
+              ? "intervalle indisponible"
+              : interval === null
+                ? "calcul de l'intervalle en cours"
+                : `prochaine révision ${intervalToSpeech(interval)}`;
           return (
             <motion.div
               key={r.rating}
@@ -152,8 +163,9 @@ export function ReviewControls({
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => onRate(r.rating)}
-                aria-label={`${r.label} (touche ${r.hotkey})`}
+                aria-label={`${r.label}, ${intervalAria} (touche ${r.hotkey})`}
                 aria-keyshortcuts={r.hotkey}
+                aria-busy={isPending || (interval === null && !next.isError)}
                 data-testid={`rating-${r.rating}`}
                 className={cn(
                   "flex w-full flex-col items-center justify-center gap-1 rounded-md px-3 py-3 text-sm font-semibold shadow-sm transition-colors",
@@ -168,7 +180,13 @@ export function ReviewControls({
                     {r.hotkey}
                   </span>
                 </span>
-                <span className="font-mono text-[11px] font-normal tabular-nums opacity-90">
+                {/* P105 — visual chip stays terse; `aria-hidden` so the SR uses
+                    the richer `aria-label` above instead of double-reading the
+                    `…` / `—` glyph. */}
+                <span
+                  aria-hidden
+                  className="font-mono text-[11px] font-normal tabular-nums opacity-90"
+                >
                   {isPending ? "…" : interval === null ? "—" : formatInterval(interval)}
                 </span>
               </button>
@@ -178,4 +196,32 @@ export function ReviewControls({
       </div>
     </div>
   );
+}
+
+/**
+ * P105 — spell out an FSRS interval (in possibly-fractional days) as a French
+ * phrase for screen readers (« dans 7 jours », « dans 10 minutes »). Mirrors
+ * the buckets of `formatInterval` but uses full words instead of the terse
+ * visual abbreviations a SR would mispronounce (« j », « h »).
+ */
+function intervalToSpeech(days: number): string {
+  if (!Number.isFinite(days) || days < 0) return "indisponible";
+  if (days === 0) return "dans moins de 10 minutes";
+  if (days < 1) {
+    const totalMinutes = Math.max(1, Math.round(days * 24 * 60));
+    if (totalMinutes < 60) {
+      return `dans ${totalMinutes} minute${totalMinutes > 1 ? "s" : ""}`;
+    }
+    const hours = Math.round(days * 24 * 10) / 10;
+    const rounded = Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+    return `dans ${rounded} heure${hours > 1 ? "s" : ""}`;
+  }
+  if (days === 1) return "dans 1 jour";
+  if (days < 30) return `dans ${Math.round(days)} jours`;
+  if (days < 365) {
+    const months = Number((days / 30).toFixed(1));
+    return `dans ${months} mois`;
+  }
+  const years = Number((days / 365).toFixed(1));
+  return `dans ${years} an${years > 1 ? "s" : ""}`;
 }

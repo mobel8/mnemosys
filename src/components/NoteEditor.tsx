@@ -35,6 +35,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
@@ -45,6 +52,13 @@ import { cn } from "@/lib/utils";
 
 const MAX_TAGS = 10;
 const TAG_SEPARATORS = [",", "Enter"];
+
+/**
+ * Radix `<Select>` forbids an empty-string item value, so the "Aucune" (no
+ * frequency band) option is carried by this sentinel and converted back to
+ * `null` on change. Mirrors the null⇄sentinel pattern used elsewhere.
+ */
+const NO_BAND = "__none__";
 
 type TemplateTab = NoteTemplate;
 
@@ -620,18 +634,23 @@ export function NoteEditor({ deckId, onAdded, note, onUpdated }: NoteEditorProps
           </div>
           <div className="space-y-2">
             <Label htmlFor="sentence-freq">Bande de fréquence</Label>
-            <select
-              id="sentence-freq"
-              value={frequencyBand ?? ""}
-              onChange={(e) => setFrequencyBand((e.target.value || null) as FrequencyBand | null)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            <Select
+              value={frequencyBand ?? NO_BAND}
+              onValueChange={(value) =>
+                setFrequencyBand(value === NO_BAND ? null : (value as FrequencyBand))
+              }
             >
-              {FREQUENCY_BAND_OPTIONS.map((opt) => (
-                <option key={opt.value ?? "none"} value={opt.value ?? ""}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id="sentence-freq">
+                <SelectValue placeholder="Aucune" />
+              </SelectTrigger>
+              <SelectContent>
+                {FREQUENCY_BAND_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value ?? NO_BAND} value={opt.value ?? NO_BAND}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-xs text-muted-foreground">
               Classe le vocabulaire par fréquence pour suivre ta couverture lexicale (Pareto 80/20).
             </p>

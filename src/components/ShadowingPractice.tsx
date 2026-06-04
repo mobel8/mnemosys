@@ -138,10 +138,22 @@ export function ShadowingPractice() {
   const stopTimerRef = useRef<number | null>(null);
   // Track the last object URL so we can revoke it before replacing.
   const userUrlRef = useRef<string | null>(null);
+  // `false` once the component has unmounted: async callbacks (onstop,
+  // decodeToPeaks resolutions) must not touch React state afterwards, and we
+  // must never resurrect a torn-down AudioContext.
+  const mountedRef = useRef(true);
+  // Monotonic token for the reference (TTS) pipeline. Each handleListen()
+  // captures the current value on entry and drops its src/peaks if a newer
+  // listen has superseded it — so a slow synthesis from an abandoned sentence
+  // can never overwrite the current reference (stale-resolution guard).
+  const listenGenRef = useRef(0);
 
   /** Lazily build (or resume) the shared AudioContext for decoding. */
   const getAudioContext = useCallback((): AudioContext | null => {
     if (typeof window === "undefined") return null;
+    // After teardown we never rebuild the context — a late decode call must
+    // not leak a fresh, never-closed AudioContext.
+    if (!mountedRef.current) return null;
     const Ctor =
       window.AudioContext ??
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -182,6 +194,7 @@ export function ShadowingPractice() {
   // Tear everything down on unmount.
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
       clearStopTimer();
       try {
         recorderRef.current?.stop();
@@ -213,8 +226,14 @@ export function ShadowingPractice() {
   async function handleListen() {
     const trimmed = sentence.trim();
     if (trimmed.length === 0) return;
+    // Claim a generation: any earlier in-flight listen is now stale and must
+    // not write back its src/peaks.
+    listenGenRef.current += 1;
+    const gen = listenGenRef.current;
     try {
       const result = await synthesize.mutateAsync({ text: trimmed, voice, speed });
+      // A newer listen (or unmount) superseded us while synthesis was pending.
+      if (gen !== listenGenRef.current || !mountedRef.current) return;
       const src = convertFileSrc(result.path);
       // Play it…
       const audio = refAudioRef.current;
@@ -228,11 +247,14 @@ export function ShadowingPractice() {
         const resp = await fetch(src);
         const buf = await resp.arrayBuffer();
         const peaks = await decodeToPeaks(buf);
+        // Re-check: decoding is async too, so a newer round may have started.
+        if (gen !== listenGenRef.current || !mountedRef.current) return;
         setRefPeaks(peaks);
       } catch (err) {
         console.warn("[shadowing] could not decode reference audio", err);
       }
     } catch (err) {
+      if (gen !== listenGenRef.current || !mountedRef.current) return;
       const message = err instanceof Error ? err.message : String(err);
       const isMissingKey = /api key/i.test(message);
       toast({
@@ -311,6 +333,9 @@ export function ShadowingPractice() {
       cleanupStream();
       const chunks = chunksRef.current;
       chunksRef.current = [];
+      // Unmounted while the recorder was flushing: do not touch state. The
+      // teardown effect has already revoked any tracked URL, so just bail.
+      if (!mountedRef.current) return;
       if (chunks.length === 0) {
         setRecState("idle");
         return;
@@ -327,16 +352,19 @@ export function ShadowingPractice() {
       try {
         const buf = await blob.arrayBuffer();
         const peaks = await decodeToPeaks(buf);
+        if (!mountedRef.current) return; // decode is async — re-check.
         setUserPeaks(peaks);
       } catch (err) {
         console.warn("[shadowing] could not decode recording", err);
-        toast({
-          title: "Analyse audio impossible",
-          description: "L'enregistrement a été capturé mais n'a pas pu être décodé.",
-          variant: "destructive",
-        });
+        if (mountedRef.current) {
+          toast({
+            title: "Analyse audio impossible",
+            description: "L'enregistrement a été capturé mais n'a pas pu être décodé.",
+            variant: "destructive",
+          });
+        }
       } finally {
-        setRecState("idle");
+        if (mountedRef.current) setRecState("idle");
       }
     };
 
@@ -448,7 +476,7 @@ export function ShadowingPractice() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Comparaison des waveforms</CardTitle>
+          <CardTitle className="text-lg">Comparaison des formes d'onde</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">

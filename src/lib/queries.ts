@@ -439,6 +439,12 @@ export function useDeleteNote(opts?: UseMutationOptions<void, Error, number>) {
     onSuccess: (data, variables, onMutateResult, context) => {
       qc.invalidateQueries({ queryKey: ["cards-in-deck"] });
       qc.invalidateQueries({ queryKey: ["deck-stats"] });
+      // P056 — a deleted note removes its card(s) from the due queue and
+      // reshapes the deck's mastery distribution (and the Bloom gate). The
+      // command returns `void` (no deck id), so invalidate the whole families.
+      qc.invalidateQueries({ queryKey: ["due-cards"] });
+      qc.invalidateQueries({ queryKey: ["deck-mastery"] });
+      qc.invalidateQueries({ queryKey: ["deck-mastery-status"] });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -455,6 +461,11 @@ export function useSuspendCard(
       qc.invalidateQueries({ queryKey: ["cards-in-deck"] });
       qc.invalidateQueries({ queryKey: ["due-cards"] });
       qc.invalidateQueries({ queryKey: ["deck-stats"] });
+      // P056 — suspending / unsuspending a card shifts the deck's mastery
+      // distribution (and may flip the Bloom gate). The command returns `void`,
+      // so invalidate the whole mastery families.
+      qc.invalidateQueries({ queryKey: ["deck-mastery"] });
+      qc.invalidateQueries({ queryKey: ["deck-mastery-status"] });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -470,6 +481,12 @@ export function useResetCard(opts?: UseMutationOptions<Card, Error, number>) {
       qc.invalidateQueries({ queryKey: ["cards-in-deck"] });
       qc.invalidateQueries({ queryKey: ["due-cards"] });
       qc.invalidateQueries({ queryKey: ["deck-stats"] });
+      // P056 — resetting a card to `new` drops it out of the « mastered »
+      // tally, so refresh the deck's mastery (targeted via the returned card's
+      // deck) plus the whole gate-status family (a reset can re-lock a deck
+      // gated behind this one).
+      qc.invalidateQueries({ queryKey: queryKeys.deckMastery(data.deck_id) });
+      qc.invalidateQueries({ queryKey: ["deck-mastery-status"] });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -505,7 +522,12 @@ export function useSubmitReview(
       // A review shifts this deck's retention, which may unlock decks gated
       // behind it — refresh the whole mastery-status family (Vague 15).
       qc.invalidateQueries({ queryKey: ["deck-mastery-status"] });
-      qc.invalidateQueries({ queryKey: queryKeys.nextStates(variables.cardId) });
+      // P127 — the card we just graded leaves the queue and won't be shown
+      // again this session, so *drop* its interval preview rather than marking
+      // it stale (which would trigger a wasted `preview_next_states` IPC +
+      // FSRS tensor pass in the background). It'll be re-fetched fresh if the
+      // card ever comes back due.
+      qc.removeQueries({ queryKey: queryKeys.nextStates(variables.cardId) });
       // Gamification side-effects.
       qc.invalidateQueries({ queryKey: queryKeys.userStats });
       qc.invalidateQueries({ queryKey: queryKeys.achievements });
@@ -1385,11 +1407,16 @@ export function useSetWordStatus(
  * card list so the deck detail page reflects the freshly-minted notes.
  */
 export function useCreateCardsFromWords(
-  opts?: UseMutationOptions<number, Error, { deckId: number; words: string[] }>,
+  opts?: UseMutationOptions<
+    number,
+    Error,
+    { deckId: number; words: string[]; translations?: string[] }
+  >,
 ) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ deckId, words }) => api.reading.createCardsFromWords(deckId, words),
+    mutationFn: ({ deckId, words, translations }) =>
+      api.reading.createCardsFromWords(deckId, words, translations ?? []),
     ...opts,
     onSuccess: (data, variables, onMutateResult, context) => {
       qc.invalidateQueries({ queryKey: queryKeys.deckStats(variables.deckId) });

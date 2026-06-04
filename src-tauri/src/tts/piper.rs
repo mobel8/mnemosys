@@ -96,6 +96,22 @@ pub fn synthesize_piper(binary: &str, model: &str, text: &str, out_path: &Path) 
             ))
         })?;
 
+    // P119 — drain stderr on a dedicated thread *before* we start polling for
+    // exit. A verbose Piper build can emit well over the ~64 KB pipe buffer; if
+    // we only read stderr in the failure branch (after the wait loop) the child
+    // blocks on a full pipe and never exits, so `try_wait` spins until the 60 s
+    // timeout kills a synthesis that would otherwise have succeeded — the
+    // classic pipe-full deadlock, well known for stdin but just as real for
+    // stderr. Reading it concurrently keeps the pipe drained at all times.
+    let stderr_handle = child.stderr.take().map(|mut s| {
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut buf = String::new();
+            let _ = s.read_to_string(&mut buf);
+            buf
+        })
+    });
+
     // Feed the text on stdin, then drop the handle so Piper sees EOF and starts
     // synthesising. Holding the handle would deadlock against a child that
     // waits for end-of-input.
@@ -110,6 +126,15 @@ pub fn synthesize_piper(binary: &str, model: &str, text: &str, out_path: &Path) 
         })?;
     }
 
+    // Join the stderr reader once the child has been waited on. The thread ends
+    // as soon as the child closes its stderr (i.e. on exit or kill), so this
+    // never blocks beyond the child's own lifetime. Defaults to empty if the
+    // pipe was missing or the reader thread panicked.
+    let collect_stderr =
+        |handle: Option<std::thread::JoinHandle<String>>| -> String {
+            handle.and_then(|h| h.join().ok()).unwrap_or_default()
+        };
+
     // Bounded wait. `std::process` has no native timeout, so poll `try_wait`
     // on a short interval up to the ceiling. This keeps the dependency surface
     // at zero while still protecting against a wedged child.
@@ -121,6 +146,8 @@ pub fn synthesize_piper(binary: &str, model: &str, text: &str, out_path: &Path) 
                 if std::time::Instant::now() >= deadline {
                     let _ = child.kill();
                     let _ = child.wait();
+                    // Reap the drainer so the thread doesn't outlive us.
+                    let _ = collect_stderr(stderr_handle);
                     return Err(AppError::Other(format!(
                         "Piper unavailable: synthesis timed out after {PIPER_TIMEOUT_SECS}s."
                     )));
@@ -128,6 +155,7 @@ pub fn synthesize_piper(binary: &str, model: &str, text: &str, out_path: &Path) 
                 std::thread::sleep(std::time::Duration::from_millis(50));
             }
             Err(e) => {
+                let _ = collect_stderr(stderr_handle);
                 return Err(AppError::Other(format!(
                     "Piper unavailable: failed while waiting on the process ({e})."
                 )));
@@ -135,17 +163,10 @@ pub fn synthesize_piper(binary: &str, model: &str, text: &str, out_path: &Path) 
         }
     };
 
+    // Always join the drainer so the thread is reaped, even on success.
+    let stderr = collect_stderr(stderr_handle);
+
     if !status.success() {
-        let stderr = child
-            .stderr
-            .take()
-            .map(|mut s| {
-                let mut buf = String::new();
-                use std::io::Read;
-                let _ = s.read_to_string(&mut buf);
-                buf
-            })
-            .unwrap_or_default();
         let detail = stderr.trim();
         let suffix = if detail.is_empty() {
             String::new()
@@ -156,6 +177,8 @@ pub fn synthesize_piper(binary: &str, model: &str, text: &str, out_path: &Path) 
             "Piper unavailable: synthesis failed with status {status}{suffix}."
         )));
     }
+    // `stderr` is intentionally dropped on the success path (already drained).
+    drop(stderr);
 
     // Defend against a "success" exit that produced nothing (e.g. wrong model
     // type). Without this the caller would cache an empty file and the UI

@@ -120,10 +120,16 @@ export function DeckCard({ deck }: DeckCardProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [podcastOpen, setPodcastOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const cardCount = stats.data?.total_cards ?? 0;
+  // P057 — the podcast gate must count only *podcastable* cards (those whose
+  // text the backend can extract). Image-occlusion notes carry no usable text,
+  // so `fetch_deck_cards` skips them; gating on `total_cards` would offer the
+  // option for an occlusion-only deck and then fail server-side with
+  // « deck must contain at least 3 cards ». `podcastable_cards` mirrors the
+  // exact set the backend extracts, keeping UI and server in lockstep.
+  const podcastableCount = stats.data?.podcastable_cards ?? 0;
   // Podcast generation makes sense only when the deck has enough material;
-  // the backend enforces the same floor (≥3 cards).
-  const canPodcast = cardCount >= 3;
+  // the backend enforces the same floor (≥3 podcastable cards).
+  const canPodcast = podcastableCount >= 3;
 
   // P013b — decks that list this one as their Bloom prerequisite. The backend
   // uses ON DELETE SET NULL, so deleting succeeds and simply unlocks them; we
