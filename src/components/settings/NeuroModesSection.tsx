@@ -11,7 +11,7 @@
  *   - Cyclic sighing      : Spiegel et al., Cell Reports Medicine 2023.
  */
 
-import { Loader2, Moon, Save, Volume2 } from "lucide-react";
+import { AlertTriangle, Loader2, Moon, RotateCcw, Save, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CHRONOTYPE_INFO, type Chronotype, ChronotypeQuiz } from "@/components/ChronotypeQuiz";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/use-toast";
 import { type AmbientKind, createAmbient } from "@/lib/ambient";
 import { useSaveSettings, useSettingsQuery } from "@/lib/queries";
+import { DEFAULT_SETTINGS as DEFAULTS } from "@/lib/stores/settings";
 import type { AppSettings } from "@/lib/tauri";
 
 /** Ambient-sound dropdown options. */
@@ -43,49 +44,66 @@ const AMBIENT_OPTIONS: { value: AmbientKind; label: string }[] = [
 /** How long the « Tester » button previews an ambience, in ms. */
 const AMBIENT_PREVIEW_MS = 3000;
 
-const DEFAULTS: AppSettings = {
-  theme: "system",
-  desired_retention: 0.9,
-  daily_new_limit: 20,
-  daily_review_limit: 200,
-  show_next_interval: true,
-  openai_api_key: null,
-  tts_voice: null,
-  tts_speed: null,
-  piper_enabled: false,
-  piper_binary_path: "",
-  piper_model_path: "",
-  anthropic_api_key: null,
-  supabase_url: null,
-  supabase_anon_key: null,
-  type_the_answer_enabled: false,
-  confidence_rating_enabled: false,
-  pre_questioning_enabled: false,
-  neuro_modes_enabled: false,
-  mood_checkin_enabled: false,
-  movement_break_minutes: 25,
-  cyclic_sighing_enabled: false,
-  sketch_before_flip_enabled: false,
-  delayed_jol_enabled: false,
-  jol_delay_minutes: 30,
-  voice_answer_enabled: false,
-  pretest_mode_enabled: false,
-  self_explanation_enabled: false,
-  focus_guard_enabled: false,
-  ollama_enabled: false,
-  ollama_url: null,
-  ollama_model: null,
-  chronotype: null,
-  ambient_sound: "none",
-  hands_free_enabled: false,
-};
-
 const MIN_MINUTES = 10;
 const MAX_MINUTES = 60;
 
 function clamp(value: number, min: number, max: number) {
   if (!Number.isFinite(value)) return min;
   return Math.min(Math.max(Math.round(value), min), max);
+}
+
+/**
+ * P108 — états de chargement / d'erreur harmonisés (mêmes motifs que les autres
+ * sections de réglages). Tant que la requête n'a pas réussi, on n'affiche pas le
+ * formulaire : le remplir avec les valeurs par défaut puis sauvegarder
+ * écraserait silencieusement la configuration serveur.
+ */
+function SettingsSkeleton() {
+  return (
+    <div
+      className="space-y-4"
+      role="status"
+      aria-busy="true"
+      aria-label="Chargement des paramètres"
+    >
+      <div className="h-9 w-1/2 animate-pulse rounded-lg bg-muted" />
+      <div className="h-20 w-full animate-pulse rounded-lg bg-muted" />
+      <div className="h-9 w-2/3 animate-pulse rounded-lg bg-muted" />
+    </div>
+  );
+}
+
+function SettingsErrorBanner({
+  message,
+  onRetry,
+  isRetrying,
+}: {
+  message: string;
+  onRetry: () => void;
+  isRetrying: boolean;
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm"
+    >
+      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+      <div className="flex-1 space-y-2">
+        <div>
+          <p className="font-medium text-destructive">Impossible de charger les paramètres</p>
+          <p className="mt-0.5 text-muted-foreground">{message}</p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={onRetry} disabled={isRetrying}>
+          {isRetrying ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RotateCcw className="h-4 w-4" />
+          )}
+          Réessayer
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function NeuroModesSection() {
@@ -189,6 +207,35 @@ export function NeuroModesSection() {
   }
 
   const masterOff = !draft.neuro_modes_enabled;
+
+  // P108 — tant que la requête n'a pas réussi, on n'affiche pas le formulaire :
+  // le remplir avec les DEFAULTS puis sauvegarder écraserait la config serveur.
+  if (!query.isSuccess) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Modes neuro (opt-in)</CardTitle>
+          <CardDescription>
+            Ces fonctionnalités sont opt-in et basées sur des études scientifiques (effets modérés).
+            <strong> Aucune prescription médicale.</strong>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {query.isError ? (
+            <SettingsErrorBanner
+              message={query.error.message}
+              onRetry={() => {
+                void query.refetch();
+              }}
+              isRetrying={query.isFetching}
+            />
+          ) : (
+            <SettingsSkeleton />
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>

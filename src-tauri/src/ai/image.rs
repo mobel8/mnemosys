@@ -152,59 +152,22 @@ impl ImageClient {
 
 /// Decode a standard (RFC 4648, padded) base64 string into bytes.
 ///
-/// Hand-rolled to avoid pulling in the `base64` crate just for one call (the
-/// constraint for this wave is no new Cargo dependencies). Returns `None` on
-/// any malformed input — an invalid character, bad length, or stray padding.
+/// P118 — the previous hand-rolled decoder could accept mis-placed padding in
+/// some edge cases. We now delegate to the audited `base64` crate (already a
+/// dependency, see `commands::whisper`), which rejects stray/interior padding
+/// strictly. ASCII whitespace (line wraps some encoders insert) is stripped
+/// first since the `STANDARD` engine treats whitespace as invalid. Returns
+/// `None` on any malformed input, preserving the caller's error contract.
 fn decode_b64_png(s: &str) -> Option<Vec<u8>> {
-    // Map an alphabet byte to its 6-bit value, or `None` if it isn't part of
-    // the standard base64 alphabet.
-    fn val(b: u8) -> Option<u8> {
-        match b {
-            b'A'..=b'Z' => Some(b - b'A'),
-            b'a'..=b'z' => Some(b - b'a' + 26),
-            b'0'..=b'9' => Some(b - b'0' + 52),
-            b'+' => Some(62),
-            b'/' => Some(63),
-            _ => None,
-        }
-    }
+    use base64::Engine;
 
-    // Strip ASCII whitespace (some encoders wrap lines); ignore nothing else.
     let bytes: Vec<u8> = s.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
-    if bytes.is_empty() || bytes.len() % 4 != 0 {
+    if bytes.is_empty() {
+        // Empty input would decode to an empty Vec; a PNG is never empty, so we
+        // treat it as malformed (keeps the decoder's "no bytes => None" contract).
         return None;
     }
-
-    let mut out = Vec::with_capacity(bytes.len() / 4 * 3);
-    for chunk in bytes.chunks(4) {
-        let pad = chunk.iter().filter(|&&b| b == b'=').count();
-        if pad > 2 {
-            return None;
-        }
-        // Padding may only appear at the very end of the input.
-        let mut acc: u32 = 0;
-        for (i, &b) in chunk.iter().enumerate() {
-            let six = if b == b'=' {
-                // A '=' is only legal in the last 1-2 positions of the chunk.
-                if i < 4 - pad {
-                    return None;
-                }
-                0
-            } else {
-                val(b)? as u32
-            };
-            acc = (acc << 6) | six;
-        }
-        let bytes3 = acc.to_be_bytes(); // [_, hi, mid, lo]
-        out.push(bytes3[1]);
-        if pad < 2 {
-            out.push(bytes3[2]);
-        }
-        if pad < 1 {
-            out.push(bytes3[3]);
-        }
-    }
-    Some(out)
+    base64::engine::general_purpose::STANDARD.decode(bytes).ok()
 }
 
 /// Build the DALL·E prompt that anchors `front → back` as an absurd, memorable

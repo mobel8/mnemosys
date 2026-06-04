@@ -63,36 +63,31 @@ const LEVELS: readonly LevelDef[] = [
     level: 1,
     label: "1",
     tooltip: "Aucune confiance — pure intuition",
-    className:
-      "border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200",
+    className: "border-destructive/30 bg-destructive/10 text-foreground hover:bg-destructive/20",
   },
   {
     level: 2,
     label: "2",
     tooltip: "Peu confiant — j'hésite beaucoup",
-    className:
-      "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-900/40 dark:bg-orange-950/40 dark:text-orange-200",
+    className: "border-warning/30 bg-warning/10 text-foreground hover:bg-warning/20",
   },
   {
     level: 3,
     label: "3",
     tooltip: "Moyennement confiant — je pense savoir",
-    className:
-      "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200",
+    className: "border-warning/40 bg-warning/15 text-foreground hover:bg-warning/25",
   },
   {
     level: 4,
     label: "4",
     tooltip: "Confiant — je suis sûr·e à 80%",
-    className:
-      "border-lime-200 bg-lime-50 text-lime-800 hover:bg-lime-100 dark:border-lime-900/40 dark:bg-lime-950/40 dark:text-lime-200",
+    className: "border-success/30 bg-success/10 text-foreground hover:bg-success/20",
   },
   {
     level: 5,
     label: "5",
     tooltip: "Très confiant — je suis certain·e",
-    className:
-      "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200",
+    className: "border-success/45 bg-success/20 text-foreground hover:bg-success/30",
   },
 ];
 

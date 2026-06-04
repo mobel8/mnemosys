@@ -317,8 +317,10 @@ impl<'a> DeckRepo<'a> {
 
     /// Apply a partial update. Returns the refreshed row.
     pub fn update(&self, id: i64, patch: DeckPatch) -> AppResult<Deck> {
-        // Make sure the deck exists first — gives a nicer error than a no-op UPDATE.
-        let _ = self.get(id)?;
+        // Make sure the deck exists first — gives a nicer error than a no-op
+        // UPDATE. We keep the row so P073 can read the *old* `scheduler_kind`
+        // before the column is overwritten below.
+        let existing = self.get(id)?;
 
         if let Some(retention) = patch.desired_retention {
             if !(0.5..=0.99).contains(&retention) {
@@ -380,12 +382,48 @@ impl<'a> DeckRepo<'a> {
         }
         if let Some(kind) = patch.scheduler_kind {
             // CHECK constraint on the column guards against invalid values.
-            // Switching algorithms does NOT reset existing cards — see the
-            // crate-level docs on `scheduler` for the trade-off.
+            let old_kind = existing.scheduler_kind;
             self.conn.execute(
                 "UPDATE decks SET scheduler_kind = ?1, updated_at = ?2 WHERE id = ?3",
                 params![kind.as_str(), now, id],
             )?;
+            // P073 — switching algorithms re-interprets every existing card's
+            // memory fields through one algorithm-agnostic strength (days)
+            // instead of forwarding `(stability, difficulty)` verbatim, which
+            // mean different things per algorithm. We bridge via
+            // `crate::scheduler::convert_memory_fields`, anchoring on each
+            // card's `scheduled_days` (its last interval). No-op when the algo
+            // didn't actually change (the helper short-circuits, but we also
+            // skip the whole scan to avoid touching `updated_at` needlessly).
+            if old_kind != kind {
+                let mut stmt = self.conn.prepare(
+                    "SELECT id, stability, difficulty, scheduled_days
+                     FROM cards WHERE deck_id = ?1",
+                )?;
+                let rows = stmt
+                    .query_map(params![id], |r| {
+                        Ok((
+                            r.get::<_, i64>(0)?,
+                            r.get::<_, Option<f64>>(1)?,
+                            r.get::<_, Option<f64>>(2)?,
+                            r.get::<_, i64>(3)?,
+                        ))
+                    })?
+                    .collect::<rusqlite::Result<Vec<_>>>()?;
+                for (card_id, stability, difficulty, scheduled_days) in rows {
+                    let (new_stability, new_difficulty) = crate::scheduler::convert_memory_fields(
+                        old_kind,
+                        kind,
+                        stability,
+                        difficulty,
+                        scheduled_days,
+                    );
+                    self.conn.execute(
+                        "UPDATE cards SET stability = ?1, difficulty = ?2 WHERE id = ?3",
+                        params![new_stability, new_difficulty, card_id],
+                    )?;
+                }
+            }
         }
         if let Some(lang_opt) = patch.language_mode.as_ref() {
             // `Some(None)` clears the flag, `Some(Some(code))` sets it.

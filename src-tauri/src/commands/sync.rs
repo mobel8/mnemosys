@@ -7,7 +7,7 @@
 //!   2. **Configured but logged out** — login form, `sync_login` does the
 //!      OAuth password-grant against Supabase Auth.
 //!   3. **Active session** — `sync_now` runs one full cycle through
-//!      [`crate::sync::sync::run_cycle`].
+//!      [`crate::sync::cycle::run_cycle`].
 //!
 //! The JWT lives in `sync_session.json` (tauri-plugin-store). Removing the
 //! file is equivalent to a logout.

@@ -12,10 +12,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useCalibrationStats } from "@/lib/queries";
 
 function gammaInterpretation(g: number): { label: string; color: string } {
-  if (g >= 0.5) return { label: "Excellente calibration", color: "text-emerald-600" };
-  if (g >= 0.2) return { label: "Bonne calibration", color: "text-emerald-500" };
-  if (g >= 0) return { label: "Calibration modérée", color: "text-amber-500" };
-  return { label: "Calibration inverse (à corriger)", color: "text-red-500" };
+  if (g >= 0.5) return { label: "Excellente calibration", color: "text-success" };
+  if (g >= 0.2) return { label: "Bonne calibration", color: "text-success" };
+  if (g >= 0) return { label: "Calibration modérée", color: "text-warning" };
+  return { label: "Calibration inverse (à corriger)", color: "text-destructive" };
 }
 
 function biasInterpretation(b: number): string {
@@ -194,7 +194,7 @@ export function CalibrationDashboard() {
                         {pctPredicted != null && `${pctPredicted}%`}
                       </div>
                       <div
-                        className={`flex h-full items-center justify-start rounded-r px-1 text-[10px] text-white ${over ? "bg-red-500" : "bg-emerald-500"}`}
+                        className={`flex h-full items-center justify-start rounded-r px-1 text-[10px] ${over ? "bg-destructive text-destructive-foreground" : "bg-success text-success-foreground"}`}
                         style={{
                           width: `${(pctActual ?? 0) * 0.5}%`,
                           minWidth: pctActual ? "2rem" : 0,
@@ -213,8 +213,9 @@ export function CalibrationDashboard() {
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
             <span className="inline-block h-2 w-2 rounded-sm bg-primary/80 align-middle" /> prédite
-            · <span className="inline-block h-2 w-2 rounded-sm bg-emerald-500 align-middle" /> bien
-            calibrée · <span className="inline-block h-2 w-2 rounded-sm bg-red-500 align-middle" />{" "}
+            · <span className="inline-block h-2 w-2 rounded-sm bg-success align-middle" /> bien
+            calibrée ·{" "}
+            <span className="inline-block h-2 w-2 rounded-sm bg-destructive align-middle" />{" "}
             surconfiance
           </p>
         </div>

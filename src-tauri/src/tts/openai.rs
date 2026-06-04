@@ -15,7 +15,11 @@ use serde::Serialize;
 const OPENAI_TTS_URL: &str = "https://api.openai.com/v1/audio/speech";
 
 /// Default model. Low-cost, stable, MP3 output.
-const DEFAULT_MODEL: &str = "gpt-4o-mini-tts";
+///
+/// P118 — `pub` so the command layer can pass the exact model that produced the
+/// audio into [`super::cache::TTSCache::new_for_model`], keeping the cache key
+/// aligned with the real model (a single source of truth for invalidation).
+pub const DEFAULT_MODEL: &str = "gpt-4o-mini-tts";
 
 /// All voices currently offered by OpenAI TTS (Dec 2025).
 ///

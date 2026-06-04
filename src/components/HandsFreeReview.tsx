@@ -70,25 +70,25 @@ const RATING_BUTTONS: {
     rating: 1,
     label: "Encore",
     keywords: ["encore", "again", "1", "un"],
-    className: "bg-red-500 hover:bg-red-600",
+    className: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
   },
   {
     rating: 2,
     label: "Difficile",
     keywords: ["difficile", "hard", "dur", "2", "deux"],
-    className: "bg-amber-500 hover:bg-amber-600",
+    className: "bg-warning text-warning-foreground hover:bg-warning/90",
   },
   {
     rating: 3,
     label: "Bien",
     keywords: ["bien", "good", "bon", "3", "trois"],
-    className: "bg-lime-600 hover:bg-lime-700",
+    className: "bg-success text-success-foreground hover:bg-success/90",
   },
   {
     rating: 4,
     label: "Facile",
     keywords: ["facile", "easy", "4", "quatre"],
-    className: "bg-emerald-600 hover:bg-emerald-700",
+    className: "bg-chart-2 text-background hover:bg-chart-2/90",
   },
 ];
 
@@ -533,7 +533,7 @@ export function HandsFreeReview({
                 type="button"
                 onClick={() => handleRate(b.rating)}
                 disabled={isTranscribing}
-                className={cn("h-20 text-lg font-semibold text-white", b.className)}
+                className={cn("h-20 text-lg font-semibold", b.className)}
               >
                 {b.label}
               </Button>

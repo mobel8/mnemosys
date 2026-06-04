@@ -7,7 +7,7 @@
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::db::{Deck, DeckMastery, DeckPatch, DeckStats, MasteryStatus};
+use crate::db::{Deck, DeckMastery, DeckPatch, DeckStats, DeckWithStats, MasteryStatus};
 use crate::error::AppResult;
 use crate::fsrs::DEFAULT_DESIRED_RETENTION;
 use crate::scheduler::SchedulerKind;
@@ -68,6 +68,15 @@ pub fn delete_deck(state: State<'_, AppState>, id: i64) -> AppResult<()> {
 pub fn get_deck_stats(state: State<'_, AppState>, id: i64) -> AppResult<DeckStats> {
     let conn = state.db.lock();
     state.db.decks(&conn).stats(id)
+}
+
+/// P081 — every deck with its stats + mastery in ONE IPC round-trip + ONE
+/// aggregated SQL pass, so the dashboard no longer fires 2-3 commands per deck
+/// (N+1). Consumed by `useDecksWithStats`.
+#[tauri::command]
+pub fn get_decks_with_stats(state: State<'_, AppState>) -> AppResult<Vec<DeckWithStats>> {
+    let conn = state.db.lock();
+    state.db.decks(&conn).list_with_stats()
 }
 
 #[tauri::command]

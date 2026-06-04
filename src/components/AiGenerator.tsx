@@ -55,11 +55,22 @@ const MAX_TEXT_CHARS = 50_000;
 const DEFAULT_MAX_CARDS = 10;
 const MAX_CARDS_HARD_CAP = 50;
 
-/** Language picker options. Value is the locale hint sent to the backend. */
+/**
+ * Language picker options. `value` is the locale hint forwarded verbatim to the
+ * backend (treated as a free-form hint, never validated), so widening this list
+ * is all that's needed to let users generate in more target languages.
+ * `LanguageValue` below derives from this const automatically.
+ */
 const LANGUAGES = [
   { value: "fr", label: "Français" },
   { value: "en", label: "English" },
   { value: "es", label: "Español" },
+  { value: "de", label: "Deutsch" },
+  { value: "it", label: "Italiano" },
+  { value: "pt", label: "Português" },
+  { value: "nl", label: "Nederlands" },
+  { value: "ja", label: "日本語" },
+  { value: "zh", label: "中文" },
 ] as const;
 
 type LanguageValue = (typeof LANGUAGES)[number]["value"];

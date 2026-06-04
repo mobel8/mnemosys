@@ -21,47 +21,8 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/use-toast";
 import { useSaveSettings, useSettingsQuery } from "@/lib/queries";
+import { DEFAULT_SETTINGS as DEFAULTS } from "@/lib/stores/settings";
 import type { AppSettings } from "@/lib/tauri";
-
-const DEFAULTS: AppSettings = {
-  theme: "system",
-  desired_retention: 0.9,
-  daily_new_limit: 20,
-  daily_review_limit: 200,
-  show_next_interval: true,
-  openai_api_key: null,
-  tts_voice: null,
-  tts_speed: null,
-  piper_enabled: false,
-  piper_binary_path: "",
-  piper_model_path: "",
-  anthropic_api_key: null,
-  supabase_url: null,
-  supabase_anon_key: null,
-  // Vague 2 cognitive features — opt-in.
-  type_the_answer_enabled: false,
-  confidence_rating_enabled: false,
-  pre_questioning_enabled: false,
-  neuro_modes_enabled: false,
-  mood_checkin_enabled: false,
-  movement_break_minutes: 25,
-  cyclic_sighing_enabled: false,
-  sketch_before_flip_enabled: false,
-  delayed_jol_enabled: false,
-  jol_delay_minutes: 30,
-  voice_answer_enabled: false,
-  // Vague 12 cognitive features — opt-in.
-  pretest_mode_enabled: false,
-  self_explanation_enabled: false,
-  focus_guard_enabled: false,
-  // Vague 18 — local AI + advanced neuro.
-  ollama_enabled: false,
-  ollama_url: null,
-  ollama_model: null,
-  chronotype: null,
-  ambient_sound: "none",
-  hands_free_enabled: false,
-};
 
 const RETENTION_MIN = 0.8;
 const RETENTION_MAX = 0.97;

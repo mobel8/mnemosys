@@ -48,7 +48,7 @@ pub mod sketches;
 pub mod wellness;
 
 pub use cards::{Card, CardRepo, CardState, CardWithNote};
-pub use decks::{Deck, DeckMastery, DeckPatch, DeckRepo, DeckStats, MasteryStatus};
+pub use decks::{Deck, DeckMastery, DeckPatch, DeckRepo, DeckStats, DeckWithStats, MasteryStatus};
 pub use gamification::{Achievement, GamificationRepo, UserStats};
 pub use metacognition::{CalibrationBucket, CalibrationStats, JolPrediction, MetacognitionRepo};
 pub use notes::{FrequencyCoverage, Note, NoteRepo, NoteTemplate};

@@ -197,6 +197,9 @@ pub fn apply_import(db: &Database, import: ExportFile) -> AppResult<ImportResult
             None,
         )?;
 
+        // P064 — read the card count BEFORE opening the transaction (the deck
+        // was just created above, so this is 0 in practice, but reading it
+        // outside the BEGIN keeps the before/after framing explicit).
         let card_count_before: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM cards WHERE deck_id = ?1",
@@ -205,18 +208,27 @@ pub fn apply_import(db: &Database, import: ExportFile) -> AppResult<ImportResult
             )
             .unwrap_or(0);
 
+        // P064 — one transaction per deck instead of one per note. Each note
+        // previously paid its own BEGIN/COMMIT (+ FTS triggers + WAL fsync);
+        // `create_inner` runs commit-free inside this single transaction. On
+        // any error we ROLLBACK the whole deck's notes and bubble up.
+        conn.execute_batch("BEGIN;")?;
         for note in deck_data.notes {
-            // NoteRepo::create also materialises every derived card row, so
-            // we don't need a separate card-count pass per template.
-            db.notes(&conn).create(
+            // NoteRepo::create_inner also materialises every derived card row,
+            // so we don't need a separate card-count pass per template.
+            if let Err(e) = db.notes(&conn).create_inner(
                 deck.id,
                 note.template,
                 note.fields,
                 note.tags,
                 note.frequency_band,
-            )?;
+            ) {
+                let _ = conn.execute_batch("ROLLBACK;");
+                return Err(e);
+            }
             notes_imported += 1;
         }
+        conn.execute_batch("COMMIT;")?;
 
         let card_count_after: i64 = conn
             .query_row(

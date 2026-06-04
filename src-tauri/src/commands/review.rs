@@ -49,10 +49,17 @@ pub fn get_due_cards(
     state: State<'_, AppState>,
     deck_id: Option<i64>,
     limit: u32,
+    // P069 — `limit` caps reviews/day (daily_review_limit); `new_limit` caps the
+    // new cards that may enter the queue (daily_new_limit). None = no dedicated
+    // new-card cap (legacy behaviour). The two settings were previously inert.
+    new_limit: Option<u32>,
 ) -> AppResult<Vec<CardWithNote>> {
     let now = chrono::Utc::now().timestamp();
     let conn = state.db.lock();
-    state.db.cards(&conn).due_cards(deck_id, now, limit)
+    state
+        .db
+        .cards(&conn)
+        .due_cards_with_new(deck_id, now, limit, new_limit)
 }
 
 /// Multi-deck interleaved due queue (Vague 5).

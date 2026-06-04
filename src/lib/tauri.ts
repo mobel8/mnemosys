@@ -297,6 +297,16 @@ export interface DeckMastery {
   burned: number;
 }
 
+/**
+ * P081 — a deck plus its dashboard aggregates in one payload. The Rust side
+ * `#[serde(flatten)]`s the `Deck` fields, so this extends `Deck` rather than
+ * nesting it.
+ */
+export interface DeckWithStats extends Deck {
+  stats: DeckStats;
+  mastery: DeckMastery;
+}
+
 export interface DayCount {
   date: string;
   count: number;
@@ -837,6 +847,7 @@ export const api = {
     update: (id: number, patch: DeckPatch) => invoke<Deck>("update_deck", { id, patch }),
     delete: (id: number) => invoke<void>("delete_deck", { id }),
     stats: (id: number) => invoke<DeckStats>("get_deck_stats", { id }),
+    withStats: () => invoke<DeckWithStats[]>("get_decks_with_stats"),
     count: () => invoke<number>("count_decks"),
     /** WaniKani-style mastery buckets (apprentice / guru / master / …). */
     mastery: (id: number) => invoke<DeckMastery>("get_deck_mastery", { id }),
@@ -888,8 +899,8 @@ export const api = {
     resetCard: (id: number) => invoke<Card>("reset_card", { id }),
   },
   review: {
-    dueCards: (deckId: number | null, limit: number) =>
-      invoke<CardWithNote[]>("get_due_cards", { deckId, limit }),
+    dueCards: (deckId: number | null, limit: number, newLimit?: number) =>
+      invoke<CardWithNote[]>("get_due_cards", { deckId, limit, newLimit }),
     /**
      * Vague 5 — multi-deck interleaved due queue. Returns up to `limit`
      * cards drawn from every deck listed in `deckIds`, shuffled so the

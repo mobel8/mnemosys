@@ -19,15 +19,23 @@ import { PartyPopper } from "lucide-react";
 import { ReviewSession } from "@/components/ReviewSession";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useDueCards } from "@/lib/queries";
+import { useDueCards, useSettingsQuery } from "@/lib/queries";
 
 const routeApi = getRouteApi("/review/$deckId");
 
 export default function ReviewPage() {
   const { deckId } = routeApi.useParams();
-  const due = useDueCards(deckId, 200);
+  // P069 — wire the daily quotas that were previously inert: `limit` caps
+  // reviews/day, `newLimit` caps new cards/day. Wait for settings before
+  // fetching so the first queue already respects the caps (no stale 200/∞ run).
+  const settings = useSettingsQuery();
+  const reviewLimit = settings.data?.daily_review_limit ?? 200;
+  const newLimit = settings.data?.daily_new_limit ?? 20;
+  const due = useDueCards(deckId, reviewLimit, newLimit, {
+    enabled: settings.data != null,
+  });
 
-  if (due.isLoading) {
+  if (settings.isLoading || due.isLoading) {
     return <ReviewLoadingSkeleton />;
   }
 

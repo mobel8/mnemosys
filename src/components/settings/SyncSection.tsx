@@ -15,7 +15,15 @@
  */
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Cloud, CloudOff, Loader2, LogOut, RefreshCw } from "lucide-react";
+import {
+  AlertTriangle,
+  Cloud,
+  CloudOff,
+  Loader2,
+  LogOut,
+  RefreshCw,
+  RotateCcw,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,44 +39,8 @@ import {
   useSyncLogout,
   useSyncStatus,
 } from "@/lib/queries";
+import { DEFAULT_SETTINGS as DEFAULTS } from "@/lib/stores/settings";
 import type { AppSettings } from "@/lib/tauri";
-
-const DEFAULTS: AppSettings = {
-  theme: "system",
-  desired_retention: 0.9,
-  daily_new_limit: 20,
-  daily_review_limit: 200,
-  show_next_interval: true,
-  openai_api_key: null,
-  tts_voice: null,
-  tts_speed: null,
-  piper_enabled: false,
-  piper_binary_path: "",
-  piper_model_path: "",
-  anthropic_api_key: null,
-  supabase_url: null,
-  supabase_anon_key: null,
-  type_the_answer_enabled: false,
-  confidence_rating_enabled: false,
-  pre_questioning_enabled: false,
-  neuro_modes_enabled: false,
-  mood_checkin_enabled: false,
-  movement_break_minutes: 25,
-  cyclic_sighing_enabled: false,
-  sketch_before_flip_enabled: false,
-  delayed_jol_enabled: false,
-  jol_delay_minutes: 30,
-  voice_answer_enabled: false,
-  pretest_mode_enabled: false,
-  self_explanation_enabled: false,
-  focus_guard_enabled: false,
-  ollama_enabled: false,
-  ollama_url: null,
-  ollama_model: null,
-  chronotype: null,
-  ambient_sound: "none",
-  hands_free_enabled: false,
-};
 
 function formatLastSync(ts: number | null): string {
   if (ts == null) return "Jamais";
@@ -77,6 +49,62 @@ function formatLastSync(ts: number | null): string {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+/**
+ * P108 — états de chargement / d'erreur harmonisés pour le formulaire de
+ * configuration Supabase. Tant que les réglages ne sont pas chargés, on ne
+ * laisse pas l'utilisateur enregistrer : composer le payload à partir des
+ * valeurs par défaut écraserait silencieusement la configuration serveur.
+ */
+function SettingsSkeleton() {
+  return (
+    <div
+      className="space-y-3"
+      role="status"
+      aria-busy="true"
+      aria-label="Chargement des paramètres"
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="h-9 animate-pulse rounded-lg bg-muted" />
+        <div className="h-9 animate-pulse rounded-lg bg-muted" />
+      </div>
+      <div className="h-3 w-2/3 animate-pulse rounded-lg bg-muted" />
+    </div>
+  );
+}
+
+function SettingsErrorBanner({
+  message,
+  onRetry,
+  isRetrying,
+}: {
+  message: string;
+  onRetry: () => void;
+  isRetrying: boolean;
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm"
+    >
+      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+      <div className="flex-1 space-y-2">
+        <div>
+          <p className="font-medium text-destructive">Impossible de charger les paramètres</p>
+          <p className="mt-0.5 text-muted-foreground">{message}</p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={onRetry} disabled={isRetrying}>
+          {isRetrying ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RotateCcw className="h-4 w-4" />
+          )}
+          Réessayer
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function SyncSection() {
@@ -188,47 +216,64 @@ export function SyncSection() {
         {/* ---- Supabase project config ---- */}
         <section className="space-y-3">
           <h3 className="text-sm font-semibold">Projet Supabase</h3>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="supabase-url">URL du projet</Label>
-              <Input
-                id="supabase-url"
-                type="url"
-                autoComplete="off"
-                placeholder="https://xxxxxxxxxxxx.supabase.co"
-                value={supabaseUrl}
-                onChange={(e) => setSupabaseUrl(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="supabase-anon">Clé anon (publique)</Label>
-              <Input
-                id="supabase-anon"
-                type="password"
-                autoComplete="off"
-                placeholder="eyJhbGciOi…"
-                value={anonKey}
-                onChange={(e) => setAnonKey(e.target.value)}
-              />
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Crée un projet sur <strong>supabase.com</strong>, applique le schéma décrit dans{" "}
-            <code>docs/SESSION_3_SYNC.md</code>, puis colle ici l'URL et la clé anon.
-          </p>
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => {
-                void handleSaveSupabaseConfig();
+          {/* P108 — tant que les réglages ne sont pas chargés, on n'affiche pas
+              le formulaire : enregistrer composerait le payload à partir des
+              DEFAULTS et écraserait la configuration serveur. */}
+          {settingsQuery.isError ? (
+            <SettingsErrorBanner
+              message={settingsQuery.error.message}
+              onRetry={() => {
+                void settingsQuery.refetch();
               }}
-              disabled={saveSettings.isPending}
-            >
-              {saveSettings.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Enregistrer la configuration
-            </Button>
-          </div>
+              isRetrying={settingsQuery.isFetching}
+            />
+          ) : !settingsQuery.isSuccess ? (
+            <SettingsSkeleton />
+          ) : (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="supabase-url">URL du projet</Label>
+                  <Input
+                    id="supabase-url"
+                    type="url"
+                    autoComplete="off"
+                    placeholder="https://xxxxxxxxxxxx.supabase.co"
+                    value={supabaseUrl}
+                    onChange={(e) => setSupabaseUrl(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="supabase-anon">Clé anon (publique)</Label>
+                  <Input
+                    id="supabase-anon"
+                    type="password"
+                    autoComplete="off"
+                    placeholder="eyJhbGciOi…"
+                    value={anonKey}
+                    onChange={(e) => setAnonKey(e.target.value)}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Crée un projet sur <strong>supabase.com</strong>, applique le schéma décrit dans{" "}
+                <code>docs/SESSION_3_SYNC.md</code>, puis colle ici l'URL et la clé anon.
+              </p>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    void handleSaveSupabaseConfig();
+                  }}
+                  disabled={saveSettings.isPending}
+                >
+                  {saveSettings.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Enregistrer la configuration
+                </Button>
+              </div>
+            </>
+          )}
         </section>
 
         {/* ---- Status-driven content ---- */}
@@ -249,7 +294,7 @@ export function SyncSection() {
           <div className="flex items-start gap-3 rounded-lg border border-dashed bg-muted/30 p-4">
             <CloudOff className="mt-0.5 h-5 w-5 text-muted-foreground" />
             <div className="space-y-1 text-sm">
-              <p className="font-medium">Sync cloud désactivée</p>
+              <p className="font-medium">Synchronisation cloud désactivée</p>
               <p className="text-muted-foreground">
                 Configure l'URL Supabase et la clé anon ci-dessus pour activer la synchronisation.
               </p>

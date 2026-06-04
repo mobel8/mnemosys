@@ -83,6 +83,7 @@ pub fn run() {
             commands::decks::update_deck,
             commands::decks::delete_deck,
             commands::decks::get_deck_stats,
+            commands::decks::get_decks_with_stats,
             commands::decks::count_decks,
             commands::decks::get_deck_mastery,
             commands::decks::get_deck_mastery_status,

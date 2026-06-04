@@ -20,7 +20,9 @@
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
-use crate::ai::cards::{build_card_prompt, parse_cards_response, SYSTEM_PROMPT};
+// P074 — `strip_code_fences` is the single shared fence stripper from `cards`;
+// the local copy that used to live here has been removed.
+use crate::ai::cards::{build_card_prompt, parse_cards_response, strip_code_fences, SYSTEM_PROMPT};
 use crate::ai::ollama::{DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL};
 use crate::ai::{
     build_image_prompt, critique_cards, generate_cards_from_pdf, generate_cards_from_text,
@@ -32,6 +34,10 @@ use crate::error::{AppError, AppResult};
 
 /// Sub-directory of `app_data_dir` where generated mnemonic images live.
 const MNEMONIC_IMAGE_DIR: &str = "mnemonic-images";
+
+/// P118 — the 8-byte PNG signature (`\x89PNG\r\n\x1a\n`). We validate it before
+/// trusting the API bytes so a corrupt/non-PNG response never lands in cache.
+const PNG_MAGIC: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
 /// Resolve the Anthropic API key. Env var wins; falls back to the persisted
 /// app settings. Returns a validation error with actionable copy if both
@@ -270,21 +276,6 @@ fn parse_elaboration_response(response: &str) -> AppResult<CardElaborationDTO> {
     })
 }
 
-fn strip_code_fences(s: &str) -> &str {
-    let mut out = s.trim();
-    if let Some(rest) = out.strip_prefix("```") {
-        let rest = match rest.find('\n') {
-            Some(nl) => &rest[nl + 1..],
-            None => rest,
-        };
-        out = rest.trim_end();
-    }
-    if let Some(stripped) = out.strip_suffix("```") {
-        out = stripped.trim_end();
-    }
-    out.trim()
-}
-
 /// Generate a `{ why, example }` elaboration for a single card.
 ///
 /// `card_text` is the prompt+answer concatenation the UI has already
@@ -514,7 +505,17 @@ pub async fn generate_card_mnemonic_image(
         .await
         .map_err(|e| AppError::Other(e.to_string()))?;
 
-    std::fs::write(&target, &png)?;
+    // P118 — verify the PNG magic bytes before trusting the API output, and
+    // write to a `.tmp` then rename so a partial/corrupt file never appears in
+    // cache (rename is atomic on the same filesystem).
+    if png.len() < 8 || png[..8] != PNG_MAGIC {
+        return Err(AppError::Other(
+            "Image générée invalide : la réponse n'est pas un PNG.".to_string(),
+        ));
+    }
+    let tmp = target.with_extension("png.tmp");
+    std::fs::write(&tmp, &png)?;
+    std::fs::rename(&tmp, &target)?;
     Ok(target.to_string_lossy().into_owned())
 }
 

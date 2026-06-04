@@ -154,7 +154,9 @@ Example output (and ONLY this kind of output):
 
 /// Strip markdown fences if present and parse the JSON array.
 pub(super) fn parse_script_response(response: &str) -> Result<Vec<PodcastLine>, ClaudeError> {
-    let cleaned = strip_code_fences(response.trim());
+    // P074 — reuse the shared, hardened fence stripper (single-line fence +
+    // bracket-extraction fixes) instead of a drifting local copy.
+    let cleaned = super::cards::strip_code_fences(response.trim());
 
     let lines: Vec<PodcastLine> = serde_json::from_str(cleaned).map_err(|e| {
         let preview: String = response.chars().take(200).collect();
@@ -179,21 +181,6 @@ pub(super) fn parse_script_response(response: &str) -> Result<Vec<PodcastLine>, 
     }
 
     Ok(cleaned)
-}
-
-fn strip_code_fences(s: &str) -> &str {
-    let mut out = s.trim();
-    if let Some(rest) = out.strip_prefix("```") {
-        let rest = match rest.find('\n') {
-            Some(nl) => &rest[nl + 1..],
-            None => rest,
-        };
-        out = rest.trim_end();
-    }
-    if let Some(stripped) = out.strip_suffix("```") {
-        out = stripped.trim_end();
-    }
-    out.trim()
 }
 
 #[cfg(test)]

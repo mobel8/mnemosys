@@ -394,7 +394,8 @@ const CardRow = memo(function CardRow({ row }: { row: DisplayRow }) {
     onSuccess: () => {
       toast({
         title: "Carte réinitialisée",
-        description: "La carte repart en « new ». L'historique des reviews est conservé.",
+        description:
+          "La carte repart à l'état « nouvelle ». L'historique des révisions est conservé.",
       });
     },
     onError: (err) => {

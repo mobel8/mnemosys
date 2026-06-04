@@ -20,13 +20,15 @@
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createRouter, RouterProvider } from "@tanstack/react-router";
+import { createRouter, Link, RouterProvider } from "@tanstack/react-router";
 import { MotionConfig } from "framer-motion";
+import { AlertTriangle, Compass, Home, Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DelayedJolPrompt } from "@/components/DelayedJolPrompt";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { MovementBreakReminder } from "@/components/MovementBreakReminder";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
+import { Button } from "@/components/ui/button";
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 import { Toaster } from "@/components/ui/toaster";
 import { scheduleNotifications } from "@/lib/notifications";
@@ -49,9 +51,89 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * P083 — rendered when a route throws `notFound()` (e.g. an `/decks/abc` URL
+ * whose id parser rejects the non-integer param) or when no route matches the
+ * URL at all. Without this the `notFound()` thrown by the `$deckId` / `$palaceId`
+ * parsers fell through to an empty `<main>`. Lives inside the root layout's
+ * `<Outlet />`, so it's a content-area panel rather than a full-screen takeover.
+ */
+function RouteNotFound() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-6 p-6 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <Compass className="h-8 w-8" />
+      </div>
+      <div className="max-w-md space-y-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Page introuvable</h1>
+        <p className="text-sm text-muted-foreground">
+          Cette page n'existe pas ou le lien utilisé n'est plus valide.
+        </p>
+      </div>
+      <Button asChild>
+        <Link to="/">
+          <Home className="h-4 w-4" />
+          Retour à l'accueil
+        </Link>
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * P083 — rendered when a route loader or component throws during navigation.
+ * The app-level <ErrorBoundary> still wraps everything as a last resort, but
+ * this keeps a route-scoped failure contained to the content area (the sidebar
+ * and topbar stay usable) and offers an in-place retry.
+ */
+function RouteError({ error, reset }: { error: Error; reset: () => void }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-6 p-6 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+        <AlertTriangle className="h-8 w-8" />
+      </div>
+      <div className="max-w-md space-y-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Une erreur est survenue</h1>
+        <p className="text-sm text-muted-foreground">
+          {error.message || "Le chargement de cette page a échoué."}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <Button onClick={reset}>
+          <RefreshCw className="h-4 w-4" />
+          Réessayer
+        </Button>
+        <Button variant="outline" asChild>
+          <Link to="/">
+            <Home className="h-4 w-4" />
+            Retour à l'accueil
+          </Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * P083 — shown while a lazy route chunk downloads (the Three.js palace bundle
+ * and the OCR/capture bundle are heavy). Replaces the previous blank `<main>`
+ * with an explicit loading affordance so slow navigations don't look frozen.
+ */
+function RoutePending() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-muted-foreground">
+      <Loader2 className="h-6 w-6 animate-spin" />
+      <p className="text-sm">Chargement…</p>
+    </div>
+  );
+}
+
 const router = createRouter({
   routeTree,
   defaultPreload: "intent",
+  defaultNotFoundComponent: RouteNotFound,
+  defaultErrorComponent: RouteError,
+  defaultPendingComponent: RoutePending,
 });
 
 // Hand TanStack Router the inferred routeTree type so `<Link to="...">`

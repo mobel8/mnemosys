@@ -118,6 +118,13 @@ pub fn convert_to_mnemosys(db: &Database, anki: AnkiCollection) -> AppResult<Con
         ..Default::default()
     };
 
+    // P064 — one outer transaction around the whole notes loop. Each note used
+    // to pay its own BEGIN/COMMIT (+ FTS triggers + WAL fsync); an import of
+    // thousands of notes became thousands of commits. We BEGIN once, call the
+    // commit-free `create_inner`, COMMIT once, and ROLLBACK on any hard error.
+    // The deck creation above stays outside this transaction to avoid nesting.
+    conn.execute_batch("BEGIN;")?;
+
     for note in &anki.notes {
         let cards = match notes_with_cards.get(&note.id) {
             Some(c) => c,
@@ -179,14 +186,16 @@ pub fn convert_to_mnemosys(db: &Database, anki: AnkiCollection) -> AppResult<Con
             }
         };
 
-        // NoteRepo::create validates fields (non-empty front/back, ≥1 cloze
-        // marker). Anything it refuses we count as `skipped` rather than
-        // aborting the whole import.
+        // P064 — `create_inner` runs inside the outer transaction (no inner
+        // BEGIN/COMMIT). It still validates fields (non-empty front/back, ≥1
+        // cloze marker); a `Validation` error means « unsupported payload » and
+        // is counted as skipped rather than aborting the import. Any *other*
+        // error is a real failure, so we ROLLBACK the whole batch and bubble up.
         match db
             .notes(&conn)
             // Anki packages don't carry a frequency_band, so import as None.
             // The learner can tag notes manually post-import.
-            .create(target_deck_id, template, fields, note.tags.clone(), None)
+            .create_inner(target_deck_id, template, fields, note.tags.clone(), None)
         {
             Ok(_) => {
                 stats.notes_imported += 1;
@@ -197,9 +206,15 @@ pub fn convert_to_mnemosys(db: &Database, anki: AnkiCollection) -> AppResult<Con
                 }
             }
             Err(AppError::Validation(_)) => stats.notes_skipped += 1,
-            Err(e) => return Err(e),
+            Err(e) => {
+                let _ = conn.execute_batch("ROLLBACK;");
+                return Err(e);
+            }
         }
     }
+
+    // P064 — single commit/fsync for the whole notes batch.
+    conn.execute_batch("COMMIT;")?;
 
     Ok(ConversionResult {
         stats,

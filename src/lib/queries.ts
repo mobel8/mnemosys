@@ -34,6 +34,7 @@ import {
   type DeckMastery,
   type DeckPatch,
   type DeckStats,
+  type DeckWithStats,
   type FrequencyBand,
   type FrequencyCoverage,
   type GeneratedCard,
@@ -133,6 +134,21 @@ export function useDecks(opts?: Partial<UseQueryOptions<Deck[]>>) {
   });
 }
 
+/**
+ * P081 — every deck plus its stats + mastery in ONE IPC call, for the dashboard
+ * grid (replaces `useDecks` + per-card `useDeckStats`/`useDeckMastery`, i.e.
+ * 1 + 2N..3N calls → 1). The key is prefixed by `queryKeys.decks`, so every
+ * mutation that already invalidates `["decks"]` (create/update/delete deck,
+ * review submit) refreshes this batch too.
+ */
+export function useDecksWithStats(opts?: Partial<UseQueryOptions<DeckWithStats[]>>) {
+  return useQuery<DeckWithStats[]>({
+    queryKey: [...queryKeys.decks, "with-stats"] as const,
+    queryFn: () => api.decks.withStats(),
+    ...opts,
+  });
+}
+
 export function useDeck(id: number, opts?: Partial<UseQueryOptions<Deck>>) {
   return useQuery<Deck>({
     queryKey: queryKeys.deck(id),
@@ -225,11 +241,14 @@ export function useCardWithNote(cardId: number, opts?: Partial<UseQueryOptions<C
 export function useDueCards(
   deckId: number | null,
   limit = 100,
+  // P069 — optional new-cards/day cap. Part of the query key so flipping the
+  // setting doesn't serve a stale queue from cache.
+  newLimit?: number,
   opts?: Partial<UseQueryOptions<CardWithNote[]>>,
 ) {
   return useQuery<CardWithNote[]>({
-    queryKey: queryKeys.dueCards(deckId, limit),
-    queryFn: () => api.review.dueCards(deckId, limit),
+    queryKey: [...queryKeys.dueCards(deckId, limit), newLimit ?? null],
+    queryFn: () => api.review.dueCards(deckId, limit, newLimit),
     ...opts,
   });
 }

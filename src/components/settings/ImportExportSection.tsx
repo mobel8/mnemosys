@@ -382,7 +382,7 @@ export function ImportExportSection() {
           </div>
           <p className="text-xs text-muted-foreground">
             L'import Anki crée de nouveaux decks. L'historique de révision Anki n'est pas conservé
-            (les cartes repartent en « new »).
+            (les cartes repartent à l'état « nouvelle »).
           </p>
         </section>
 

@@ -41,10 +41,18 @@ import {
   useDecks,
   useDeleteDeck,
 } from "@/lib/queries";
-import type { Deck, DeckMastery } from "@/lib/tauri";
+import type { Deck, DeckMastery, DeckStats } from "@/lib/tauri";
 
 interface DeckCardProps {
   deck: Deck;
+  /**
+   * P081 — when the parent grid fetched the batched `useDecksWithStats`, it
+   * passes the stats/mastery here so the card skips its own per-deck IPC calls
+   * (N+1 → 1). Left undefined, the card falls back to its own queries (keeps
+   * the component usable standalone).
+   */
+  statsData?: DeckStats;
+  masteryData?: DeckMastery;
 }
 
 /**
@@ -95,16 +103,20 @@ function pickMasteryLevel(m: DeckMastery): {
   };
 }
 
-export function DeckCard({ deck }: DeckCardProps) {
+export function DeckCard({ deck, statsData, masteryData }: DeckCardProps) {
   const navigate = useNavigate();
   // P029b — honour prefers-reduced-motion: skip the hover lift entirely so the
   // tile stays still for users who opted out of motion (MotionConfig already
   // covers the global case; this makes the intent explicit and avoids a
   // transform animation being queued at all).
   const reduceMotion = useReducedMotion();
-  const stats = useDeckStats(deck.id);
-  const mastery = useDeckMastery(deck.id);
-  const masteryLevel = mastery.data ? pickMasteryLevel(mastery.data) : null;
+  // P081 — prefer the batched stats/mastery passed by the grid; only fall back
+  // to a per-deck fetch when this card is rendered standalone (props absent).
+  const statsQuery = useDeckStats(deck.id, { enabled: statsData === undefined });
+  const masteryQuery = useDeckMastery(deck.id, { enabled: masteryData === undefined });
+  const stats = statsData ?? statsQuery.data;
+  const mastery = masteryData ?? masteryQuery.data;
+  const masteryLevel = mastery ? pickMasteryLevel(mastery) : null;
   // Vague 15 — Bloom mastery gate. Only query when this deck has a prerequisite
   // (an ungated deck is always unlocked, so we skip the round-trip).
   const hasPrerequisite = deck.prerequisite_deck_id != null;
@@ -126,7 +138,7 @@ export function DeckCard({ deck }: DeckCardProps) {
   // option for an occlusion-only deck and then fail server-side with
   // « deck must contain at least 3 cards ». `podcastable_cards` mirrors the
   // exact set the backend extracts, keeping UI and server in lockstep.
-  const podcastableCount = stats.data?.podcastable_cards ?? 0;
+  const podcastableCount = stats?.podcastable_cards ?? 0;
   // Podcast generation makes sense only when the deck has enough material;
   // the backend enforces the same floor (≥3 podcastable cards).
   const canPodcast = podcastableCount >= 3;
@@ -255,21 +267,27 @@ export function DeckCard({ deck }: DeckCardProps) {
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              {stats.data ? (
+              {stats ? (
                 <>
                   <Badge
-                    variant={stats.data.due_today > 0 ? "default" : "secondary"}
+                    variant={stats.due_today > 0 ? "default" : "secondary"}
                     className="font-medium tabular-nums"
                   >
-                    {stats.data.due_today} dues
+                    {stats.due_today} dues
                   </Badge>
                   <Badge variant="outline" className="tabular-nums">
-                    {stats.data.new_cards} nouvelles
+                    {stats.new_cards} nouvelles
                   </Badge>
                   <Badge variant="outline" className="inline-flex items-center gap-1 tabular-nums">
                     <BookOpen className="h-3 w-3" />
-                    {stats.data.total_cards} total
+                    {stats.total_cards} total
                   </Badge>
+                  {/* P080 — surface suspended cards so total_cards reconciles. */}
+                  {stats.suspended_cards > 0 && (
+                    <Badge variant="outline" className="tabular-nums text-muted-foreground">
+                      {stats.suspended_cards} suspendues
+                    </Badge>
+                  )}
                   {masteryLevel && (
                     <Badge
                       variant="outline"

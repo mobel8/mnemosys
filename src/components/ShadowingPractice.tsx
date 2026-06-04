@@ -86,6 +86,19 @@ export function computeWaveformPeaks(samples: Float32Array, bars: number): numbe
   return peaks;
 }
 
+/**
+ * Resolve a CSS custom property (a design token) to its concrete computed
+ * value. The canvas 2D context can't consume a Tailwind class or a raw
+ * `var(--token)`, so we read the token off `:root` at paint time — this keeps
+ * the waveforms theme-aware (light/dark) without hardcoding a hex. Falls back
+ * to `currentColor` if the property is missing (e.g. during SSR/tests).
+ */
+function resolveToken(name: string): string {
+  if (typeof window === "undefined") return "currentColor";
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value.length > 0 ? value : "currentColor";
+}
+
 /** Paint a mirrored bar waveform onto a canvas, scaled to its CSS size. */
 function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], color: string) {
   const ctx = canvas.getContext("2d");
@@ -213,12 +226,18 @@ export function ShadowingPractice() {
     };
   }, [clearStopTimer, cleanupStream]);
 
-  // Re-paint canvases whenever peaks change.
+  // Re-paint canvases whenever peaks change. Colours are resolved from the
+  // design tokens at paint time (reference = brand indigo `--chart-1`, user =
+  // ambre `--chart-4`) so the waveforms stay theme-aware without a hex.
   useEffect(() => {
-    if (refCanvasRef.current) drawWaveform(refCanvasRef.current, refPeaks, "#3b82f6");
+    if (refCanvasRef.current) {
+      drawWaveform(refCanvasRef.current, refPeaks, resolveToken("--chart-1"));
+    }
   }, [refPeaks]);
   useEffect(() => {
-    if (userCanvasRef.current) drawWaveform(userCanvasRef.current, userPeaks, "#f59e0b");
+    if (userCanvasRef.current) {
+      drawWaveform(userCanvasRef.current, userPeaks, resolveToken("--chart-4"));
+    }
   }, [userPeaks]);
 
   // ----- Reference (TTS) -------------------------------------------------
@@ -466,7 +485,7 @@ export function ShadowingPractice() {
 
             {isRecording && (
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" aria-hidden />
+                <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" aria-hidden />
                 Max {(MAX_DURATION_MS / 1000).toFixed(0)} s
               </span>
             )}
@@ -480,7 +499,7 @@ export function ShadowingPractice() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
-            <p className="text-xs font-medium uppercase tracking-wide text-blue-600 dark:text-blue-400">
+            <p className="text-xs font-medium uppercase tracking-wide text-chart-1">
               Référence (TTS)
             </p>
             <div className="rounded-md border bg-muted/20 p-2">
@@ -499,9 +518,7 @@ export function ShadowingPractice() {
           </div>
 
           <div className="space-y-1.5">
-            <p className="text-xs font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400">
-              Ta voix
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wide text-chart-4">Ta voix</p>
             <div className="rounded-md border bg-muted/20 p-2">
               <canvas
                 ref={userCanvasRef}

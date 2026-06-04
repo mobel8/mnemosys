@@ -121,7 +121,9 @@ pub async fn synthesize_audio(
     let voice_enum = parse_voice(&voice)?;
     let speed = speed.unwrap_or(1.0);
 
-    let cache = TTSCache::new(cache_dir(&app)?)?;
+    // P118 — key the cache on the exact OpenAI model that produces the audio so
+    // a model bump auto-invalidates stale entries (single source of truth).
+    let cache = TTSCache::new_for_model(cache_dir(&app)?, crate::tts::openai::DEFAULT_MODEL)?;
 
     // Fast path: already on disk.
     if cache.exists(&text, voice.as_str(), speed) {
