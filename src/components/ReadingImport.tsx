@@ -90,8 +90,10 @@ interface Token {
  */
 export function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
-  // Letters (incl. accents via \p{L}), digits, apostrophes, hyphens.
-  const wordRe = /[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu;
+  // Letters (incl. accents via \p{L}), digits, with apostrophes/hyphens allowed
+  // only *between* alphanumerics — a word must start AND end on a letter/digit
+  // (P120: trailing « ' » / « - » would otherwise fragment word-status tracking).
+  const wordRe = /[\p{L}\p{N}](?:[\p{L}\p{N}'’-]*[\p{L}\p{N}])?/gu;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   let i = 0;
@@ -510,8 +512,9 @@ export function ReadingImport() {
               aria-live="polite"
             >
               <span className="text-muted-foreground">
-                <strong className="text-foreground">{stats.unknown}</strong> mot
-                {stats.unknown > 1 ? "s" : ""} inconnu{stats.unknown > 1 ? "s" : ""} /{" "}
+                <strong className="text-foreground">{stats.unknown - stats.learning}</strong>{" "}
+                inconnus · <strong className="text-foreground">{stats.learning}</strong> en cours ·{" "}
+                <strong className="text-foreground">{stats.known}</strong> connus /{" "}
                 <strong className="text-foreground">{stats.total}</strong> total
               </span>
               <span className="text-muted-foreground">

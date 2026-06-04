@@ -27,12 +27,13 @@ describe("TodayCard", () => {
     expect(screen.getByTestId("today-retention-value")).toHaveTextContent("94%");
   });
 
-  it("renders zeros and 0% when no data has loaded yet", () => {
+  it("renders zeros and a neutral « — » retention when no data has loaded yet", () => {
     render(<TodayCard data={undefined} />);
     expect(screen.getByTestId("today-reviews-done-value")).toHaveTextContent("0");
     expect(screen.getByTestId("today-due-now-value")).toHaveTextContent("0");
     expect(screen.getByTestId("today-new-cards-value")).toHaveTextContent("0");
-    expect(screen.getByTestId("today-retention-value")).toHaveTextContent("0%");
+    // P098: 0 review today → « — » (no data) rather than an alarming red 0 %.
+    expect(screen.getByTestId("today-retention-value")).toHaveTextContent("—");
   });
 
   it("colors retention red when below 75 %", () => {

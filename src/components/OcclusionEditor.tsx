@@ -149,6 +149,17 @@ export function OcclusionEditor({ deckId, onSaved }: OcclusionEditorProps) {
   const handleImageLoad = useCallback(() => {
     const img = imgRef.current;
     if (!img) return;
+    // P099: a 0-dimension image (corrupt file, SVG without an intrinsic size)
+    // would divide by zero in the screen→image coordinate mapping. Refuse it.
+    if (img.naturalWidth <= 0 || img.naturalHeight <= 0) {
+      setNatural(null);
+      toast({
+        title: "Image aux dimensions invalides",
+        description: "Choisis une image bitmap avec une largeur et une hauteur définies.",
+        variant: "destructive",
+      });
+      return;
+    }
     setNatural({ width: img.naturalWidth, height: img.naturalHeight });
   }, []);
 

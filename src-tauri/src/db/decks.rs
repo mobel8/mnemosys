@@ -203,6 +203,15 @@ impl<'a> DeckRepo<'a> {
                 "desired_retention must be in [0.5, 0.99]".into(),
             ));
         }
+        // P054: a prerequisite must point at an existing deck (a fresh deck
+        // can't reference itself — it has no id yet).
+        if let Some(prereq) = prerequisite_deck_id {
+            if self.get(prereq).is_err() {
+                return Err(AppError::Validation(
+                    "Le deck prérequis spécifié n'existe pas.".into(),
+                ));
+            }
+        }
         let kind = scheduler_kind.unwrap_or_default();
         let now = Utc::now().timestamp();
         self.conn.execute(
@@ -223,6 +232,26 @@ impl<'a> DeckRepo<'a> {
             if !(0.5..=0.99).contains(&retention) {
                 return Err(AppError::Validation(
                     "desired_retention must be in [0.5, 0.99]".into(),
+                ));
+            }
+        }
+
+        // P054: validate the mastery-gate prerequisite before any write — reject
+        // self-reference, a missing target deck, and a direct cycle (A → B where
+        // B already requires A). `patch.prerequisite_deck_id` is double-wrapped:
+        // `Some(None)` clears the gate, `Some(Some(p))` sets it to deck `p`.
+        if let Some(Some(prereq)) = patch.prerequisite_deck_id {
+            if prereq == id {
+                return Err(AppError::Validation(
+                    "Un deck ne peut pas être son propre prérequis.".into(),
+                ));
+            }
+            let target = self.get(prereq).map_err(|_| {
+                AppError::Validation("Le deck prérequis spécifié n'existe pas.".into())
+            })?;
+            if target.prerequisite_deck_id == Some(id) {
+                return Err(AppError::Validation(
+                    "Prérequis circulaire : le deck cible dépend déjà de ce deck.".into(),
                 ));
             }
         }

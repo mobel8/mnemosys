@@ -102,19 +102,16 @@ export function TopBar() {
 
       <div className="flex items-center gap-2">
         <StreakWidget />
-        <Button asChild size="sm" variant="default">
-          {activeDeckId ? (
+        {/* P104: « Nouvelle carte » ne s'affiche que dans le contexte d'un deck
+            (sinon le bouton renvoyait vers « / » — un no-op trompeur). */}
+        {activeDeckId !== null && (
+          <Button asChild size="sm" variant="default">
             <Link to="/decks/$deckId/new-card" params={{ deckId: activeDeckId }}>
               <Plus className="h-4 w-4" />
               Nouvelle carte
             </Link>
-          ) : (
-            <Link to="/">
-              <Plus className="h-4 w-4" />
-              Nouvelle carte
-            </Link>
-          )}
-        </Button>
+          </Button>
+        )}
       </div>
     </header>
   );

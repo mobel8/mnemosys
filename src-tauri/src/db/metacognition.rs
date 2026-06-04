@@ -378,18 +378,27 @@ fn goodman_kruskal_gamma(pairs: &[(f64, bool)]) -> f64 {
     }
 
     let working: Vec<(f64, bool)> = if pairs.len() > SAMPLING_THRESHOLD {
-        // Deterministic, dependency-free sampling: take a strided slice of
-        // SAMPLING_THRESHOLD evenly-spaced indices. Good enough to estimate
-        // γ on a uniform sub-sample; the alternative (full O(N²)) would
-        // make this a noticeable hiccup on 5 k+ predictions.
-        let step = pairs.len() / SAMPLING_THRESHOLD;
-        let mut out = Vec::with_capacity(SAMPLING_THRESHOLD);
-        let mut idx = 0;
-        while idx < pairs.len() && out.len() < SAMPLING_THRESHOLD {
-            out.push(pairs[idx]);
-            idx += step.max(1);
+        // P059: a *uniform random* sub-sample. A strided slice of the
+        // chronologically-ordered pairs biases γ toward temporally-clustered
+        // runs (early vs late learning); a partial Fisher-Yates shuffle picks
+        // SAMPLING_THRESHOLD pairs with equal probability. Dependency-free LCG
+        // seeded by the wall clock — sampling quality, not cryptography.
+        let mut shuffled = pairs.to_vec();
+        let n = shuffled.len();
+        let mut seed: u64 = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0x9e37_79b9_7f4a_7c15)
+            | 1;
+        for i in 0..SAMPLING_THRESHOLD.min(n) {
+            seed = seed
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            let j = i + (seed >> 33) as usize % (n - i);
+            shuffled.swap(i, j);
         }
-        out
+        shuffled.truncate(SAMPLING_THRESHOLD);
+        shuffled
     } else {
         pairs.to_vec()
     };

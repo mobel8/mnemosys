@@ -81,7 +81,9 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-const APP_VERSION = import.meta.env.PACKAGE_VERSION ?? "0.8.0";
+// P130: dev fallback only — the real version is injected at build time from
+// package.json (see vite.config). Never hard-code a stale release number here.
+const APP_VERSION = import.meta.env.PACKAGE_VERSION ?? "0.0.0-dev";
 
 export function Sidebar() {
   const router = useRouterState();

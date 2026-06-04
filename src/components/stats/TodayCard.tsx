@@ -47,7 +47,10 @@ export function TodayCard({ data, isLoading }: TodayCardProps) {
   const retentionPct = Math.round(retention * 100);
 
   const dueColor: StatColor = due > 0 ? "red" : "default";
-  const retentionTone: StatColor = retentionColor(retention);
+  // P098: « 0 % » en rouge quand aucune review aujourd'hui = « pas de données »
+  // affiché comme un échec. Neutre tant qu'il n'y a rien à mesurer.
+  const noReviews = reviews === 0;
+  const retentionTone: StatColor = noReviews ? "default" : retentionColor(retention);
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -75,7 +78,7 @@ export function TodayCard({ data, isLoading }: TodayCardProps) {
       <StatTile
         icon={TrendingUp}
         label="Rétention aujourd'hui"
-        value={isLoading ? "—" : `${retentionPct}%`}
+        value={isLoading || noReviews ? "—" : `${retentionPct}%`}
         color={isLoading ? "default" : retentionTone}
         testid="today-retention"
       />
