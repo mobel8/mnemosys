@@ -14,7 +14,9 @@
 
 ## Vision
 
-Mnemosys est une app desktop de **répétition espacée (SRS)** qui pousse FSRS-6 et la stack moderne du web (React 19, Tauri 2, Rust) au service d'une seule chose : **te faire retenir plus, en révisant moins**. Pas de cloud obligatoire, pas de gamification creuse, juste un cycle review/feedback aussi serré que possible. C'est l'alternative légère, performante et auditable à Anki pour 2026.
+Mnemosys est une app desktop de **répétition espacée (SRS)** taillée pour **les apprenants de langues exigeants** — d'abord l'anglais — qui veulent transformer du texte, des captures d'écran et du vocabulaire réel en cartes, puis les ancrer durablement. Le cœur reste une seule promesse : **retenir plus en révisant moins**, grâce à FSRS-6 et un cycle review/feedback aussi serré que possible.
+
+Tout le reste (palais de mémoire 3D, podcasts de deck, modes neuro, dessin…) est rangé en **modules opt-in** : on peut les ignorer entièrement et garder une app SRS rapide, locale et auditable. Pas de cloud obligatoire, pas de gamification creuse. C'est l'alternative moderne, performante et transparente à Anki pour 2026.
 
 ## Statut
 
@@ -35,22 +37,41 @@ Mnemosys est une app desktop de **répétition espacée (SRS)** qui pousse FSRS-
 
 ## Différenciateurs vs Anki / RemNote / Mochi
 
-- **La SEULE app SRS qui mesure la métacognition** (CBM confidence rating + scoring asymétrique)
-- **Choix d'algorithme par deck** (FSRS-6 / SM-2 / Leitner)
-- **Local-first + AI Augmented** (cohérent privacy-first Tauri)
-- **Sourcing scientifique transparent** — chaque feature opt-in cite ses papers (effect sizes)
+- **Métacognition de première classe** — confidence rating (CBM) + dashboard de calibration qui montre l'écart entre ta confiance et ta réussite réelle. Rare dans les SRS grand public.
+- **Capture → cartes** — OCR d'une capture d'écran ou collage de texte, puis génération de cartes (LLM en option, BYOK) ; pensé pour l'immersion linguistique.
+- **Choix d'algorithme par deck** (FSRS-6 / SM-2 / Leitner) — tu arbitres selon le contexte plutôt qu'un seul scheduler imposé.
+- **Local-first + auditable** — base SQLite locale, code ouvert, IA en *Bring-Your-Own-Key* : aucune donnée ne part sans ton action.
+- **Sourcing scientifique transparent** — chaque module opt-in cite ses publications (effect sizes) ; FSRS-6 réduit typiquement la charge de révision de **20–30 %** à rétention égale ([benchmark open-spaced-repetition](https://github.com/open-spaced-repetition/srs-benchmark)).
 
-## Fonctionnalités (Session 1)
+## Fonctionnalités (v0.10.0)
+
+**Cœur SRS**
 
 - **FSRS-6** via la crate `fsrs` 5.2 (21 paramètres, prévisualisation des intervalles, états `new` / `learning` / `review` / `relearning`). [Spec algo](https://github.com/open-spaced-repetition/fsrs4anki/wiki/ABC-of-FSRS).
-- **Decks + cartes** avec trois templates : `basic`, `basic_reverse` (2 cartes générées par note) et `cloze` (`{{c1::texte}}` style Anki).
-- **Session de review** : flip animé, 4 boutons de notation Again/Hard/Good/Easy avec **preview live des intervalles**, raccourcis clavier, suspension/édition à la volée, écran de fin avec confetti.
-- **Dashboard de stats** : KPIs du jour, heatmap GitHub-style sur 1 an, courbes reviews/jour et rétention/jour avec sélecteur de période (7j / 30j / 90j / 1 an).
-- **Import / export JSON** : round-trip portable (export ne contient pas l'historique de scheduling — design choice pour rester compatible entre bases).
-- **4 decks démo (835 cartes)** : Vocabulaire EN→FR (500), Capitales du monde (195), Fondamentaux JavaScript/TypeScript (80), Biologie cellulaire (60).
-- **Thèmes light / dark / system** persistés.
-- **Recherche FTS5 trigram** sur le contenu et les tags des notes.
-- **First-run wizard** trois slides + dialog d'aide raccourcis (`?`).
+- **Schedulers pluggables par deck** : FSRS-6, SM-2 ou Leitner 5-box, au choix.
+- **Decks + cartes** avec templates `basic`, `basic_reverse` (2 cartes par note) et `cloze` (`{{c1::texte}}` style Anki).
+- **Session de review** : flip animé, notation Again/Hard/Good/Easy avec **preview live des intervalles**, raccourcis clavier, suspension/édition à la volée, écran de fin.
+- **Dashboard de stats** : KPIs du jour, heatmap GitHub-style sur 1 an, courbes reviews/jour, rétention/jour et **dashboard de calibration** (sélecteur 7j / 30j / 90j / 1 an).
+- **FSRS Optimizer** : recalibre les 21 paramètres sur ton propre historique.
+- **Import / export JSON** + **import `.apkg` Anki**.
+- **4 decks démo — 835 notes (≈ 1 030 cartes)** : Vocabulaire EN→FR (500), Capitales du monde (195, recto-verso), Fondamentaux JavaScript/TypeScript (80), Biologie cellulaire (60).
+
+**Apprentissage des langues**
+
+- **Capture → cartes** : OCR (Tesseract `fra`/`eng`) d'une capture d'écran, puis génération de cartes.
+- **Génération IA** (BYOK : Claude / OpenAI / Ollama local) à partir d'un texte, avec critique et champs *Why?/Example* optionnels.
+- **Lecture assistée**, **Vocabulaire par fréquence**, **Shadowing** et **Prononciation** (paires minimales, IPA, TTS Piper + Whisper).
+
+**Modules opt-in (labs)**
+
+- **Palais de mémoire 3D** (React-Three-Fiber), **Mnémotechnique**, **Musique**, **Dessin**.
+- **Modes neuro** sourcés : mood/sleep check-in, pauses mouvement, cyclic sighing.
+- **Gamification éthique** : streaks + freeze, succès intrinsèques, maîtrise de deck (style WaniKani).
+
+**Transverse**
+
+- **Thèmes light / dark / system** persistés, **recherche FTS5 trigram**, **first-run wizard** + aide raccourcis (`?`).
+- **Sync cloud Supabase** optionnelle (désactivée tant qu'aucun projet n'est configuré).
 
 ## Installation
 
@@ -59,7 +80,7 @@ Mnemosys est une app desktop de **répétition espacée (SRS)** qui pousse FSRS-
 | Outil | Version |
 |-------|---------|
 | Node  | **22+** |
-| pnpm  | **9+**  |
+| pnpm  | **10+** (le dépôt épingle `pnpm@11` via `packageManager` ; active-le avec `corepack enable`) |
 | Rust  | **1.81+** (via [rustup](https://rustup.rs)) |
 
 ### Dépendances système
@@ -89,8 +110,9 @@ Rien d'autre — WebKit est embarqué dans le système.
 ### Cloner et installer
 
 ```bash
-git clone <repo-url> mnemosys
+git clone https://github.com/mobel8/mnemosys.git
 cd mnemosys
+corepack enable      # active la version de pnpm épinglée par le dépôt
 pnpm install
 ```
 
@@ -106,7 +128,7 @@ Le premier build Rust dure environ **5 minutes** (compilation de Tauri + dépend
 ```bash
 pnpm tauri:build
 ```
-Produit un binaire optimisé (`opt-level=s`, LTO, strip) + un installeur natif (`.deb`/`.AppImage` sur Linux, `.dmg`/`.app` sur macOS, `.msi`/`.exe` sur Windows). *Note : ce chemin n'a pas été validé en Session 1 (release packaging = Session 4).*
+Produit un binaire optimisé (`opt-level=s`, LTO, strip) + un installeur natif (`.deb`/`.AppImage` sur Linux, `.dmg`/`.app` sur macOS, `.msi`/`.exe` sur Windows). Ce chemin est validé en CI (matrice Linux / macOS / Windows) et publie les bundles à chaque release taguée.
 
 ## Stack technique
 
@@ -140,10 +162,12 @@ Voir [ARCHITECTURE.md](./ARCHITECTURE.md) pour le détail (diagramme, schéma DB
 
 ## Roadmap
 
-- **Session 1 — MVP Desktop** (livré) : FSRS-6, CRUD decks/cartes, review session, stats, import/export.
-- **Session 2 — IA & contenu** : génération de cartes à partir d'un texte (LLM), text-to-speech, image-occlusion, import `.apkg` Anki.
-- **Session 3 — Sync cloud** : Supabase (Postgres + Auth), résolution de conflits CRDT, multi-device.
-- **Session 4 — Optimizer & release** : FSRS Optimizer (calibration personnalisée des 21 params), analytics avancés, packaging signé pour les 3 OS.
+Tout l'historique livré (Sessions 1→4 puis Vagues 1→9) est détaillé dans le [CHANGELOG.md](./CHANGELOG.md). Ce qui reste à venir :
+
+- **Durcissement** : audit de dépendances en CI, crash reporting opt-in, signature des binaires des 3 OS.
+- **Sync cloud GA** : sortir Supabase du mode scaffolding (résolution de conflits, multi-device).
+- **Codegen de la frontière IPC** (tauri-specta) pour supprimer la duplication manuelle des wrappers.
+- **Couverture linguistique** : enrichir dictionnaire/IPA et traductions du vocabulaire par fréquence.
 
 ## Tests
 
@@ -156,7 +180,7 @@ Voir [ARCHITECTURE.md](./ARCHITECTURE.md) pour le détail (diagramme, schéma DB
 | `pnpm typecheck`       | Vérifie tous les fichiers TS/TSX |
 | `pnpm lint`            | Biome check |
 
-**Résultats actuels (Session 1)** : 9 fichiers de tests TS (smoke, format, stats, note-editor, review-controls, import-export, shortcuts), 27 golden tests FSRS côté Rust + tests d'intégration DB.
+**Couverture actuelle** : suite de tests TypeScript (Vitest, jsdom) sur les composants et utilitaires, et plus de 250 tests Rust (golden FSRS, scheduler, DB, commandes). La CI exécute frontend (tsc + Biome + Vitest), backend (`cargo fmt`/`clippy -D warnings`/`test`), un *gate* de licences et un build matriciel Linux / macOS / Windows.
 
 ## Contribution
 
