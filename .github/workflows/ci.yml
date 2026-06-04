@@ -126,6 +126,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Audit npm dependencies (P066)
+        # Fail the build on a known HIGH/CRITICAL advisory in a *production*
+        # dependency (what actually ships in the bundle). `--prod` excludes
+        # devDependencies (Vitest UI / esbuild / vite dev-server advisories are
+        # build-time only and never reach a user), keeping the gate signal-rich
+        # rather than noisy. Catches a future shipped-dependency CVE on every PR.
+        run: pnpm audit --prod --audit-level high
+
       - name: Check npm licenses (license-checker)
         # `--failOn` exits non-zero if any production dependency carries a
         # banned license. Semicolon-separated SPDX ids. `--production` skips

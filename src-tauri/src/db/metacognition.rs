@@ -691,7 +691,8 @@ mod tests {
         // A review one second before the horizon end is still too early.
         let just_before = predicted_at + horizon_days * DAY - 1;
         assert_eq!(
-            meta.resolve_prediction(card_id, false, just_before).unwrap(),
+            meta.resolve_prediction(card_id, false, just_before)
+                .unwrap(),
             0,
             "resolution must wait until predicted_at + horizon*86400"
         );
@@ -700,7 +701,8 @@ mod tests {
         // (correct) is the one calibration records.
         let after_horizon = predicted_at + horizon_days * DAY;
         assert_eq!(
-            meta.resolve_prediction(card_id, true, after_horizon).unwrap(),
+            meta.resolve_prediction(card_id, true, after_horizon)
+                .unwrap(),
             1,
             "the first post-horizon review must resolve the JOL"
         );

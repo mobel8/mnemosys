@@ -2,7 +2,7 @@
 
 > L'app de mémorisation next-gen, propulsée par l'algorithme **FSRS-6** — 100 % locale, ultra-rapide, pensée clavier-first.
 
-[![v0.10.0](https://img.shields.io/badge/version-0.10.0-22c55e)](./CHANGELOG.md)
+[![v0.10.1](https://img.shields.io/badge/version-0.10.1-22c55e)](./CHANGELOG.md)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-24c8db)](https://tauri.app)
 [![React 19](https://img.shields.io/badge/React-19-61dafb)](https://react.dev)
 [![Rust 1.81+](https://img.shields.io/badge/Rust-1.81%2B-orange)](https://www.rust-lang.org)

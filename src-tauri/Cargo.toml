@@ -1,6 +1,6 @@
 [package]
 name = "mnemosys"
-version = "0.10.0"
+version = "0.10.1"
 description = "Next-gen spaced repetition (SRS) desktop app."
 authors = ["Mnemosys Team"]
 edition = "2021"
@@ -27,6 +27,10 @@ tauri-plugin-dialog = "2"
 # entirely in favour of sqlx (requires rewriting A2 repositories).
 tauri-plugin-store = "2"
 tauri-plugin-notification = "2"
+# P091 — persistent, rotating log file in the OS log dir (+ stdout in dev) so a
+# production crash leaves a diagnosable trail. Paired with a panic hook and the
+# `log_frontend_error` / `open_log_dir` commands (see commands/diagnostics.rs).
+tauri-plugin-log = "2"
 # Auto-updater (Session 4). SECURITY (P036): the plugin must NOT be compiled
 # in nor registered until a real minisign signing keypair exists and its
 # public key is committed to `tauri.conf.json::plugins.updater.pubkey`.

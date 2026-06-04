@@ -130,10 +130,9 @@ pub fn synthesize_piper(binary: &str, model: &str, text: &str, out_path: &Path) 
     // as soon as the child closes its stderr (i.e. on exit or kill), so this
     // never blocks beyond the child's own lifetime. Defaults to empty if the
     // pipe was missing or the reader thread panicked.
-    let collect_stderr =
-        |handle: Option<std::thread::JoinHandle<String>>| -> String {
-            handle.and_then(|h| h.join().ok()).unwrap_or_default()
-        };
+    let collect_stderr = |handle: Option<std::thread::JoinHandle<String>>| -> String {
+        handle.and_then(|h| h.join().ok()).unwrap_or_default()
+    };
 
     // Bounded wait. `std::process` has no native timeout, so poll `try_wait`
     // on a short interval up to the ceiling. This keeps the dependency surface

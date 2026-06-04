@@ -314,8 +314,9 @@ impl<'a> NoteRepo<'a> {
         let fields_str = serde_json::to_string(&fields)?;
 
         // The ordinal set the edited fields should own (sorted, unique).
-        let desired: BTreeSet<i64> =
-            ords_for_template(existing.template, &fields)?.into_iter().collect();
+        let desired: BTreeSet<i64> = ords_for_template(existing.template, &fields)?
+            .into_iter()
+            .collect();
 
         // Reconcile the fields write and the card add/remove in ONE
         // transaction so a mid-reconciliation failure can't leave the note's
@@ -1111,7 +1112,11 @@ mod tests {
                 }),
             )
             .unwrap();
-        assert_eq!(card_count(note.id), 1, "two masks removed → two cards deleted");
+        assert_eq!(
+            card_count(note.id),
+            1,
+            "two masks removed → two cards deleted"
+        );
     }
 
     #[test]

@@ -11,6 +11,7 @@ pub mod cards;
 pub mod cognitive;
 pub mod decks;
 pub mod demo;
+pub mod diagnostics;
 pub mod fsrs_optimizer;
 pub mod gamification;
 pub mod io;

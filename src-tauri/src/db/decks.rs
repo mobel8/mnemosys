@@ -947,7 +947,11 @@ mod tests {
         db.cards(&conn).suspend(suspended, true).unwrap();
 
         let batch = db.decks(&conn).list_with_stats().unwrap();
-        assert_eq!(batch.len(), 2, "every deck must be present, even empty ones");
+        assert_eq!(
+            batch.len(),
+            2,
+            "every deck must be present, even empty ones"
+        );
 
         for entry in &batch {
             let stats = db.decks(&conn).stats(entry.deck.id).unwrap();

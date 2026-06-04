@@ -268,7 +268,11 @@ pub(crate) fn strip_code_fences(s: &str) -> &str {
     // bracket so both array and object payloads survive a chatty model.
     if !(out.starts_with('[') || out.starts_with('{')) {
         if let Some(start) = out.find(['[', '{']) {
-            let close = if out.as_bytes()[start] == b'[' { ']' } else { '}' };
+            let close = if out.as_bytes()[start] == b'[' {
+                ']'
+            } else {
+                '}'
+            };
             if let Some(end) = out.rfind(close) {
                 if end > start {
                     return out[start..=end].trim();
@@ -286,7 +290,8 @@ mod tests {
     #[test]
     fn strips_single_line_json_fence() {
         // P074 — the regression: tag + payload on ONE line, no newline.
-        let raw = r#"```json [{"template":"basic","fields":{"front":"Q","back":"A"},"tags":[]}] ```"#;
+        let raw =
+            r#"```json [{"template":"basic","fields":{"front":"Q","back":"A"},"tags":[]}] ```"#;
         let cards = parse_cards_response(raw).expect("single-line fence must parse");
         assert_eq!(cards.len(), 1);
     }

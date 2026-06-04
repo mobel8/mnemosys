@@ -354,7 +354,10 @@ pub fn save_settings(
     }
     if let Some(ct) = settings.chronotype.as_deref() {
         if !matches!(ct, "morning" | "intermediate" | "evening") {
-            return Err(AppError::Validation(format!("Chronotype invalide : {}", ct)));
+            return Err(AppError::Validation(format!(
+                "Chronotype invalide : {}",
+                ct
+            )));
         }
     }
     // P043: a Supabase URL, when present, must be an `https://` endpoint with a

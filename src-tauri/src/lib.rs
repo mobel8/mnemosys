@@ -35,7 +35,30 @@ use crate::app_state::AppState;
 /// Entry point used by both `main.rs` (release) and integration tests.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // P091 — route Rust panics into the persistent log so a production crash
+    // isn't silent. Chained after any pre-existing hook. The log target is set
+    // up by `tauri_plugin_log` below (LogDir + stdout in dev).
+    let prev_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        log::error!("[panic] {info}");
+        prev_hook(info);
+    }));
+
     let builder = tauri::Builder::default()
+        // P091 — rotating log file in the OS log dir (+ stdout in debug builds).
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("mnemosys".into()),
+                    },
+                ))
+                .target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::Stdout,
+                ))
+                .build(),
+        )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         // tauri-plugin-sql is intentionally NOT registered — rusqlite owns
@@ -85,6 +108,9 @@ pub fn run() {
             commands::decks::get_deck_stats,
             commands::decks::get_decks_with_stats,
             commands::decks::count_decks,
+            // P091 — diagnostics surface for the error boundary.
+            commands::diagnostics::log_frontend_error,
+            commands::diagnostics::open_log_dir,
             commands::decks::get_deck_mastery,
             commands::decks::get_deck_mastery_status,
             // cards / notes

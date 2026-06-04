@@ -285,7 +285,9 @@ fn estimate_strength_days(
 
     let raw = match from {
         // FSRS stability is already a day-scale memory strength.
-        Fsrs6 => stability.filter(|s| s.is_finite() && *s > 0.0).unwrap_or(anchor_days),
+        Fsrs6 => stability
+            .filter(|s| s.is_finite() && *s > 0.0)
+            .unwrap_or(anchor_days),
         // SM-2 EF is not a day scale; the card's last interval is the best
         // available strength anchor.
         Sm2 => anchor_days,
@@ -303,8 +305,12 @@ fn estimate_strength_days(
         // HLR: half-life `h = 2^(nb_correct - nb_incorrect + bias)` (see
         // hlr.rs, θ = [+1, -1, +1]). The half-life is the natural strength.
         Hlr => {
-            let nb_correct = stability.filter(|v| v.is_finite() && *v >= 0.0).unwrap_or(0.0);
-            let nb_incorrect = difficulty.filter(|v| v.is_finite() && *v >= 0.0).unwrap_or(0.0);
+            let nb_correct = stability
+                .filter(|v| v.is_finite() && *v >= 0.0)
+                .unwrap_or(0.0);
+            let nb_incorrect = difficulty
+                .filter(|v| v.is_finite() && *v >= 0.0)
+                .unwrap_or(0.0);
             2f64.powf(nb_correct - nb_incorrect + 1.0)
         }
         // MEMORIZE: interval = C/√n with C ≈ 2.7 (see memorize.rs). The current
@@ -425,13 +431,8 @@ mod tests {
     #[test]
     fn convert_pristine_new_card_stays_fresh() {
         // A never-reviewed card (no stored fields) must not gain bogus values.
-        let (s, d) = convert_memory_fields(
-            SchedulerKind::Fsrs6,
-            SchedulerKind::Leitner,
-            None,
-            None,
-            0,
-        );
+        let (s, d) =
+            convert_memory_fields(SchedulerKind::Fsrs6, SchedulerKind::Leitner, None, None, 0);
         assert_eq!(s, None);
         assert_eq!(d, None);
     }
@@ -490,8 +491,7 @@ mod tests {
             SchedulerKind::Hlr,
             SchedulerKind::Memorize,
         ] {
-            let (s, d) =
-                convert_memory_fields(sources, to, Some(99_999.0), Some(999.0), 100_000);
+            let (s, d) = convert_memory_fields(sources, to, Some(99_999.0), Some(999.0), 100_000);
             let s = s.unwrap();
             let d = d.unwrap();
             assert!(s.is_finite() && d.is_finite());

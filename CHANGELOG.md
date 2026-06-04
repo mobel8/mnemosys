@@ -1,5 +1,62 @@
 # Changelog
 
+## [0.10.1] — Audit qualité, Vague 2 : ~64 corrections medium + low (2026-06-04)
+
+Suite de l'audit du 0.10.0 : correction du **reste du backlog** (medium + low)
+via deux swarms multi-agents (17 escouades de fix + 6 de finition, fichiers
+exclusifs) puis réconciliation et **vérification centrale complète** verte
+(tsc · biome · vitest 189 · cargo fmt/clippy/test 296+55).
+
+### Correctness / parcours
+- **P049** : l'édition d'une note cloze/occlusion réconcilie ses cartes (plus
+  de cartes orphelines ou manquantes).
+- **P058** : la résolution des prédictions JOL respecte `prediction_horizon_days`.
+- **P069** : `daily_review_limit` / `daily_new_limit` étaient **inopérants** — la
+  file de révision plafonne désormais réellement révisions + cartes neuves.
+- **P073** : au changement de scheduler d'un deck, `stability`/`difficulty` sont
+  **convertis** (devise commune « force mémoire en jours ») au lieu d'être
+  réinterprétés bruts.
+- **P124/P128** : `elapsed_days` à source unique ; mélange entrelacé à graine
+  64 bits (splitmix64) + page plafonnée serveur.
+- **P052** : concaténation MP3 du podcast qui retire les tags ID3/Xing en milieu
+  de flux (plus de corruption). **P064** : import `.apkg`/lecture en une seule
+  transaction. **P129** : mapping deck déterministe à l'import `.apkg`.
+
+### Performance
+- **P060** : statistiques rétrospectives calculées en SQL (plus de chargement
+  de tout l'historique en mémoire). **P062** : états FSRS mémoïsés.
+- **P081** : tableau de bord N+1 supprimé — nouvelle commande
+  `get_decks_with_stats` (une requête agrégée + un aller-retour IPC) consommée
+  par `useDecksWithStats` ; `DeckGrid` passe stats/maîtrise en props.
+
+### Sécurité / robustesse
+- **P090** : les corps d'erreur amont (Claude/OpenAI/Ollama/Supabase) ne fuient
+  plus verbatim — statuts mappés vers des messages courts contrôlés.
+- **P083** : routes à paramètre durcies (`notFound()` sur id invalide) + pages
+  d'erreur/chargement par défaut du routeur.
+- **P091** : logs persistants rotatifs (`tauri-plugin-log`) + hook de panic +
+  commandes `log_frontend_error`/`open_log_dir` derrière l'ErrorBoundary.
+- **P118** : validation des octets magiques PNG, décodeur base64 standard, clé
+  de cache TTS incluant le modèle.
+- **P066** : audit des dépendances npm de production en CI (`pnpm audit --prod`).
+
+### Design / accessibilité / i18n
+- **P072** : couleurs brutes (hex/Tailwind) remplacées par les tokens
+  sémantiques (waveforms, confiance, calibration, mains-libres).
+- **P071** : `<select>` natifs → primitives Radix ; **P070** : confirmations via
+  AlertDialog ; **P100/P106/P105/P109** : a11y (occlusion, radiogroup couleurs,
+  intervalles annoncés, progression). **P115** : corrections FR (octets, libellés).
+- **P057** : la gate Podcast compte les cartes réellement « podcastables ».
+
+### Non corrigés (documentés)
+- **P065** : `fsrs` 5.2 n'expose aucune feature Cargo ; le poids de Burn
+  (wgpu/candle) + `zip 1.1.4` sont des deps transitives non contrôlables sans
+  fork ou bump de version risqué — laissé en l'état.
+- **P092** (workflow de publication auto), **P094** (monétisation/entitlement),
+  **P132** (codegen tauri-specta de la frontière IPC) : différés.
+- **P131** : faux positif (le `pnpm build` est le bon `beforeBuildCommand`
+  cross-OS, prouvé par la CI verte) — ignoré.
+
 ## [0.10.0] — Audit qualité multi-agents : 48 corrections critical + high (2026-06-03)
 
 Audit exhaustif (52 finders + 7 stratèges + 7 veille concurrentielle, ~533

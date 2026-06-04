@@ -207,10 +207,16 @@ mod tests {
     /// silently falling through to the `.webm` default.
     #[test]
     fn filename_strips_codec_parameters() {
-        assert_eq!(filename_for_mime("audio/webm;codecs=opus"), "recording.webm");
+        assert_eq!(
+            filename_for_mime("audio/webm;codecs=opus"),
+            "recording.webm"
+        );
         assert_eq!(filename_for_mime("audio/ogg;codecs=opus"), "recording.ogg");
         // Whitespace after the ';' is tolerated and matching is case-insensitive.
-        assert_eq!(filename_for_mime("AUDIO/WAV; charset=binary"), "recording.wav");
+        assert_eq!(
+            filename_for_mime("AUDIO/WAV; charset=binary"),
+            "recording.wav"
+        );
     }
 
     /// Bare MIME types keep mapping to their canonical extension, and an
@@ -222,6 +228,9 @@ mod tests {
         assert_eq!(filename_for_mime("audio/mp4"), "recording.m4a");
         assert_eq!(filename_for_mime("audio/ogg"), "recording.ogg");
         assert_eq!(filename_for_mime("audio/webm"), "recording.webm");
-        assert_eq!(filename_for_mime("application/octet-stream"), "recording.webm");
+        assert_eq!(
+            filename_for_mime("application/octet-stream"),
+            "recording.webm"
+        );
     }
 }

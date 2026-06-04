@@ -193,9 +193,7 @@ fn skip_leading_xing_info(data: &[u8]) -> &[u8] {
     // a genuine Xing frame places it within the first ~40 bytes.
     let scan_end = frame_len.min(40);
     let body = &data[4..scan_end];
-    let is_vbr_header = body
-        .windows(4)
-        .any(|w| w == b"Xing" || w == b"Info");
+    let is_vbr_header = body.windows(4).any(|w| w == b"Xing" || w == b"Info");
     if is_vbr_header {
         &data[frame_len..]
     } else {
@@ -355,7 +353,9 @@ mod tests {
     #[test]
     fn strip_id3v2_ignores_bogus_syncsafe_size() {
         // High bit set in a size byte is illegal → treat as no tag, don't slice.
-        let data = vec![b'I', b'D', b'3', 0x03, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xAA];
+        let data = vec![
+            b'I', b'D', b'3', 0x03, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xAA,
+        ];
         assert_eq!(strip_leading_id3v2(&data), &data[..]);
     }
 
@@ -394,7 +394,7 @@ mod tests {
     #[test]
     fn concat_single_segment_is_verbatim() {
         let only = id3v2(4);
-        let out = concat_mp3_segments(&[only.clone()]);
+        let out = concat_mp3_segments(std::slice::from_ref(&only));
         assert_eq!(out, only);
     }
 }
