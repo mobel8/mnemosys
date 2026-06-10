@@ -971,30 +971,6 @@ fn sketch_deleted_with_card_cascade() {
     }
 }
 
-// ---- Vague 9 — Memory Palace 3D Builder ------------------------------------
-
-/// Seed a deck and `n` distinct basic notes/cards, returning their card ids.
-fn seed_n_cards(db: &Database, deck_id: i64, n: usize) -> Vec<i64> {
-    let conn = db.lock();
-    for i in 0..n {
-        db.notes(&conn)
-            .create(
-                deck_id,
-                NoteTemplate::Basic,
-                json!({ "front": format!("Q{}", i), "back": format!("A{}", i) }),
-                vec![],
-                None,
-            )
-            .unwrap();
-    }
-    db.cards(&conn)
-        .list_in_deck(deck_id, n as u32, 0)
-        .unwrap()
-        .into_iter()
-        .map(|c| c.card.id)
-        .collect()
-}
-
 #[test]
 fn create_sentence_note_creates_2_cards() {
     let (db, deck_id) = fresh_db_with_deck();
