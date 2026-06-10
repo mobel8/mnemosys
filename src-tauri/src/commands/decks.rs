@@ -10,7 +10,6 @@ use crate::app_state::AppState;
 use crate::db::{Deck, DeckMastery, DeckPatch, DeckStats, DeckWithStats, MasteryStatus};
 use crate::error::AppResult;
 use crate::fsrs::DEFAULT_DESIRED_RETENTION;
-use crate::scheduler::SchedulerKind;
 
 #[tauri::command]
 pub fn list_decks(state: State<'_, AppState>) -> AppResult<Vec<Deck>> {
@@ -27,6 +26,9 @@ pub fn get_deck(state: State<'_, AppState>, id: i64) -> AppResult<Deck> {
 // Arguments mirror the deck's persisted columns 1:1 and are passed by name
 // over the Tauri IPC boundary; collapsing them into a struct would only move
 // the same fields behind an extra layer, so we accept the count here.
+//
+// v0.11 — no `scheduler_kind` argument anymore: FSRS-6 is the only scheduler,
+// every deck is created as `'fsrs6'`.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn create_deck(
@@ -35,7 +37,6 @@ pub fn create_deck(
     description: Option<String>,
     color: String,
     desired_retention: Option<f64>,
-    scheduler_kind: Option<SchedulerKind>,
     language_mode: Option<String>,
     prerequisite_deck_id: Option<i64>,
 ) -> AppResult<Deck> {
@@ -46,7 +47,7 @@ pub fn create_deck(
         description.as_deref(),
         &color,
         retention,
-        scheduler_kind,
+        None,
         language_mode.as_deref(),
         prerequisite_deck_id,
     )

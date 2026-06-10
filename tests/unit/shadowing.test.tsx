@@ -7,18 +7,28 @@
  *      "Écouter" stays disabled until a sentence is typed.
  *   2. `computeWaveformPeaks` down-samples a PCM channel to the requested bar
  *      count and normalises the loudest bar to 1.
+ *   3. When synthesis fails, the page degrades to the Web Speech fallback
+ *      (« voix système » note, informative toast, no further synth calls)
+ *      instead of a dead « Écouter » button.
  *
  * The Web-Audio AudioContext is stubbed globally in `tests/setup.ts`; the TTS
  * query hooks + `convertFileSrc` are mocked here. We never exercise the real
  * MediaRecorder / decode path in these tests.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const synthesizeMutateAsync = vi.fn(async () => ({
+  path: "/tmp/x.mp3",
+  cached: false,
+  size_bytes: 1,
+}));
+const toastMock = vi.fn();
 
 vi.mock("@/components/ui/use-toast", () => ({
-  toast: vi.fn(),
-  useToast: () => ({ toasts: [], toast: vi.fn(), dismiss: vi.fn() }),
+  toast: (...args: unknown[]) => toastMock(...args),
+  useToast: () => ({ toasts: [], toast: toastMock, dismiss: vi.fn() }),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -27,15 +37,18 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("@/lib/queries", () => ({
   useSettingsQuery: () => ({ data: { tts_voice: "nova", tts_speed: 1.0 } }),
-  useSynthesizeAudio: () => ({
-    mutateAsync: vi.fn(async () => ({ path: "/tmp/x.mp3", cached: false, size_bytes: 1 })),
-    isPending: false,
-  }),
+  useSynthesizeAudio: () => ({ mutateAsync: synthesizeMutateAsync, isPending: false }),
 }));
 
 import { computeWaveformPeaks, ShadowingPractice } from "@/components/ShadowingPractice";
 
+beforeEach(() => {
+  synthesizeMutateAsync.mockClear();
+  toastMock.mockReset();
+});
+
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -77,5 +90,42 @@ describe("ShadowingPractice", () => {
       target: { value: "Buenos días" },
     });
     expect(listen).toBeEnabled();
+  });
+
+  it("falls back to the system voice when synthesis fails, with a discreet note", async () => {
+    synthesizeMutateAsync.mockRejectedValueOnce(new Error("No API key configured"));
+    // jsdom ships no Web Speech API — install observable stubs.
+    const speakSpy = vi.fn();
+    const cancelSpy = vi.fn();
+    vi.stubGlobal("speechSynthesis", { speak: speakSpy, cancel: cancelSpy });
+    class FakeUtterance {
+      text: string;
+      rate = 1;
+      constructor(text: string) {
+        this.text = text;
+      }
+    }
+    vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
+
+    render(<ShadowingPractice />);
+    fireEvent.change(screen.getByLabelText(/Saisis ou colle une phrase/i), {
+      target: { value: "Hello world" },
+    });
+    fireEvent.click(screen.getByTestId("listen-button"));
+
+    // The « voix système » note appears, the sentence is spoken via Web
+    // Speech, and the learner is informed (non-destructive toast).
+    expect(await screen.findByTestId("fallback-note")).toHaveTextContent("voix système");
+    expect(speakSpy).toHaveBeenCalledTimes(1);
+    expect((speakSpy.mock.calls[0]?.[0] as { text: string }).text).toBe("Hello world");
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Voix locale utilisée" }),
+    );
+
+    // Subsequent listens go straight to Web Speech — no further synth calls.
+    synthesizeMutateAsync.mockClear();
+    fireEvent.click(screen.getByTestId("listen-button"));
+    await waitFor(() => expect(speakSpy).toHaveBeenCalledTimes(2));
+    expect(synthesizeMutateAsync).not.toHaveBeenCalled();
   });
 });

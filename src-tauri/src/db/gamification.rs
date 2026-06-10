@@ -12,7 +12,7 @@
 //! Singleton table `user_stats` lives at `id = 1` (CHECK constraint, seeded by
 //! migration v4) so every read path that touches it can assume the row exists.
 
-use chrono::{DateTime, Datelike, Duration, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone};
 use rusqlite::{params, Connection, Row};
 use serde::{Deserialize, Serialize};
 
@@ -23,7 +23,9 @@ use crate::error::{AppError, AppResult};
 pub struct UserStats {
     pub streak_current: i64,
     pub streak_best: i64,
-    /// ISO calendar date (`YYYY-MM-DD`) of the most recent review.
+    /// ISO calendar date (`YYYY-MM-DD`, **local** timezone) of the most
+    /// recent review. Local so a 00:30 review extends today's streak instead
+    /// of yesterday's (the user's wall clock defines the "day").
     pub last_review_date: Option<String>,
     pub freeze_remaining: i64,
     /// ISO month (`YYYY-MM`) the `freeze_remaining` counter belongs to.
@@ -73,10 +75,11 @@ impl<'a> GamificationRepo<'a> {
     /// 2-day gap, otherwise reset to 1), `total_reviews`, and `total_correct`
     /// when the review was passed.
     ///
-    /// `reviewed_at_ts` is a unix timestamp in **seconds** (UTC). `correct`
+    /// `reviewed_at_ts` is a unix timestamp in **seconds**. The calendar day
+    /// it counts toward is resolved in the **local** timezone. `correct`
     /// reflects whether the rating was Good/Easy (`>=2` in the FSRS scale).
     pub fn update_on_review(&self, reviewed_at_ts: i64, correct: bool) -> AppResult<UserStats> {
-        let now_dt = unix_seconds_to_utc(reviewed_at_ts)?;
+        let now_dt = unix_seconds_to_local(reviewed_at_ts)?;
         let today = now_dt.date_naive();
         let stats = self.refresh_freeze_for_month(now_dt)?;
 
@@ -115,7 +118,7 @@ impl<'a> GamificationRepo<'a> {
     /// streak" the day after a miss. Errors with `Validation` when no freeze
     /// is available.
     pub fn use_freeze(&self) -> AppResult<UserStats> {
-        let now_dt = Utc::now();
+        let now_dt = Local::now();
         let stats = self.refresh_freeze_for_month(now_dt)?;
         if stats.freeze_remaining <= 0 {
             return Err(AppError::Validation(
@@ -160,9 +163,10 @@ impl<'a> GamificationRepo<'a> {
 
     // ---- internals --------------------------------------------------------
 
-    /// Lazily reset the per-month freeze counter when the calendar month rolls
-    /// over. Returns the *post-refresh* stats. Idempotent within a month.
-    fn refresh_freeze_for_month(&self, now_dt: DateTime<Utc>) -> AppResult<UserStats> {
+    /// Lazily reset the per-month freeze counter when the LOCAL calendar
+    /// month rolls over. Returns the *post-refresh* stats. Idempotent within
+    /// a month.
+    fn refresh_freeze_for_month(&self, now_dt: DateTime<Local>) -> AppResult<UserStats> {
         let current_month = now_dt.format("%Y-%m").to_string();
         let stats = self.get_user_stats()?;
         let needs_reset = match stats.freeze_month.as_deref() {
@@ -227,8 +231,11 @@ fn compute_streak_progress(
     Ok((1, freeze_remaining))
 }
 
-fn unix_seconds_to_utc(ts: i64) -> AppResult<DateTime<Utc>> {
-    Utc.timestamp_opt(ts, 0)
+/// Resolve a unix timestamp to the user's LOCAL wall-clock time — the
+/// reference frame for streak days and freeze months.
+fn unix_seconds_to_local(ts: i64) -> AppResult<DateTime<Local>> {
+    Local
+        .timestamp_opt(ts, 0)
         .single()
         .ok_or_else(|| AppError::Validation(format!("invalid unix timestamp {}", ts)))
 }

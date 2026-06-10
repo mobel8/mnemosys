@@ -2,7 +2,7 @@
 
 > L'app de mémorisation next-gen, propulsée par l'algorithme **FSRS-6** — 100 % locale, ultra-rapide, pensée clavier-first.
 
-[![v0.10.1](https://img.shields.io/badge/version-0.10.1-22c55e)](./CHANGELOG.md)
+[![v0.11.0](https://img.shields.io/badge/version-0.11.0-22c55e)](./CHANGELOG.md)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-24c8db)](https://tauri.app)
 [![React 19](https://img.shields.io/badge/React-19-61dafb)](https://react.dev)
 [![Rust 1.81+](https://img.shields.io/badge/Rust-1.81%2B-orange)](https://www.rust-lang.org)
@@ -16,7 +16,7 @@
 
 Mnemosys est une app desktop de **répétition espacée (SRS)** taillée pour **les apprenants de langues exigeants** — d'abord l'anglais — qui veulent transformer du texte, des captures d'écran et du vocabulaire réel en cartes, puis les ancrer durablement. Le cœur reste une seule promesse : **retenir plus en révisant moins**, grâce à FSRS-6 et un cycle review/feedback aussi serré que possible.
 
-Tout le reste (palais de mémoire 3D, podcasts de deck, modes neuro, dessin…) est rangé en **modules opt-in** : on peut les ignorer entièrement et garder une app SRS rapide, locale et auditable. Pas de cloud obligatoire, pas de gamification creuse. C'est l'alternative moderne, performante et transparente à Anki pour 2026.
+Depuis la v0.11 (« Recentrage »), l'app assume cette promesse : **6 destinations** (Accueil, Réviser, Créer, Langues, Statistiques, Paramètres), **FSRS-6 comme unique algorithme**, et les quelques extras restants (croquis, mains-libres, podcast, son ambiant) vivent dans un onglet Labs désactivé par défaut. Pas de cloud obligatoire, pas de gamification creuse. C'est l'alternative moderne, performante et transparente à Anki pour 2026.
 
 ## Statut
 
@@ -39,21 +39,21 @@ Tout le reste (palais de mémoire 3D, podcasts de deck, modes neuro, dessin…) 
 
 - **Métacognition de première classe** — confidence rating (CBM) + dashboard de calibration qui montre l'écart entre ta confiance et ta réussite réelle. Rare dans les SRS grand public.
 - **Capture → cartes** — OCR d'une capture d'écran ou collage de texte, puis génération de cartes (LLM en option, BYOK) ; pensé pour l'immersion linguistique.
-- **Choix d'algorithme par deck** (FSRS-6 / SM-2 / Leitner) — tu arbitres selon le contexte plutôt qu'un seul scheduler imposé.
+- **FSRS-6, point.** Le vainqueur des benchmarks open-spaced-repetition, avec rétention cible par deck, optimiseur personnel (asynchrone) et **ré-apprentissage intra-session** des cartes ratées — pas un menu de 5 schedulers dont 4 pièges.
 - **Local-first + auditable** — base SQLite locale, code ouvert, IA en *Bring-Your-Own-Key* : aucune donnée ne part sans ton action.
 - **Sourcing scientifique transparent** — chaque module opt-in cite ses publications (effect sizes) ; FSRS-6 réduit typiquement la charge de révision de **20–30 %** à rétention égale ([benchmark open-spaced-repetition](https://github.com/open-spaced-repetition/srs-benchmark)).
 
-## Fonctionnalités (v0.10.0)
+## Fonctionnalités (v0.11.0)
 
 **Cœur SRS**
 
 - **FSRS-6** via la crate `fsrs` 5.2 (21 paramètres, prévisualisation des intervalles, états `new` / `learning` / `review` / `relearning`). [Spec algo](https://github.com/open-spaced-repetition/fsrs4anki/wiki/ABC-of-FSRS).
-- **Schedulers pluggables par deck** : FSRS-6, SM-2 ou Leitner 5-box, au choix.
+- **Ré-apprentissage intra-session** : une carte « Encore » revient dans la même session (max 2 repassages) au lieu de disparaître jusqu'au lendemain.
 - **Decks + cartes** avec templates `basic`, `basic_reverse` (2 cartes par note) et `cloze` (`{{c1::texte}}` style Anki).
 - **Session de review** : flip animé, notation Again/Hard/Good/Easy avec **preview live des intervalles**, raccourcis clavier, suspension/édition à la volée, écran de fin.
 - **Dashboard de stats** : KPIs du jour, heatmap GitHub-style sur 1 an, courbes reviews/jour, rétention/jour et **dashboard de calibration** (sélecteur 7j / 30j / 90j / 1 an).
 - **FSRS Optimizer** : recalibre les 21 paramètres sur ton propre historique.
-- **Import / export JSON** + **import `.apkg` Anki**.
+- **Export/Import JSON v2 = vrai backup** (état FSRS + historique de reviews) + **import `.apkg` Anki** et sous-titres `.srt`/`.vtt`, regroupés dans le hub « Créer ».
 - **4 decks démo — 835 notes (≈ 1 030 cartes)** : Vocabulaire EN→FR (500), Capitales du monde (195, recto-verso), Fondamentaux JavaScript/TypeScript (80), Biologie cellulaire (60).
 
 **Apprentissage des langues**
@@ -62,16 +62,14 @@ Tout le reste (palais de mémoire 3D, podcasts de deck, modes neuro, dessin…) 
 - **Génération IA** (BYOK : Claude / OpenAI / Ollama local) à partir d'un texte, avec critique et champs *Why?/Example* optionnels.
 - **Lecture assistée**, **Vocabulaire par fréquence**, **Shadowing** et **Prononciation** (paires minimales, IPA, TTS Piper + Whisper).
 
-**Modules opt-in (labs)**
+**Labs (opt-in, Paramètres → Labs)**
 
-- **Palais de mémoire 3D** (React-Three-Fiber), **Mnémotechnique**, **Musique**, **Dessin**.
-- **Modes neuro** sourcés : mood/sleep check-in, pauses mouvement, cyclic sighing.
-- **Gamification éthique** : streaks + freeze, succès intrinsèques, maîtrise de deck (style WaniKani).
+- Croquis avant retournement, réponse vocale (Whisper), mode mains-libres, podcast de deck, son ambiant.
+- **Gamification éthique** : streaks + freeze, succès intrinsèques, maîtrise de deck (style WaniKani) — onglet Succès des statistiques.
 
 **Transverse**
 
 - **Thèmes light / dark / system** persistés, **recherche FTS5 trigram**, **first-run wizard** + aide raccourcis (`?`).
-- **Sync cloud Supabase** optionnelle (désactivée tant qu'aucun projet n'est configuré).
 
 ## Installation
 
@@ -128,7 +126,7 @@ Le premier build Rust dure environ **5 minutes** (compilation de Tauri + dépend
 ```bash
 pnpm tauri:build
 ```
-Produit un binaire optimisé (`opt-level=s`, LTO, strip) + un installeur natif (`.deb`/`.AppImage` sur Linux, `.dmg`/`.app` sur macOS, `.msi`/`.exe` sur Windows). Ce chemin est validé en CI (matrice Linux / macOS / Windows) et publie les bundles à chaque release taguée.
+Produit un binaire optimisé (`opt-level=s`, LTO, strip) + un installeur natif (`.deb`/`.AppImage` sur Linux, `.dmg`/`.app` sur macOS, `.msi`/`.exe` sur Windows). Ce chemin est validé en CI (matrice Linux / macOS / Windows) ; les bundles y sont produits comme artifacts.
 
 ## Stack technique
 
@@ -175,7 +173,7 @@ Tout l'historique livré (Sessions 1→4 puis Vagues 1→9) est détaillé dans 
 |----------|-----------|
 | `pnpm test`            | Tests unitaires TypeScript (Vitest, jsdom) |
 | `pnpm test:watch`      | Vitest en mode watch |
-| `pnpm test:e2e`        | Tests Playwright (nécessite `pnpm tauri:dev` actif) |
+| `pnpm test:e2e`        | Tests Playwright (lance son propre serveur Vite) |
 | `cd src-tauri && cargo test` | Tests Rust (DB, FSRS scheduler, commands) |
 | `pnpm typecheck`       | Vérifie tous les fichiers TS/TSX |
 | `pnpm lint`            | Biome check |

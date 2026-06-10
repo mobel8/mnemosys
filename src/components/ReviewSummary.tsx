@@ -153,11 +153,11 @@ export function ReviewSummary({
 
           <div className="flex flex-col items-center gap-2 pt-2 sm:flex-row sm:justify-center">
             <Button asChild variant="outline">
-              {/* `deckId < 0` is the interleaved-session sentinel: a mixed
-                  queue has no canonical deck, so route back to the interleaved
-                  entry point instead of a non-existent `/decks/-1`. */}
+              {/* `deckId < 0` is the all-decks sentinel (global « Réviser »
+                  session): a mixed queue has no canonical deck, so route back
+                  to the home dashboard instead of a non-existent `/decks/-1`. */}
               {deckId < 0 ? (
-                <Link to="/review-interleaved">Retour au mode entrelacé</Link>
+                <Link to="/">Retour à l'accueil</Link>
               ) : (
                 <Link to="/decks/$deckId" params={{ deckId }}>
                   Retour au deck

@@ -21,8 +21,9 @@ pub struct Deck {
     pub color: String,
     pub desired_retention: f64,
     /// Algorithm used to schedule this deck's cards. Persisted as a TEXT
-    /// column (`'fsrs6'` / `'sm2'` / `'leitner'`). See
-    /// [`crate::scheduler`] for details.
+    /// column. Always `'fsrs6'` since migration v19 (FSRS-6 is the only
+    /// scheduler); the legacy values are still parseable so pre-v19 rows can
+    /// be read mid-migration. See [`crate::scheduler`] for details.
     pub scheduler_kind: SchedulerKind,
     /// Vague 10 — optional ISO 639-1 language code (`'en'`, `'ja'`, …) that
     /// flags this deck as a language-learning deck. `None` for ordinary
@@ -49,10 +50,6 @@ pub struct DeckPatch {
     pub description: Option<Option<String>>,
     pub color: Option<String>,
     pub desired_retention: Option<f64>,
-    /// Switch this deck's scheduling algorithm. Existing cards keep their
-    /// stored `stability` / `difficulty`; the new algorithm re-interprets
-    /// those fields on the next review — see [`crate::scheduler`].
-    pub scheduler_kind: Option<SchedulerKind>,
     /// Vague 10 — set/clear the deck's language flag. The double-`Option`
     /// distinguishes "leave alone" (`None`) from "set/clear to this value"
     /// (`Some(Some("en"))` / `Some(None)`).
@@ -265,9 +262,10 @@ impl<'a> DeckRepo<'a> {
 
     /// Insert a new deck. `name` must be unique (DB-enforced).
     ///
-    /// `scheduler_kind` defaults to FSRS-6 when `None` is passed — matches
-    /// the SQL column default and stays backwards-compatible with
-    /// callers that pre-date Vague 4.
+    /// `_scheduler_kind` is accepted-and-ignored: FSRS-6 is the only
+    /// scheduler (v0.11), so the column is always written `'fsrs6'`. The
+    /// parameter slot is kept so the many existing call sites (all passing
+    /// `None`) don't have to churn.
     ///
     /// `language_mode` (Vague 10) is an optional ISO 639-1 code flagging the
     /// deck as language-learning; `None` keeps it an ordinary deck.
@@ -283,7 +281,7 @@ impl<'a> DeckRepo<'a> {
         description: Option<&str>,
         color: &str,
         desired_retention: f64,
-        scheduler_kind: Option<SchedulerKind>,
+        _scheduler_kind: Option<SchedulerKind>,
         language_mode: Option<&str>,
         prerequisite_deck_id: Option<i64>,
     ) -> AppResult<Deck> {
@@ -304,7 +302,8 @@ impl<'a> DeckRepo<'a> {
                 ));
             }
         }
-        let kind = scheduler_kind.unwrap_or_default();
+        // FSRS-6 is the only scheduler — every new deck is 'fsrs6'.
+        let kind = SchedulerKind::Fsrs6;
         let now = Utc::now().timestamp();
         self.conn.execute(
             "INSERT INTO decks (name, description, color, desired_retention, scheduler_kind, language_mode, prerequisite_deck_id, created_at, updated_at)
@@ -318,9 +317,8 @@ impl<'a> DeckRepo<'a> {
     /// Apply a partial update. Returns the refreshed row.
     pub fn update(&self, id: i64, patch: DeckPatch) -> AppResult<Deck> {
         // Make sure the deck exists first — gives a nicer error than a no-op
-        // UPDATE. We keep the row so P073 can read the *old* `scheduler_kind`
-        // before the column is overwritten below.
-        let existing = self.get(id)?;
+        // UPDATE.
+        let _ = self.get(id)?;
 
         if let Some(retention) = patch.desired_retention {
             if !(0.5..=0.99).contains(&retention) {
@@ -379,51 +377,6 @@ impl<'a> DeckRepo<'a> {
                 "UPDATE decks SET desired_retention = ?1, updated_at = ?2 WHERE id = ?3",
                 params![retention, now, id],
             )?;
-        }
-        if let Some(kind) = patch.scheduler_kind {
-            // CHECK constraint on the column guards against invalid values.
-            let old_kind = existing.scheduler_kind;
-            self.conn.execute(
-                "UPDATE decks SET scheduler_kind = ?1, updated_at = ?2 WHERE id = ?3",
-                params![kind.as_str(), now, id],
-            )?;
-            // P073 — switching algorithms re-interprets every existing card's
-            // memory fields through one algorithm-agnostic strength (days)
-            // instead of forwarding `(stability, difficulty)` verbatim, which
-            // mean different things per algorithm. We bridge via
-            // `crate::scheduler::convert_memory_fields`, anchoring on each
-            // card's `scheduled_days` (its last interval). No-op when the algo
-            // didn't actually change (the helper short-circuits, but we also
-            // skip the whole scan to avoid touching `updated_at` needlessly).
-            if old_kind != kind {
-                let mut stmt = self.conn.prepare(
-                    "SELECT id, stability, difficulty, scheduled_days
-                     FROM cards WHERE deck_id = ?1",
-                )?;
-                let rows = stmt
-                    .query_map(params![id], |r| {
-                        Ok((
-                            r.get::<_, i64>(0)?,
-                            r.get::<_, Option<f64>>(1)?,
-                            r.get::<_, Option<f64>>(2)?,
-                            r.get::<_, i64>(3)?,
-                        ))
-                    })?
-                    .collect::<rusqlite::Result<Vec<_>>>()?;
-                for (card_id, stability, difficulty, scheduled_days) in rows {
-                    let (new_stability, new_difficulty) = crate::scheduler::convert_memory_fields(
-                        old_kind,
-                        kind,
-                        stability,
-                        difficulty,
-                        scheduled_days,
-                    );
-                    self.conn.execute(
-                        "UPDATE cards SET stability = ?1, difficulty = ?2 WHERE id = ?3",
-                        params![new_stability, new_difficulty, card_id],
-                    )?;
-                }
-            }
         }
         if let Some(lang_opt) = patch.language_mode.as_ref() {
             // `Some(None)` clears the flag, `Some(Some(code))` sets it.

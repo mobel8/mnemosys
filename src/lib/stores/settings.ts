@@ -27,30 +27,16 @@ export const DEFAULT_SETTINGS: AppSettings = {
   piper_binary_path: "",
   piper_model_path: "",
   anthropic_api_key: null,
-  supabase_url: null,
-  supabase_anon_key: null,
-  // Vague 2 cognitive features — opt-in.
+  // Active recall options — opt-in.
   type_the_answer_enabled: false,
   confidence_rating_enabled: false,
-  pre_questioning_enabled: false,
-  // Vague 3 neuro modes — all opt-in, master switch off.
-  neuro_modes_enabled: false,
-  mood_checkin_enabled: false,
-  movement_break_minutes: 25,
-  cyclic_sighing_enabled: false,
+  // Labs — opt-in.
   sketch_before_flip_enabled: false,
-  delayed_jol_enabled: false,
-  jol_delay_minutes: 30,
   voice_answer_enabled: false,
-  // Vague 12 cognitive features — all opt-in.
-  pretest_mode_enabled: false,
-  self_explanation_enabled: false,
-  focus_guard_enabled: false,
-  // Vague 18 — local AI + advanced neuro.
+  hands_free_enabled: false,
+  ambient_sound: "none",
+  // Local AI (Ollama).
   ollama_enabled: false,
   ollama_url: null,
   ollama_model: null,
-  chronotype: null,
-  ambient_sound: "none",
-  hands_free_enabled: false,
 };

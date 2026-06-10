@@ -1,5 +1,88 @@
 # Changelog
 
+## [0.11.0] — Recentrage : 6 destinations, FSRS-6 unique, le cœur d'abord (2026-06-10)
+
+Restructuration produit complète issue d'un audit à 33 agents (9 zones
+d'analyse + 24 vérifications adversariales, 0 réfutée) — voir `AUDIT_V0.11.md`.
+L'app passe de 17 destinations de menu à **6**, de 5 schedulers à **1**, de 11
+interruptions de session possibles à **1 max par phase**.
+
+### Navigation & structure
+- **Menu : 6 entrées** — Accueil, Réviser, Créer, Langues, Statistiques (+
+  Paramètres). « Réviser » (nouveau) lance LA session quotidienne : toutes les
+  cartes dues, tous decks confondus, ordre entrelacé, quotas respectés.
+- **Hub Créer** : Génération IA + Capture OCR + Vocabulaire + Imports (JSON /
+  .apkg Anki / sous-titres) en onglets — l'import Anki n'est plus enterré dans
+  Paramètres.
+- **Hub Langues** : Lecture + Shadowing + Prononciation en onglets.
+- **Statistiques en onglets** : Vue d'ensemble / Calibration / Succès / Graphe
+  (les pages dédiées Succès et Graphe disparaissent).
+- **Paramètres en onglets** : Apparence / Révision / IA & Audio / Rappels
+  (l'ex-page Planning, simplifiée aux déclencheurs horaires réels) / Données /
+  Labs / À propos.
+- **Supprimés** (hors-mission ou morts) : palais 3D (mode review jamais câblé à
+  FSRS + ~74 Mo de deps three.js), métronome/ear-training, minuteur de dessin
+  gestuel, Major System, pipeline JOL différé (mort-né, bootstrap circulaire),
+  pré-questionnement LLM, pré-test séparé, auto-explication (gate `id % 5`
+  défectueux), garde-attention webcam (toggle placebo — webgazer retiré depuis
+  longtemps), bilan humeur/sommeil, pauses mouvement, soupirs cycliques,
+  chronotype, sync Supabase (cassé au niveau protocole : reviews jamais
+  pushées), 2 commandes IPC mortes.
+
+### Cœur de révision
+- **Ré-apprentissage intra-session** : une carte « Encore » revient dans la
+  même session (max 2 repassages) au lieu de disparaître jusqu'au lendemain —
+  le plus gros manque pédagogique vs Anki.
+- **Plein écran** : la session masque sidebar et top bar.
+- **Confiance CBM réparée** : capturée AVANT de retourner la carte (elle était
+  rendue après — donnée invalide) ; une seule échelle (le doublon rétrospectif
+  à 14 boutons disparaît) ; la colonne `reviews.confidence` alimente enfin le
+  dashboard de calibration.
+- **Échap = même confirmation que « Quitter »** (il la contournait) ; hotkeys
+  bloquées quand un modal est ouvert ; un seul dialog d'aide (le raccourci « E »
+  fantôme est retiré) ; toasts unifiés sur le système global.
+- **« Continuer » respecte le quota quotidien de nouvelles cartes** (il le
+  contournait).
+- ~10 familles de requêtes étaient refetchées à CHAQUE note — réduit au strict
+  minimum par carte, le reste une fois en fin de session.
+
+### Scheduler
+- **FSRS-6 unique.** SM-2, Leitner (plafond 30 j), HLR (jamais entraîné,
+  θ codé en dur) et MEMORIZE (plafond mathématique 27 j à vie) sont supprimés.
+  **Migration v19** : conversion automatique des decks existants via la devise
+  « force mémoire en jours » (P073), avec correction du facteur HLR (demi-vie
+  ≠ stabilité@90 % : ×ln(0.9)/ln(0.5) ≈ 0.152 — l'ancienne conversion était
+  faussée ×6.6).
+- **Optimiseur FSRS asynchrone** (`spawn_blocking`) — il gelait l'app 5-30 s.
+- Le slider global de rétention (placebo : jamais consulté au scheduling) est
+  retiré ; la rétention par deck — le seul réglage réel — reste.
+
+### Données & fiabilité
+- **Export JSON v2 = vrai backup** : état FSRS complet (stabilité, difficulté,
+  états, échéances) + historique de reviews. L'import v2 restaure tout ;
+  les fichiers v1 restent importables.
+- **Jour local partout** (stats, heatmap, streak) — tout était en jour UTC :
+  réviser à 0h30 comptait pour la veille.
+- settings.json corrompu : plus de reset silencieux (clés API préservées,
+  erreur loguée).
+- Chargement des decks démo : 4 transactions au lieu de 835.
+- Hint Whisper et voix TTS ne sont plus codés en dur (« fr » / « nova ») —
+  la langue du deck pilote la transcription.
+
+### Design
+- Animations Radix ressuscitées (`tw-animate-css` était référencé partout mais
+  jamais installé — dialogs/selects/toasts s'animent enfin).
+- FOUC de thème supprimé (script pré-paint + cache localStorage), `lang="fr"`,
+  favicon brandé.
+- Contrôles natifs remplacés par le kit ui/ dans AiGenerator ; retours aux
+  tokens (success/warning/destructive) dans les composants des « Vagues ».
+- `.gitattributes` (eol=lf) : un clone Windows frais ne casse plus le lint.
+
+### Suppressions chiffrées
+~12 000 LOC retirées (sync 2 250, palais 2 050+, JOL 640, wellness 1 600+,
+musique/dessin 1 100, schedulers 1 220…), 89 → 55 commandes IPC, 33 → 21
+champs de settings, −4 dépendances lourdes (three, @react-three/*).
+
 ## [0.10.1] — Audit qualité, Vague 2 : ~64 corrections medium + low (2026-06-04)
 
 Suite de l'audit du 0.10.0 : correction du **reste du backlog** (medium + low)

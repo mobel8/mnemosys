@@ -2,21 +2,30 @@
  * Home dashboard page component — extracted from `src/routes/index.tsx` so the
  * route can lazy-load it via `lazyRouteComponent`, keeping the initial JS
  * bundle small.
+ *
+ * v0.11 — the page now leads with a review hero: ONE number (cards waiting
+ * today = due + today's remaining new-card allowance) and ONE primary action
+ * (« Réviser maintenant »). The audit found the core action buried two
+ * clicks deep while the old « Nouvelles » KPI showed 0 next to four decks
+ * full of new cards (it counted new cards *studied* today — truthful label
+ * restored below).
  */
 
-import { BookOpen, ClipboardList, Plus, Sparkles, TrendingUp } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { BookOpen, GraduationCap, Plus, Sparkles, TrendingUp } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { CreateDeckDialog } from "@/components/CreateDeckDialog";
 import { DeckGrid } from "@/components/DeckGrid";
 import { FirstRunWizard, isFirstRunPending } from "@/components/FirstRunWizard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { toast } from "@/components/ui/use-toast";
-import { useDecks, useLoadDemo, useTodayStats } from "@/lib/queries";
+import { useDecksWithStats, useLoadDemo, useSettingsQuery, useTodayStats } from "@/lib/queries";
 
 export default function IndexPage() {
-  const decks = useDecks();
+  const decks = useDecksWithStats();
   const today = useTodayStats();
+  const settings = useSettingsQuery();
   const loadDemo = useLoadDemo({
     onSuccess: (count) => {
       toast({
@@ -37,6 +46,18 @@ export default function IndexPage() {
 
   const deckList = decks.data ?? [];
   const isEmpty = !decks.isLoading && deckList.length === 0;
+
+  // Cards waiting today = every due card + today's REMAINING new-card
+  // allowance (daily_new_limit minus the new cards already studied). This is
+  // the one number the hero leads with.
+  const waitingToday = useMemo(() => {
+    if (!decks.data || !today.data) return null;
+    const totalDue = decks.data.reduce((sum, d) => sum + d.stats.due_today, 0);
+    const newAvailable = decks.data.reduce((sum, d) => sum + d.stats.new_cards, 0);
+    const newLimit = settings.data?.daily_new_limit ?? 20;
+    const newAllowance = Math.max(0, newLimit - today.data.new_cards_today);
+    return totalDue + Math.min(newAvailable, newAllowance);
+  }, [decks.data, today.data, settings.data?.daily_new_limit]);
 
   // Show the first-run wizard once the decks query resolves and reports an
   // empty collection — but only if the user hasn't dismissed it before.
@@ -66,34 +87,82 @@ export default function IndexPage() {
         </Button>
       </header>
 
-      <section aria-label="Aujourd'hui" className="space-y-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Aujourd'hui
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <StatCard
-            label="Révisions dues"
-            value={String(today.data?.due_now ?? 0)}
-            loading={today.isLoading}
-            error={today.isError}
-            icon={ClipboardList}
-          />
-          <StatCard
-            label="Nouvelles"
-            value={String(today.data?.new_cards_today ?? 0)}
-            loading={today.isLoading}
-            error={today.isError}
-            icon={Sparkles}
-          />
-          <StatCard
-            label="Rétention"
-            value={`${Math.round((today.data?.retention_today ?? 0) * 100)}%`}
-            loading={today.isLoading}
-            error={today.isError}
-            icon={TrendingUp}
-          />
-        </div>
-      </section>
+      {!isEmpty && (
+        <section aria-label="Aujourd'hui" className="space-y-4">
+          <Card className="bg-brand-radial overflow-hidden">
+            <CardContent className="flex flex-col items-start justify-between gap-6 p-8 sm:flex-row sm:items-center">
+              <div className="space-y-1">
+                {waitingToday === null ? (
+                  <div className="h-9 w-64 animate-pulse rounded-lg bg-muted" />
+                ) : waitingToday > 0 ? (
+                  <>
+                    <p className="font-display text-3xl tracking-tight">
+                      <span className="font-mono font-semibold tabular-nums text-brand-500">
+                        {waitingToday}
+                      </span>{" "}
+                      carte{waitingToday > 1 ? "s" : ""} à réviser
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Environ {Math.max(1, Math.round((waitingToday * 9) / 60))} min — tous decks
+                      confondus, mélangés.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-display text-3xl tracking-tight">Tu es à jour ✦</p>
+                    <p className="text-sm text-muted-foreground">
+                      Aucune carte n'attend. Crée ou importe de nouvelles cartes.
+                    </p>
+                  </>
+                )}
+              </div>
+              {waitingToday !== null && waitingToday > 0 ? (
+                <Button asChild size="lg" className="shrink-0">
+                  <Link to="/review-all">
+                    <GraduationCap className="h-5 w-5" />
+                    Réviser maintenant
+                  </Link>
+                </Button>
+              ) : (
+                <Button asChild size="lg" variant="outline" className="shrink-0">
+                  <Link to="/create">
+                    <Plus className="h-5 w-5" />
+                    Créer des cartes
+                  </Link>
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatCard
+              label="Étudiées aujourd'hui"
+              value={String(today.data?.reviews_done_today ?? 0)}
+              loading={today.isLoading}
+              error={today.isError}
+              icon={Sparkles}
+            />
+            <StatCard
+              label="Nouvelles étudiées"
+              value={String(today.data?.new_cards_today ?? 0)}
+              loading={today.isLoading}
+              error={today.isError}
+              icon={Plus}
+            />
+            <StatCard
+              label="Rétention du jour"
+              value={
+                (today.data?.reviews_done_today ?? 0) > 0
+                  ? `${Math.round((today.data?.retention_today ?? 0) * 100)}%`
+                  : "—"
+              }
+              loading={today.isLoading}
+              error={today.isError}
+              icon={TrendingUp}
+            />
+          </div>
+        </section>
+      )}
 
       <section aria-label="Decks">
         {decks.isLoading ? (
@@ -214,6 +283,9 @@ function EmptyState({
           <Button onClick={onCreate}>
             <Plus className="h-4 w-4" />
             Nouveau deck
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/create">Importer depuis Anki</Link>
           </Button>
           <Button variant="outline" onClick={onLoadDemo} disabled={loading}>
             {loading ? "Chargement…" : "Charger les decks démo"}

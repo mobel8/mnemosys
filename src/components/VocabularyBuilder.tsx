@@ -15,6 +15,10 @@
  *
  * No new persistence beyond `create_note`; the component holds only UI state.
  * The data source is `@/lib/frequency-en` (pure, accurate, ~500 lemmas).
+ *
+ * Rendered as the « Vocabulaire » tab of the « Créer » hub
+ * (`src/routes/create.page.tsx`), which owns the page header — this
+ * component renders content only (no h1).
  */
 
 import { Link } from "@tanstack/react-router";
@@ -221,19 +225,7 @@ export default function VocabularyBuilder({ translate }: VocabularyBuilderProps)
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
-      <header>
-        <h1 className="flex items-center gap-2 font-display text-2xl font-semibold tracking-tight">
-          <BookA className="h-6 w-6 text-primary" aria-hidden />
-          Vocabulaire par fréquence
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Construis ton vocabulaire anglais à partir des mots les plus fréquents. Choisis une
-          tranche, un deck cible, et génère des cartes en un clic — l'effort 80/20 de
-          l'apprentissage des langues.
-        </p>
-      </header>
-
+    <div className="space-y-6">
       {/* ---------- Config card ---------- */}
       <Card>
         <CardHeader>

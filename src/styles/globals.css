@@ -7,6 +7,11 @@
  * token. Light + dark are full peers. See design.md at repo root. */
 
 @import "tailwindcss";
+/* Resurrects the Radix open/close transitions: the ui/ kit references
+ * animate-in / fade-in-0 / zoom-in-95 utilities that only exist with this
+ * plugin — it was never installed, so dialogs/selects/toasts popped with no
+ * motion (audit finding). */
+@import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 

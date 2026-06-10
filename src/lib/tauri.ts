@@ -348,85 +348,27 @@ export interface AppSettings {
   piper_model_path: string;
   /** Anthropic API key for AI card generation. `null` falls back to env var. */
   anthropic_api_key: string | null;
-  // --- Session 3 (cloud sync) ---
-  /** Base URL of the user's Supabase project (e.g. `https://abc.supabase.co`). */
-  supabase_url: string | null;
-  /** Project anon (public) key, required for every PostgREST + Auth call. */
-  supabase_anon_key: string | null;
-  // --- Vague 2 (cognitive features) ---
+  // --- Active recall options (the methods that earned their keep) ---
   /** Type-the-answer mode: input + Levenshtein scoring before flipping. */
   type_the_answer_enabled: boolean;
-  /** Confidence rating: capture 1..5 metacognitive confidence before FSRS rating. */
+  /** Confidence rating (CBM): capture 1..5 confidence BEFORE the flip. */
   confidence_rating_enabled: boolean;
-  /** Pre-questioning IA: curiosity-priming questions before each new session block. */
-  pre_questioning_enabled: boolean;
-  // --- Vague 3 (neuro modes, opt-in) ---
-  /** Master switch — when `false` every sub-toggle below is inert. */
-  neuro_modes_enabled: boolean;
-  /** Show Mood/Sleep check-in modal at session start (once per day). */
-  mood_checkin_enabled: boolean;
-  /** Cadence in minutes (10..60) for the movement break reminder. */
-  movement_break_minutes: number;
-  /** Offer the cyclic-sighing primer (Spiegel 2023) when stress flagged. */
-  cyclic_sighing_enabled: boolean;
-  // --- Vague 7 (Tier S — sketch + delayed JOL) ---
-  /** Drawing effect: sketch the answer before flipping (Wammes 2016, +30-50%). */
+  // --- Labs ---
+  /** Drawing effect: sketch the answer before flipping (Labs). */
   sketch_before_flip_enabled: boolean;
-  /** Delayed JOL: prompt the learner ~N min after a review to predict recall. */
-  delayed_jol_enabled: boolean;
-  /** Delay (minutes, clamped 5..120) between a review and the delayed prompt. */
-  jol_delay_minutes: number;
-  // --- Vague 8 (Tier A — audio-first differentiation) ---
-  /**
-   * Whisper Mode Review: when on, basic / basic_reverse cards expose a Mic
-   * button. The learner speaks the answer; OpenAI Whisper transcribes; the
-   * same Levenshtein scorer used by `type_the_answer` grades the result.
-   * Requires an OpenAI API key. Defaults to false.
-   */
+  /** Voice answer via Whisper inside type-the-answer (needs OpenAI key). */
   voice_answer_enabled: boolean;
-  // --- Vague 12 (cognitive features, opt-in) ---
-  /** Pretest mode: guess the answer of a brand-new card before the flip (pretesting effect — Pan 2023). */
-  pretest_mode_enabled: boolean;
-  /** Self-explanation: on ~1/5 reviews, prompt "why is this the answer?" after the flip (Chi 1989, g≈0.55). */
-  self_explanation_enabled: boolean;
-  /** Focus Guard: opt-in local webcam mind-wandering detection during a session (Hutt 2024). */
-  focus_guard_enabled: boolean;
-  // --- Vague 18 (local AI + advanced neuro, opt-in) ---
+  /** Hands-free (audio + voice) review mode (Labs). */
+  hands_free_enabled: boolean;
+  /** Context ambient sound during reviews. */
+  ambient_sound: "none" | "white" | "pink" | "brown" | "rain";
+  // --- Local AI (Ollama) ---
   /** Local AI Tutor: generate cards via a local Ollama LLM instead of Claude. */
   ollama_enabled: boolean;
   /** Ollama daemon base URL. `null` falls back to `http://localhost:11434`. */
   ollama_url: string | null;
   /** Ollama model slug (e.g. `"llama3.2"`). `null` falls back to `llama3.2`. */
   ollama_model: string | null;
-  /** Chronotype from the MEQ quiz: `"morning" | "intermediate" | "evening"`, or `null` if uncalibrated. */
-  chronotype: string | null;
-  /** Context ambient sound during reviews (Godden & Baddeley 1975). */
-  ambient_sound: "none" | "white" | "pink" | "brown" | "rain";
-  /** Vague 23 — enable the hands-free (audio + voice) review mode toggle. */
-  hands_free_enabled: boolean;
-}
-
-// --- Vague 3: wellness ----------------------------------------------------
-
-/**
- * One wellness check-in (Vague 3 — opt-in neuro modes). Every nullable
- * field reflects « learner skipped that question ». Booleans always have a
- * concrete value.
- */
-export interface WellnessLog {
-  id: number;
-  /** ISO `YYYY-MM-DD` of the check-in. */
-  date: string;
-  /** Self-reported mood `[1..5]`. */
-  mood: number | null;
-  /** Hours of sleep the previous night. */
-  sleep_hours: number | null;
-  /** Self-reported stress `[1..5]`. */
-  stress_level: number | null;
-  hydrated: boolean;
-  caffeine_taken: boolean;
-  /** Unix seconds. */
-  created_at: number;
 }
 
 /**
@@ -560,21 +502,6 @@ export interface Sketch {
   created_at: number;
 }
 
-/**
- * One Judgment of Learning prediction. `actual_correct` and `resolved_at`
- * stay `null` until the next review on the same card flips them.
- */
-export interface JolPrediction {
-  id: number;
-  card_id: number;
-  predicted_at: number;
-  /** Predicted recall probability in `[0.0, 1.0]`. */
-  predicted_prob: number;
-  prediction_horizon_days: number;
-  actual_correct: boolean | null;
-  resolved_at: number | null;
-}
-
 /** One bar of the calibration histogram. Always 10 buckets, even when empty. */
 export interface CalibrationBucket {
   /** Lower edge of the confidence band: `0.0`, `0.1`, …, `0.9`. */
@@ -584,7 +511,12 @@ export interface CalibrationBucket {
   count: number;
 }
 
-/** Aggregated calibration stats over resolved predictions. */
+/**
+ * Aggregated calibration stats computed from CBM confidence ratings
+ * (`reviews.confidence` vs rating >= 3). v0.11 — the dead-born JOL pipeline
+ * was removed; confidence captured before the flip is now the single
+ * metacognitive source.
+ */
 export interface CalibrationStats {
   /** Goodman-Kruskal γ in `[-1, 1]`. */
   gamma: number;
@@ -593,19 +525,6 @@ export interface CalibrationStats {
   /** Always 10 buckets, indexed by `band`. */
   buckets: CalibrationBucket[];
   total_resolved: number;
-  // --- Vague 22 — retrospective calibration (confidence_post, Bang & Fleming 2018) ---
-  /** Retrospective γ from `confidence_post` vs Good/Easy. `null` below the minimum sample. */
-  gamma_post: number | null;
-  /** Retrospective bias (mean post-confidence - mean correct). `null` below the minimum sample. */
-  bias_post: number | null;
-  /** Number of reviews carrying a `confidence_post` value (retrospective sample size). */
-  total_post: number;
-}
-
-/** Pending JOL paired with the card it references, returned by `get_pending_jols`. */
-export interface PendingJol {
-  prediction: JolPrediction;
-  card: CardWithNote;
 }
 
 /**
@@ -670,84 +589,6 @@ export interface PodcastFile {
   /** Unix seconds. */
   generated_at: number;
   size_bytes: number;
-}
-
-// --- Vague 9: Memory Palace 3D Builder ------------------------------------
-
-/** Pre-fabricated 3D scene templates the builder can instantiate. */
-export type PalaceTemplate = "house" | "street" | "castle" | "custom";
-
-/** One palace row. */
-export interface Palace {
-  id: number;
-  name: string;
-  description: string | null;
-  template: PalaceTemplate;
-  created_at: number;
-  updated_at: number;
-}
-
-/** One locus (card pinned at (x, y, z) inside a palace). */
-export interface PalaceLocus {
-  id: number;
-  palace_id: number;
-  card_id: number;
-  x: number;
-  y: number;
-  z: number;
-  /** 1-based traversal order (lowest = visited first in review walk-through). */
-  ordinal: number;
-  label: string | null;
-  created_at: number;
-}
-
-/** `get_palace` payload — the palace + its loci sorted by ordinal. */
-export interface PalaceWithLoci extends Palace {
-  loci: PalaceLocus[];
-}
-
-// --- Session 3: cloud sync -----------------------------------------------
-
-/**
- * Persisted JWT bundle returned by `sync_login`. Mirrors the Rust struct of
- * the same name. Tokens live in `sync_session.json`.
- */
-export interface SyncSession {
-  user_id: string;
-  email: string;
-  access_token: string;
-  refresh_token: string;
-  /** Absolute unix-seconds deadline of `access_token`. */
-  expires_at: number;
-}
-
-/** Server-side output of `sync_login` — wraps the session so future fields can be added without breaking. */
-export interface SyncLoginOutput {
-  session: SyncSession;
-}
-
-/** Lightweight snapshot driving the Settings UI. */
-export interface SyncStatus {
-  /** `true` when both `supabase_url` and `supabase_anon_key` are set. */
-  configured: boolean;
-  /** `true` when a non-expired session lives in the local store. */
-  logged_in: boolean;
-  email: string | null;
-  last_sync_at: number | null;
-}
-
-/** Summary returned by `sync_now`. */
-export interface SyncReport {
-  decks_pushed: number;
-  decks_pulled: number;
-  notes_pushed: number;
-  notes_pulled: number;
-  cards_pushed: number;
-  cards_pulled: number;
-  reviews_pushed: number;
-  reviews_pulled: number;
-  /** unix-seconds timestamp written back to `sync_state.last_sync_at`. */
-  finished_at: number;
 }
 
 // --- Session 4: FSRS optimizer -------------------------------------------
@@ -828,8 +669,6 @@ export const api = {
       description?: string | null;
       color: string;
       desiredRetention?: number;
-      /** Scheduling algorithm — defaults server-side to FSRS-6 when omitted. */
-      schedulerKind?: SchedulerKind;
       /** Vague 10 — ISO 639-1 code flagging a language deck; omit for none. */
       languageMode?: string | null;
       /** Vague 15 — id of the deck that gates this one; omit for ungated. */
@@ -840,7 +679,6 @@ export const api = {
         description: data.description ?? null,
         color: data.color,
         desiredRetention: data.desiredRetention ?? null,
-        schedulerKind: data.schedulerKind ?? null,
         languageMode: data.languageMode ?? null,
         prerequisiteDeckId: data.prerequisiteDeckId ?? null,
       }),
@@ -848,7 +686,6 @@ export const api = {
     delete: (id: number) => invoke<void>("delete_deck", { id }),
     stats: (id: number) => invoke<DeckStats>("get_deck_stats", { id }),
     withStats: () => invoke<DeckWithStats[]>("get_decks_with_stats"),
-    count: () => invoke<number>("count_decks"),
     /** WaniKani-style mastery buckets (apprentice / guru / master / …). */
     mastery: (id: number) => invoke<DeckMastery>("get_deck_mastery", { id }),
     /** Vague 15 — Bloom mastery-gate status (is this deck mastered / unlocked?). */
@@ -911,7 +748,7 @@ export const api = {
     previewNextStates: (cardId: number) => invoke<NextStates>("preview_next_states", { cardId }),
     /**
      * Submit a graded card. `confidence` is the optional 1..5 metacognitive
-     * confidence captured BEFORE the FSRS rating (CBM). `null`/`undefined`
+     * confidence captured BEFORE the flip (CBM). `null`/`undefined`
      * means « confidence rating toggle was off this session ».
      */
     submit: (data: {
@@ -919,19 +756,12 @@ export const api = {
       rating: Rating;
       reviewTimeMs: number;
       confidence?: number | null;
-      /**
-       * Vague 15 — optional 1..5 *retrospective* confidence captured AFTER the
-       * answer is revealed (Bang & Fleming 2018). `null`/`undefined` when the
-       * two-step toggle is off this session.
-       */
-      confidencePost?: number | null;
     }) =>
       invoke<ReviewResult>("submit_review", {
         cardId: data.cardId,
         rating: data.rating,
         reviewTimeMs: data.reviewTimeMs,
         confidence: data.confidence ?? null,
-        confidencePost: data.confidencePost ?? null,
       }),
   },
   stats: {
@@ -1057,40 +887,6 @@ export const api = {
     /** All unlocked badges, newest first. */
     listAchievements: () => invoke<Achievement[]>("list_unlocked_achievements"),
   },
-  cognitive: {
-    /**
-     * Generate `count` curiosity-priming pre-questions for a deck. The deck
-     * must contain at least one non-occlusion note (else the backend returns
-     * a `Validation` error). Requires an Anthropic API key configured in
-     * settings or via `ANTHROPIC_API_KEY`.
-     */
-    generatePreQuestions: (deckId: number, count: number, language: string) =>
-      invoke<string[]>("generate_pre_questions", { deckId, count, language }),
-  },
-  wellness: {
-    /**
-     * Persist a fresh wellness check-in. Every value is optional (`null` =
-     * « learner skipped that field »); the booleans default to `false`.
-     */
-    submit: (data: {
-      mood: number | null;
-      sleepHours: number | null;
-      stressLevel: number | null;
-      hydrated: boolean;
-      caffeineTaken: boolean;
-    }) =>
-      invoke<WellnessLog>("submit_wellness_log", {
-        mood: data.mood,
-        sleepHours: data.sleepHours,
-        stressLevel: data.stressLevel,
-        hydrated: data.hydrated,
-        caffeineTaken: data.caffeineTaken,
-      }),
-    /** Today's most recent wellness log, or `null` when none exists. */
-    today: () => invoke<WellnessLog | null>("get_today_wellness"),
-    /** Last `days` wellness logs, newest first. */
-    recent: (days: number) => invoke<WellnessLog[]>("get_recent_wellness", { days }),
-  },
   sketches: {
     /**
      * Persist a sketch captured BEFORE the learner flipped the card. The
@@ -1108,23 +904,7 @@ export const api = {
       invoke<Sketch[]>("get_card_sketches", { cardId, limit }),
   },
   metacognition: {
-    /**
-     * Record a learner self-prediction. `horizonDays` defaults to 7 on the
-     * server when omitted. `predictedProb` must be in `[0.0, 1.0]`.
-     */
-    recordJol: (cardId: number, predictedProb: number, horizonDays?: number) =>
-      invoke<JolPrediction>("record_jol", {
-        cardId,
-        predictedProb,
-        horizonDays: horizonDays ?? null,
-      }),
-    /** Predictions older than `minAgeMinutes` that haven't been resolved yet. */
-    getPendingJols: (minAgeMinutes: number, limit: number) =>
-      invoke<PendingJol[]>("get_pending_jols", {
-        minAgeMinutes,
-        limit,
-      }),
-    /** Calibration stats over resolved predictions. Optionally per-deck. */
+    /** Calibration stats from CBM confidence vs outcomes. Optionally per-deck. */
     getCalibrationStats: (deckId?: number | null) =>
       invoke<CalibrationStats>("get_calibration_stats", { deckId: deckId ?? null }),
   },
@@ -1164,73 +944,6 @@ export const api = {
         audioBase64,
         mimeType,
         language: language ?? null,
-      }),
-  },
-  palaces: {
-    /** All palaces, alphabetical by name. */
-    list: () => invoke<Palace[]>("list_palaces"),
-    /** Fetch one palace + every locus pinned inside, ordered by `ordinal`. */
-    get: (id: number) => invoke<PalaceWithLoci>("get_palace", { id }),
-    /** Create a new palace. `name` must be unique. */
-    create: (data: { name: string; description?: string | null; template: PalaceTemplate }) =>
-      invoke<Palace>("create_palace", {
-        name: data.name,
-        description: data.description ?? null,
-        template: data.template,
-      }),
-    /**
-     * Partially update a palace. Pass `description: null` to clear it, omit
-     * the field to leave it untouched. Tauri sends `Option<Option<String>>`
-     * to the backend so the two cases stay distinguishable.
-     */
-    update: (
-      id: number,
-      patch: {
-        name?: string;
-        description?: string | null;
-        template?: PalaceTemplate;
-      },
-    ) =>
-      invoke<Palace>("update_palace", {
-        id,
-        name: patch.name ?? null,
-        description: patch.description === undefined ? null : [patch.description],
-        template: patch.template ?? null,
-      }),
-    /** Delete a palace. Loci cascade. */
-    delete: (id: number) => invoke<void>("delete_palace", { id }),
-    /** Pin a card at a locus. The traversal `ordinal` is auto-assigned to `max + 1`. */
-    addLocus: (data: {
-      palaceId: number;
-      cardId: number;
-      x: number;
-      y: number;
-      z: number;
-      label?: string | null;
-    }) =>
-      invoke<PalaceLocus>("add_palace_locus", {
-        palaceId: data.palaceId,
-        cardId: data.cardId,
-        x: data.x,
-        y: data.y,
-        z: data.z,
-        label: data.label ?? null,
-      }),
-    /** Remove a single locus by id. */
-    removeLocus: (locusId: number) => invoke<void>("remove_palace_locus", { locusId }),
-    /**
-     * Rewrite ordinals so loci visit in the caller-provided sequence.
-     * `newOrder` must contain every existing locus id of the palace.
-     */
-    reorderLoci: (palaceId: number, newOrder: number[]) =>
-      invoke<void>("reorder_palace_loci", { palaceId, newOrder }),
-    /** Move a locus to a new (x, y, z). Ordinal is preserved. */
-    moveLocus: (data: { locusId: number; x: number; y: number; z: number }) =>
-      invoke<void>("move_palace_locus", {
-        locusId: data.locusId,
-        x: data.x,
-        y: data.y,
-        z: data.z,
       }),
   },
   reading: {
@@ -1319,26 +1032,5 @@ export const api = {
       invoke<OptimizeResult>("optimize_fsrs_params", {
         minReviews: minReviews ?? null,
       }),
-  },
-  sync: {
-    /**
-     * Trade an email + password for a Supabase JWT and persist it in
-     * `sync_session.json`. Returns the freshly-minted session.
-     *
-     * Errors:
-     *   - `Validation`: sync not configured (URL/anon key missing) or
-     *     Supabase returned a non-2xx response (wrong password, etc.).
-     */
-    login: (email: string, password: string) =>
-      invoke<SyncLoginOutput>("sync_login", { email, password }),
-    /** Wipe the local session and best-effort revoke server-side. */
-    logout: () => invoke<void>("sync_logout"),
-    /** Lightweight status snapshot. Cheap; the UI calls it on every settings open. */
-    status: () => invoke<SyncStatus>("sync_status"),
-    /**
-     * Run one full sync cycle (push → pull → resolve). Returns row counters
-     * so the caller can show a useful toast. Requires `logged_in === true`.
-     */
-    now: () => invoke<SyncReport>("sync_now"),
   },
 };

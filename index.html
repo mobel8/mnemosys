@@ -1,10 +1,27 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/tauri.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mnemosys</title>
+    <script>
+      // Pre-paint theme resolution — kills the launch FOUC. Reads the cached
+      // preference mirrored by src/lib/theme.tsx and falls back to the OS
+      // scheme, so the very first paint already has the right palette.
+      (() => {
+        try {
+          const pref = localStorage.getItem("mnemosys.theme");
+          const dark =
+            pref === "dark" ||
+            ((pref === null || pref === "system") &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch {
+          /* default to light */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -2,14 +2,11 @@
 //! [`crate::scheduler::Scheduler`] trait.
 //!
 //! Why an adapter rather than reusing [`crate::fsrs::CardScheduler`]
-//! directly? Two reasons:
-//!
-//! 1. The trait gives a uniform call site in `commands/review.rs`; we
-//!    no longer have to branch the persistence path on the algorithm.
-//! 2. The trait's [`crate::scheduler::SchedulerOutcome`] uses the same
-//!    storage convention as SM-2 / Leitner (state + stability +
-//!    difficulty + interval), which keeps the `cards.update_after_review`
-//!    code path uniform.
+//! directly? The trait packages the full review outcome (state + stability +
+//! difficulty + interval) as one [`crate::scheduler::SchedulerOutcome`],
+//! which gives `commands/review.rs` a single call site feeding
+//! `cards.update_after_review` — scheduling math and persistence stay
+//! decoupled.
 //!
 //! All the actual math stays inside [`crate::fsrs::CardScheduler`] —
 //! this file is just a thin glue layer.
@@ -104,8 +101,7 @@ impl<'a> Scheduler for Fsrs6Adapter<'a> {
 }
 
 /// Lifecycle transition for FSRS — same rules as the pre-adapter code
-/// in `commands/review.rs`. Kept private so the SM-2 / Leitner branches
-/// can have their own variant of the rule (they do, inline).
+/// in `commands/review.rs`.
 fn next_card_state(before: CardState, rating: Rating) -> CardState {
     match (before, rating) {
         (CardState::New, Rating::Again) => CardState::Learning,

@@ -6,7 +6,6 @@
  */
 
 import { useState } from "react";
-import { SchedulerPicker } from "@/components/SchedulerPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,7 +29,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 import { LANGUAGE_OPTIONS } from "@/lib/languages";
 import { useCreateDeck, useDecks } from "@/lib/queries";
-import type { SchedulerKind } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
 const DECK_COLORS = [
@@ -54,7 +52,6 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
   const [description, setDescription] = useState("");
   const [color, setColor] = useState<string>(DECK_COLORS[0]);
   const [retention, setRetention] = useState(0.9);
-  const [schedulerKind, setSchedulerKind] = useState<SchedulerKind>("fsrs6");
   const [languageMode, setLanguageMode] = useState<string | null>(null);
   // Vague 15 — optional Bloom mastery-gate prerequisite.
   const [prerequisiteDeckId, setPrerequisiteDeckId] = useState<number | null>(null);
@@ -80,7 +77,6 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
     setDescription("");
     setColor(DECK_COLORS[0]);
     setRetention(0.9);
-    setSchedulerKind("fsrs6");
     setLanguageMode(null);
     setPrerequisiteDeckId(null);
   }
@@ -117,7 +113,6 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
       description: description.trim() || null,
       color,
       desiredRetention: retention,
-      schedulerKind,
       languageMode,
       prerequisiteDeckId,
     });
@@ -206,8 +201,6 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
               défaut. Ignoré pour SM-2 et Leitner (algorithmes déterministes).
             </p>
           </div>
-
-          <SchedulerPicker value={schedulerKind} onChange={setSchedulerKind} />
 
           <div className="space-y-2">
             <Label htmlFor="deck-language">Langue du deck</Label>

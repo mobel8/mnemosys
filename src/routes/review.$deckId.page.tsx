@@ -19,7 +19,7 @@ import { PartyPopper } from "lucide-react";
 import { ReviewSession } from "@/components/ReviewSession";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useDueCards, useSettingsQuery } from "@/lib/queries";
+import { useDeck, useDueCards, useSettingsQuery } from "@/lib/queries";
 
 const routeApi = getRouteApi("/review/$deckId");
 
@@ -29,6 +29,7 @@ export default function ReviewPage() {
   // reviews/day, `newLimit` caps new cards/day. Wait for settings before
   // fetching so the first queue already respects the caps (no stale 200/∞ run).
   const settings = useSettingsQuery();
+  const deck = useDeck(deckId);
   const reviewLimit = settings.data?.daily_review_limit ?? 200;
   const newLimit = settings.data?.daily_new_limit ?? 20;
   const due = useDueCards(deckId, reviewLimit, newLimit, {
@@ -94,7 +95,13 @@ export default function ReviewPage() {
     );
   }
 
-  return <ReviewSession deckId={deckId} cards={cards} />;
+  return (
+    <ReviewSession
+      deckId={deckId}
+      cards={cards}
+      languageHint={deck.data?.language_mode ?? undefined}
+    />
+  );
 }
 
 /**

@@ -8,11 +8,12 @@
 //!    updated [`Card`] along with the chosen interval so the UI can render
 //!    a "next review in N days" toast.
 //!
-//! Scheduling math goes through [`crate::scheduler::Scheduler`], whose
-//! concrete impl is picked per-deck based on `decks.scheduler_kind`
-//! (Vague 4). FSRS-6 wraps the long-lived
-//! [`CardScheduler`](crate::fsrs::CardScheduler) held in [`AppState`];
-//! SM-2 and Leitner are deterministic and need no global state.
+//! Scheduling math goes through
+//! [`Fsrs6Adapter`](crate::scheduler::fsrs6_adapter::Fsrs6Adapter), which
+//! wraps the long-lived [`CardScheduler`](crate::fsrs::CardScheduler) held in
+//! [`AppState`]. FSRS-6 is the only scheduler (restructure/v0.11): migration
+//! v19 stamped every deck `'fsrs6'`, so the old per-deck dispatch on
+//! `decks.scheduler_kind` is gone.
 
 use serde::Serialize;
 use tauri::State;
@@ -21,7 +22,8 @@ use crate::app_state::AppState;
 use crate::db::{Card, CardWithNote, NewReview, UserStats};
 use crate::error::{AppError, AppResult};
 use crate::fsrs::{MemoryStateDTO, NextStateDTO, NextStatesDTO};
-use crate::scheduler::{self, SchedulerOutcome};
+use crate::scheduler::fsrs6_adapter::Fsrs6Adapter;
+use crate::scheduler::{self, Scheduler, SchedulerOutcome};
 
 /// Result returned by [`submit_review`]: the updated card row + the scheduled
 /// interval the user just earned. The interval is also derivable from
@@ -97,17 +99,17 @@ pub fn get_interleaved_due_cards(
 #[tauri::command]
 pub fn preview_next_states(state: State<'_, AppState>, card_id: i64) -> AppResult<NextStatesDTO> {
     let now = chrono::Utc::now().timestamp();
-    let (card, kind, deck_retention) = {
+    let (card, deck_retention) = {
         let conn = state.db.lock();
         let card = state.db.cards(&conn).get(card_id)?;
         let deck = state.db.decks(&conn).get(card.deck_id)?;
-        (card, deck.scheduler_kind, deck.desired_retention as f32)
+        (card, deck.desired_retention as f32)
     };
     let fsrs = state.scheduler.lock().expect("scheduler mutex poisoned");
     // Honour the deck's own retention target so the preview chips match what
     // submit_review will actually schedule (P006).
-    let dispatcher = scheduler::from_kind_with_retention(kind, &fsrs, deck_retention);
-    let preview = dispatcher.preview(&card, now)?;
+    let adapter = Fsrs6Adapter::with_retention(&fsrs, deck_retention);
+    let preview = adapter.preview(&card, now)?;
     Ok(preview_to_dto(&preview))
 }
 
@@ -118,19 +120,17 @@ pub fn submit_review(
     rating: u8,
     review_time_ms: u32,
     confidence: Option<u8>,
-    confidence_post: Option<u8>,
 ) -> AppResult<ReviewResultDTO> {
-    // Validate both optional confidences in [1, 5]. None is always fine —
+    // Validate the optional confidence in [1, 5]. None is always fine —
     // the toggle in Settings stays off by default. `confidence` is the
-    // prospective CBM rating (before the flip, v5); `confidence_post` is the
-    // retrospective rating (after the answer, v15 — Bang & Fleming 2018).
+    // prospective CBM rating captured before the flip (v5 —
+    // Gardner-Medwin's confidence-based marking).
     let confidence_i64 = validate_confidence(confidence, "confidence")?;
-    let confidence_post_i64 = validate_confidence(confidence_post, "confidence_post")?;
     let now = chrono::Utc::now().timestamp();
 
     let conn = state.db.lock();
 
-    // P003 — wrap the whole mutation (card update + review log + JOL resolve +
+    // P003 — wrap the whole mutation (card update + review log +
     // gamification) in ONE transaction so a mid-way failure can't leave the
     // card advanced without a matching review row (or vice-versa). The repos
     // take `&Connection`; a `Transaction` derefs to `Connection`, so the same
@@ -148,17 +148,15 @@ pub fn submit_review(
     let outcome = {
         let fsrs = state.scheduler.lock().expect("scheduler mutex poisoned");
         // P006 — thread the deck's own retention target into FSRS scheduling.
-        let dispatcher = scheduler::from_kind_with_retention(
-            deck.scheduler_kind,
-            &fsrs,
-            deck.desired_retention as f32,
-        );
-        dispatcher.next_review(&card, rating, now)?
+        // Every deck is FSRS-6 after migration v19, so the adapter is built
+        // directly (no per-deck dispatch).
+        let adapter = Fsrs6Adapter::with_retention(&fsrs, deck.desired_retention as f32);
+        adapter.next_review(&card, rating, now)?
     };
 
-    // The interval the UI receives is `max(0, scheduled_days)` — SM-2's
-    // "again" path stores 0 days (relearn now) which we surface as a 0-day
-    // toast. Negative values cannot occur (each algorithm clamps).
+    // The interval the UI receives is `max(0, scheduled_days)`. Negative
+    // values cannot occur (the scheduler clamps), so this is belt-and-braces
+    // for the cast.
     let scheduled_days_u32 = outcome.scheduled_days.max(0) as u32;
 
     // P003 — reuse the already-loaded `card`; no redundant SELECT inside the
@@ -187,29 +185,19 @@ pub fn submit_review(
             scheduled_days: outcome.scheduled_days,
             review_time: review_time_ms as i64,
             confidence: confidence_i64,
-            confidence_post: confidence_post_i64,
+            // v0.11 — the retrospective two-step rating (JOL companion) was
+            // removed; the DB column survives for historical rows but is
+            // never written anymore.
+            confidence_post: None,
         },
         now,
     )?;
-
-    // Vague 7 — best-effort: if a JOL was waiting on this card, resolve it
-    // against this review's outcome. Swallow errors so a calibration write
-    // failure never blocks the underlying review (the JOL row is auxiliary;
-    // it lives in the same transaction but a failure here is non-fatal).
-    let correct_for_jol = rating >= 3;
-    if let Err(e) = state
-        .db
-        .metacognition(&tx)
-        .resolve_prediction(card_id, correct_for_jol, now)
-    {
-        log::warn!("jol resolve_prediction failed: {}", e);
-    }
 
     // White Hat gamification — best-effort: any failure here is swallowed so
     // the user's review is always recorded.
     // P055: gamification deliberately treats Hard (≥2) as « not a lapse » (the
     // learner didn't fully forget), which is a DIFFERENT signal from the FSRS
-    // « recall » (≥3) used by JOL / mastery / the session summary. Named so the
+    // « recall » (≥3) used by mastery / the session summary. Named so the
     // threshold gap reads as intentional, not a bug.
     let not_a_lapse = rating >= 2;
     let (user_stats, newly_unlocked) =
@@ -337,13 +325,10 @@ fn validate_confidence(value: Option<u8>, field: &str) -> AppResult<Option<i64>>
     }
 }
 
-/// Translate a [`scheduler::RatingPreview`] (algorithm-agnostic) into the
-/// existing [`NextStatesDTO`] shape the frontend already understands.
-///
-/// The DTO uses `stability` / `difficulty` floats — for SM-2 those
-/// correspond to `(0.0, EF)` and for Leitner to `(0.0, box_index)`.
-/// The UI doesn't care about the interpretation; it shows `interval_days`
-/// only.
+/// Translate a [`scheduler::RatingPreview`] into the existing
+/// [`NextStatesDTO`] shape the frontend already understands. The DTO carries
+/// the FSRS `stability` / `difficulty` floats, but the UI only shows
+/// `interval_days`.
 fn preview_to_dto(preview: &scheduler::RatingPreview) -> NextStatesDTO {
     NextStatesDTO {
         again: outcome_to_dto(&preview.again),

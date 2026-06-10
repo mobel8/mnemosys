@@ -148,12 +148,14 @@ impl<'a> ReviewRepo<'a> {
         Ok(out)
     }
 
-    /// Count of reviews per local UTC day for the last `days` days
-    /// (inclusive of today). Dates are formatted `YYYY-MM-DD`.
+    /// Count of reviews per LOCAL calendar day for the last `days` days
+    /// (inclusive of today). Dates are formatted `YYYY-MM-DD` in the user's
+    /// local timezone (`'localtime'` modifier) so a review at 00:30 in Paris
+    /// lands on the new day, not the previous UTC one.
     pub fn reviews_by_day(&self, days: u32, now: i64) -> AppResult<Vec<DayCount>> {
         let since = now - (days as i64) * 86_400;
         let mut stmt = self.conn.prepare(
-            "SELECT strftime('%Y-%m-%d', reviewed_at, 'unixepoch') AS day,
+            "SELECT strftime('%Y-%m-%d', reviewed_at, 'unixepoch', 'localtime') AS day,
                     COUNT(*) AS n
              FROM reviews
              WHERE reviewed_at >= ?1
@@ -174,10 +176,11 @@ impl<'a> ReviewRepo<'a> {
     }
 
     /// Per-day retention rate (rating >= 3 counts as correct, ie. "Good" or "Easy").
+    /// Days are LOCAL calendar days, consistent with [`Self::reviews_by_day`].
     pub fn retention_by_day(&self, days: u32, now: i64) -> AppResult<Vec<DayRetention>> {
         let since = now - (days as i64) * 86_400;
         let mut stmt = self.conn.prepare(
-            "SELECT strftime('%Y-%m-%d', reviewed_at, 'unixepoch') AS day,
+            "SELECT strftime('%Y-%m-%d', reviewed_at, 'unixepoch', 'localtime') AS day,
                     COUNT(*) AS total,
                     SUM(CASE WHEN rating >= 3 THEN 1 ELSE 0 END) AS correct
              FROM reviews
@@ -367,5 +370,81 @@ mod tests {
             .unwrap();
         assert!(inserted.confidence.is_none());
         assert!(inserted.confidence_post.is_none());
+    }
+
+    /// Day buckets must follow the LOCAL calendar, not UTC. A review at 00:30
+    /// local time belongs to that local date; before the `'localtime'`
+    /// modifier the SQL bucketed it on the previous day for any user east of
+    /// Greenwich. The expected date is computed with chrono `Local` so the
+    /// assertion holds in every timezone the suite runs in.
+    #[test]
+    fn reviews_by_day_groups_by_local_calendar_day() {
+        use chrono::TimeZone;
+
+        let db = Database::for_test();
+        let conn = db.lock();
+        let deck = db
+            .decks(&conn)
+            .create("D", None, "#3b82f6", 0.9, None, None, None)
+            .unwrap();
+        let note = db
+            .notes(&conn)
+            .create(
+                deck.id,
+                NoteTemplate::Basic,
+                json!({ "front": "f", "back": "b" }),
+                vec![],
+                None,
+            )
+            .unwrap();
+        let card_id: i64 = conn
+            .query_row(
+                "SELECT id FROM cards WHERE note_id = ?1",
+                params![note.id],
+                |r| r.get(0),
+            )
+            .unwrap();
+
+        // 00:30 LOCAL on a fixed date — the exact "just after midnight" shape
+        // of the original bug (false the previous day at UTC+1).
+        let reviewed_at = chrono::Local
+            .with_ymd_and_hms(2024, 1, 15, 0, 30, 0)
+            .earliest()
+            .expect("2024-01-15 00:30 exists in every timezone")
+            .timestamp();
+        db.reviews(&conn)
+            .insert(
+                NewReview {
+                    card_id,
+                    rating: 3,
+                    state_before: CardState::New,
+                    state_after: CardState::Review,
+                    stability_before: None,
+                    stability_after: 5.0,
+                    difficulty_before: None,
+                    difficulty_after: 5.0,
+                    elapsed_days: 0,
+                    scheduled_days: 5,
+                    review_time: 1_000,
+                    confidence: None,
+                    confidence_post: None,
+                },
+                reviewed_at,
+            )
+            .unwrap();
+
+        let days = db.reviews(&conn).reviews_by_day(1, reviewed_at).unwrap();
+        assert_eq!(days.len(), 1);
+        assert_eq!(
+            days[0].date, "2024-01-15",
+            "a 00:30 local review must count toward Jan 15, not Jan 14"
+        );
+        assert_eq!(days[0].count, 1);
+
+        let retention = db.reviews(&conn).retention_by_day(1, reviewed_at).unwrap();
+        assert_eq!(retention.len(), 1);
+        assert_eq!(retention[0].date, "2024-01-15");
+        assert_eq!(retention[0].total, 1);
+        assert_eq!(retention[0].correct, 1);
     }
 }

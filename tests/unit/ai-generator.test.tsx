@@ -8,13 +8,18 @@
  *   - the text-tab mutation is called with the chosen language and max-cards
  *   - generated draft cards become editable rows that can be removed
  *
+ * The deck picker is a Radix `ui/select` (design.md bans native <select>), so
+ * the selector test opens it through `@testing-library/user-event` and reads
+ * the portaled options — same pattern as `note-editor-sentence.test.tsx`.
+ *
  * What we DON'T cover here:
  *   - PDF picking (relies on @tauri-apps/plugin-dialog — mocked as a no-op)
  *   - real Claude calls (mocked: the mutation always succeeds with a static payload)
  */
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateMutateAsync = vi.fn();
 const createNoteMutateAsync = vi.fn();
@@ -82,6 +87,19 @@ vi.mock("@tanstack/react-router", () => ({
 
 import { AiGenerator } from "@/components/AiGenerator";
 
+// Radix Select relies on Pointer Capture + scrollIntoView, absent from jsdom.
+beforeAll(() => {
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (!Element.prototype.setPointerCapture) {
+    Element.prototype.setPointerCapture = () => undefined;
+  }
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => undefined;
+  }
+});
+
 beforeEach(() => {
   generateMutateAsync.mockReset();
   createNoteMutateAsync.mockReset();
@@ -100,7 +118,7 @@ describe("AiGenerator", () => {
     expect(screen.getByText(/aucun deck disponible/i)).toBeInTheDocument();
   });
 
-  it("populates the deck selector when decks are available", () => {
+  it("populates the deck selector when decks are available", async () => {
     decksData = [
       {
         id: 1,
@@ -123,10 +141,16 @@ describe("AiGenerator", () => {
         updated_at: 0,
       },
     ];
+    const user = userEvent.setup();
     render(<AiGenerator />);
-    const select = screen.getByLabelText(/Deck cible/i);
-    expect(select).toBeInTheDocument();
-    expect(within(select.parentElement as HTMLElement).getAllByRole("option")).toHaveLength(2);
+    // Radix Select: the labelled trigger opens a portaled listbox of options.
+    const trigger = screen.getByLabelText(/Deck cible/i);
+    expect(trigger).toBeInTheDocument();
+    await user.click(trigger);
+    const options = await screen.findAllByRole("option");
+    expect(options).toHaveLength(2);
+    expect(screen.getByRole("option", { name: "Spanish" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Biology" })).toBeInTheDocument();
   });
 
   it("keeps the 'Générer' button disabled while the textarea is empty", () => {

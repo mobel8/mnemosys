@@ -60,9 +60,11 @@ pub fn load_demo_decks(state: State<'_, AppState>) -> AppResult<usize> {
 
 /// Insert any demo deck that isn't already present (matched by `name`).
 ///
-/// Returns the number of newly-created decks. Note rows are inserted via
-/// `NoteRepo::create` which also materialises the per-template card rows in
-/// the same transaction, so there's nothing more to wire up.
+/// Returns the number of newly-created decks. Note rows are inserted via the
+/// commit-free `NoteRepo::create_inner` under ONE transaction per deck (P064):
+/// each note still materialises its per-template card rows, but the deck pays
+/// a single COMMIT/fsync instead of one per note — first-launch loading of the
+/// 835 demo notes is near instant instead of 835 individual transactions.
 pub fn load_demo_decks_inner(db: &Database) -> AppResult<usize> {
     let data: DemoFile = serde_json::from_str(DEMO_DATA)?;
     let conn = db.lock();
@@ -93,14 +95,23 @@ pub fn load_demo_decks_inner(db: &Database) -> AppResult<usize> {
             None,
         )?;
 
-        // NoteRepo::create wraps each insertion in its own transaction and
-        // materialises the matching card rows. Fail-fast on the first error —
-        // partially-loaded decks would be visible to the user and confusing.
+        // P064 — one transaction per deck instead of one per note.
+        // `create_inner` is the BEGIN/COMMIT-free variant of `NoteRepo::create`
+        // and still materialises the matching card rows. Fail-fast on the
+        // first error with a ROLLBACK of the whole deck's notes — partially-
+        // loaded decks would be visible to the user and confusing.
+        conn.execute_batch("BEGIN;")?;
         for note in deck_data.notes {
             // Demo decks predate Vague 10 — no frequency tagging needed.
-            db.notes(&conn)
-                .create(deck.id, note.template, note.fields, note.tags, None)?;
+            if let Err(e) =
+                db.notes(&conn)
+                    .create_inner(deck.id, note.template, note.fields, note.tags, None)
+            {
+                let _ = conn.execute_batch("ROLLBACK;");
+                return Err(e);
+            }
         }
+        conn.execute_batch("COMMIT;")?;
 
         decks_loaded += 1;
     }

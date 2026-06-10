@@ -6,59 +6,36 @@
  * validated yet). Instead, each route module exports a `Route` built with
  * `createRoute(...)` and this file wires them under the root.
  *
- * Adding a route:
- *   1. Create `src/routes/<segment>.tsx` exporting a `Route`.
- *   2. Import it here and append to the `addChildren([...])` array.
- *   3. Add type augmentation for `FileRoutesByPath` if you want full
- *      typed `Link` targets (TanStack Router v1 picks them up automatically
- *      when the Route is referenced by `getParentRoute`).
+ * v0.11 route map (6 nav destinations + deck/review details):
+ *   /                      — home (decks + today hero)
+ *   /review-all            — global due session (all decks, interleaved)
+ *   /review/$deckId        — per-deck session
+ *   /create                — creation hub (AI / capture / vocabulary / imports)
+ *   /language              — language hub (reading / shadowing / pronunciation)
+ *   /stats                 — stats hub (overview / calibration / succès / graphe)
+ *   /settings              — settings (tabbed)
+ *   /decks/$deckId[/new-card]
  */
 
 import { Route as rootRoute } from "./__root";
-import { Route as achievementsRoute } from "./achievements";
-import { Route as aiGenerateRoute } from "./ai-generate";
-import { Route as captureRoute } from "./capture";
+import { Route as createRouteEntry } from "./create";
 import { Route as decksDeckIdRoute } from "./decks.$deckId";
 import { Route as decksDeckIdNewCardRoute } from "./decks.$deckId.new-card";
-import { Route as gestureRoute } from "./gesture";
-import { Route as graphRoute } from "./graph";
 import { Route as indexRoute } from "./index";
-import { Route as mnemonicsRoute } from "./mnemonics";
-import { Route as musicRoute } from "./music";
-import { Route as palacesRoute } from "./palaces";
-import { Route as palacesPalaceIdRoute } from "./palaces.$palaceId";
-import { Route as palacesPalaceIdReviewRoute } from "./palaces.$palaceId.review";
-import { Route as plannerRoute } from "./planner";
-import { Route as pronunciationRoute } from "./pronunciation";
-import { Route as readingRoute } from "./reading";
+import { Route as languageRoute } from "./language";
 import { Route as reviewDeckIdRoute } from "./review.$deckId";
-import { Route as reviewInterleavedRoute } from "./review-interleaved";
+import { Route as reviewAllRoute } from "./review-all";
 import { Route as settingsRoute } from "./settings";
-import { Route as shadowingRoute } from "./shadowing";
 import { Route as statsRoute } from "./stats";
-import { Route as vocabularyRoute } from "./vocabulary";
 
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   decksDeckIdRoute,
   decksDeckIdNewCardRoute,
   reviewDeckIdRoute,
-  reviewInterleavedRoute,
-  aiGenerateRoute,
-  captureRoute,
-  vocabularyRoute,
-  pronunciationRoute,
-  palacesRoute,
-  palacesPalaceIdRoute,
-  palacesPalaceIdReviewRoute,
+  reviewAllRoute,
+  createRouteEntry,
+  languageRoute,
   statsRoute,
-  graphRoute,
-  achievementsRoute,
-  musicRoute,
-  gestureRoute,
-  shadowingRoute,
-  readingRoute,
-  plannerRoute,
-  mnemonicsRoute,
   settingsRoute,
 ]);

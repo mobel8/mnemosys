@@ -14,16 +14,19 @@
  *   - 51-100         → `bg-success/75`
  *   - 100+           → `bg-success`
  *
- * Accessibility: the grid carries `role="img"` with an `aria-label`
- * summarising the year so screen readers don't have to crawl 365 cells.
- * Each active day is a focusable button-like cell exposing its date and
- * count via `aria-label` (not the unread native `title`), and the legend
- * spells out each bucket in text so colour is never the sole signal. The
- * container scrolls horizontally on narrow viewports.
+ * Accessibility: the grid carries a `role="group"` `aria-label` summarising
+ * the year so screen readers don't have to crawl 365 cells. Day cells follow
+ * the ARIA grid roving-tabindex pattern: exactly **one** cell sits in the tab
+ * order (today by default) and the arrow keys move focus day-to-day — ↑/↓ one
+ * day, ←/→ one week (columns are weeks), Home/End first/last day — instead of
+ * exposing 365 tab stops. Each cell exposes its date and count via
+ * `aria-label` (not the unread native `title`), and the legend spells out
+ * each bucket in text so colour is never the sole signal. The container
+ * scrolls horizontally on narrow viewports.
  */
 
 import { CalendarDays } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateLong, isoDate } from "@/lib/date";
 import { useReviewsByDay } from "@/lib/queries";
@@ -163,6 +166,16 @@ function buildGrid(counts: Map<string, number>): WeekColumn[] {
 }
 
 /**
+ * ISO day shifted by `delta` days, computed in UTC so the result keeps
+ * matching the grid's UTC-keyed cells.
+ */
+function shiftIsoDay(iso: string, delta: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return isoDate(d);
+}
+
+/**
  * For each column, return the month label that should appear above it.
  * We label only the first column of every month so the row stays sparse.
  */
@@ -194,6 +207,67 @@ export function ReviewsHeatmap() {
     () => grid.reduce((sum, col) => sum + col.days.reduce((s, d) => s + d.count, 0), 0),
     [grid],
   );
+
+  // Roving tabindex (ARIA grid pattern): exactly one cell is tabbable and the
+  // arrow keys move focus between days — instead of 365 individual tab stops.
+  const dayIndex = useMemo(() => {
+    const isos: string[] = [];
+    for (const col of grid) {
+      for (const day of col.days) {
+        if (day.isoDay) isos.push(day.isoDay);
+      }
+    }
+    return {
+      set: new Set(isos),
+      first: isos[0] ?? null,
+      last: isos[isos.length - 1] ?? null,
+    };
+  }, [grid]);
+
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [focusedIso, setFocusedIso] = useState<string | null>(null);
+  // Default tab stop = today (the last cell). If the grid rebuilt and the
+  // previously focused day fell out of range (midnight rollover), fall back.
+  const activeIso = focusedIso && dayIndex.set.has(focusedIso) ? focusedIso : dayIndex.last;
+
+  function moveFocus(next: string | null) {
+    if (!next || !dayIndex.set.has(next)) return;
+    setFocusedIso(next);
+    gridRef.current?.querySelector<HTMLButtonElement>(`[data-iso="${next}"]`)?.focus();
+  }
+
+  function handleGridKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!activeIso) return;
+    // The grid is column-major (one column per week, Monday at the top), so
+    // ←/→ jump a whole week (±7 days) and ↑/↓ step a single day. Stepping
+    // past a column edge simply continues chronologically into the next one.
+    let next: string | null;
+    switch (event.key) {
+      case "ArrowRight":
+        next = shiftIsoDay(activeIso, 7);
+        break;
+      case "ArrowLeft":
+        next = shiftIsoDay(activeIso, -7);
+        break;
+      case "ArrowDown":
+        next = shiftIsoDay(activeIso, 1);
+        break;
+      case "ArrowUp":
+        next = shiftIsoDay(activeIso, -1);
+        break;
+      case "Home":
+        next = dayIndex.first;
+        break;
+      case "End":
+        next = dayIndex.last;
+        break;
+      default:
+        return;
+    }
+    // Swallow the key (no page scroll) even when the move clamps at an edge.
+    event.preventDefault();
+    moveFocus(next);
+  }
 
   return (
     <Card className={cn(error && "border-destructive/40")}>
@@ -242,8 +316,10 @@ export function ReviewsHeatmap() {
             {/* Day rows + grid */}
             {/* biome-ignore lint/a11y/useSemanticElements: grille heatmap — aucun élément sémantique adapté (<fieldset> inapproprié pour une grille de cases focusables) */}
             <div
+              ref={gridRef}
               role="group"
-              aria-label={`Carte d'activité des révisions sur les 365 derniers jours : ${totalReviews} révision(s) au total. Chaque case est un jour ; parcours les cases au clavier pour entendre la date et le nombre de révisions.`}
+              aria-label={`Carte d'activité des révisions sur les 365 derniers jours : ${totalReviews} révision(s) au total. Chaque case est un jour ; utilise les flèches pour passer d'un jour à l'autre et entendre la date et le nombre de révisions.`}
+              onKeyDown={handleGridKeyDown}
               className="grid gap-1"
               style={{
                 gridTemplateColumns: `1.5rem repeat(${grid.length}, 0.75rem)`,
@@ -290,6 +366,11 @@ export function ReviewsHeatmap() {
                       type="button"
                       key={key}
                       aria-label={label}
+                      // Roving tabindex: only the active day is tabbable.
+                      tabIndex={cell.isoDay === activeIso ? 0 : -1}
+                      // Keep the roving state in sync however focus arrives
+                      // (mouse click, programmatic move, Tab into the grid).
+                      onFocus={() => setFocusedIso(cell.isoDay)}
                       className={cn(
                         "h-3 w-3 rounded-sm ring-1 ring-inset ring-border/30",
                         "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",

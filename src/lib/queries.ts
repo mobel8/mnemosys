@@ -39,38 +39,27 @@ import {
   type FrequencyCoverage,
   type GeneratedCard,
   type ImportResult,
-  type JolPrediction,
   type MasteryStatus,
   type MasteryTimeline,
   type NextStates,
   type Note,
   type NoteTemplate,
   type OptimizeResult,
-  type Palace,
-  type PalaceLocus,
-  type PalaceTemplate,
-  type PalaceWithLoci,
-  type PendingJol,
   type PlanTriggerType,
   type PodcastFile,
   type PodcastFormat,
   type PodcastResult,
   type Rating,
   type ReviewResult,
-  type SchedulerKind,
   type Sketch,
   type StudyPlan,
   type SubtitleImportResult,
   type SubtitleMode,
-  type SyncLoginOutput,
-  type SyncReport,
-  type SyncStatus,
   type TagGraph,
   type TodayStats,
   type TTSResult,
   type TTSVoice,
   type UserStats,
-  type WellnessLog,
   type WordStatus,
   type WordStatusKind,
 } from "@/lib/tauri";
@@ -96,21 +85,13 @@ export const queryKeys = {
   masteryTimeline: (weeks: number) => ["mastery-timeline", weeks] as const,
   settings: ["settings"] as const,
   ttsCacheSize: ["tts-cache-size"] as const,
-  syncStatus: ["sync-status"] as const,
   userStats: ["user-stats"] as const,
   achievements: ["achievements"] as const,
-  todayWellness: ["today-wellness"] as const,
-  recentWellness: (days: number) => ["recent-wellness", days] as const,
-  // Vague 7 — Tier S
+  // Sketch history (Labs)
   cardSketches: (cardId: number, limit: number) => ["card-sketches", cardId, limit] as const,
-  pendingJols: (minAgeMinutes: number, limit: number) =>
-    ["pending-jols", minAgeMinutes, limit] as const,
   calibrationStats: (deckId: number | null) => ["calibration-stats", deckId] as const,
   // Vague 8 — Deck Podcast
   deckPodcasts: (deckId: number) => ["deck-podcasts", deckId] as const,
-  // Vague 9 — Memory Palaces
-  palaces: ["palaces"] as const,
-  palace: (id: number) => ["palace", id] as const,
   // Session 4 — FSRS optimizer
   totalReviewsCount: ["total-reviews-count"] as const,
   // Vague 11 — Knowledge Graph (tag co-occurrence)
@@ -359,7 +340,6 @@ export function useCreateDeck(
       description?: string | null;
       color: string;
       desiredRetention?: number;
-      schedulerKind?: SchedulerKind;
       /** Vague 10 — optional ISO 639-1 code flagging a language deck. */
       languageMode?: string | null;
       /** Vague 15 — optional Bloom mastery-gate prerequisite deck id. */
@@ -519,10 +499,8 @@ export function useSubmitReview(
       cardId: number;
       rating: Rating;
       reviewTimeMs: number;
-      /** Optional 1..5 confidence (CBM). Omitted when the toggle is off. */
+      /** Optional 1..5 confidence (CBM, captured before the flip). */
       confidence?: number | null;
-      /** Vague 15 — optional 1..5 retrospective confidence (post-answer). */
-      confidencePost?: number | null;
     }
   >,
 ) {
@@ -531,46 +509,40 @@ export function useSubmitReview(
     mutationFn: (input) => api.review.submit(input),
     ...opts,
     onSuccess: (data, variables, onMutateResult, context) => {
-      // Affects stats + the due queue for the deck this card belongs to.
+      // Invalidation diet (audit: ~10 query families refetched PER GRADE,
+      // including the parent's mounted 200-card due query). Per-card we only
+      // touch the cheap daily counter; everything session-scoped (due queue,
+      // charts, deck stats, mastery, gamification) is invalidated ONCE at
+      // session end by `invalidateAfterSession`.
       qc.invalidateQueries({ queryKey: queryKeys.todayStats });
-      qc.invalidateQueries({ queryKey: ["due-cards"] });
-      qc.invalidateQueries({ queryKey: ["reviews-by-day"] });
-      qc.invalidateQueries({ queryKey: ["retention-by-day"] });
-      qc.invalidateQueries({ queryKey: ["deck-stats", data.card.deck_id] });
-      qc.invalidateQueries({ queryKey: ["deck-mastery", data.card.deck_id] });
-      // A review shifts this deck's retention, which may unlock decks gated
-      // behind it — refresh the whole mastery-status family (Vague 15).
-      qc.invalidateQueries({ queryKey: ["deck-mastery-status"] });
       // P127 — the card we just graded leaves the queue and won't be shown
       // again this session, so *drop* its interval preview rather than marking
       // it stale (which would trigger a wasted `preview_next_states` IPC +
       // FSRS tensor pass in the background). It'll be re-fetched fresh if the
       // card ever comes back due.
       qc.removeQueries({ queryKey: queryKeys.nextStates(variables.cardId) });
-      // Gamification side-effects.
-      qc.invalidateQueries({ queryKey: queryKeys.userStats });
-      qc.invalidateQueries({ queryKey: queryKeys.achievements });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
 }
 
-// ---------------------------------------------------------------------------
-// Vague 2 — Cognitive features
-// ---------------------------------------------------------------------------
-
 /**
- * Mutation: ask the LLM to mint a handful of curiosity-priming pre-questions
- * for a deck. Stateless — no cache invalidation needed.
+ * Session-end invalidation — everything a batch of reviews could have moved.
+ * Call once from the summary screen / on session exit instead of after every
+ * single grade.
  */
-export function useGeneratePreQuestions(
-  opts?: UseMutationOptions<string[], Error, { deckId: number; count: number; language: string }>,
-) {
-  return useMutation({
-    mutationFn: ({ deckId, count, language }) =>
-      api.cognitive.generatePreQuestions(deckId, count, language),
-    ...opts,
-  });
+export function invalidateAfterSession(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["due-cards"] });
+  qc.invalidateQueries({ queryKey: ["interleaved-due-cards"] });
+  qc.invalidateQueries({ queryKey: ["reviews-by-day"] });
+  qc.invalidateQueries({ queryKey: ["retention-by-day"] });
+  qc.invalidateQueries({ queryKey: ["deck-stats"] });
+  qc.invalidateQueries({ queryKey: ["deck-mastery"] });
+  qc.invalidateQueries({ queryKey: ["deck-mastery-status"] });
+  qc.invalidateQueries({ queryKey: queryKeys.todayStats });
+  qc.invalidateQueries({ queryKey: queryKeys.userStats });
+  qc.invalidateQueries({ queryKey: queryKeys.achievements });
+  qc.invalidateQueries({ queryKey: queryKeys.decks });
 }
 
 export function useSaveSettings(opts?: UseMutationOptions<void, Error, AppSettings>) {
@@ -849,74 +821,6 @@ export function useImportSubtitles(
 }
 
 // ---------------------------------------------------------------------------
-// Session 3 — Cloud sync (Supabase scaffolding)
-// ---------------------------------------------------------------------------
-
-/** Snapshot used by the Settings UI to pick which sub-form to render. */
-export function useSyncStatus(opts?: Partial<UseQueryOptions<SyncStatus>>) {
-  return useQuery<SyncStatus>({
-    queryKey: queryKeys.syncStatus,
-    queryFn: () => api.sync.status(),
-    ...opts,
-  });
-}
-
-/**
- * Mutation: log in to Supabase. Invalidates the sync-status query so the
- * UI flips to « logged in » without an explicit refetch.
- */
-export function useSyncLogin(
-  opts?: UseMutationOptions<SyncLoginOutput, Error, { email: string; password: string }>,
-) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ email, password }) => api.sync.login(email, password),
-    ...opts,
-    onSuccess: (data, variables, onMutateResult, context) => {
-      qc.invalidateQueries({ queryKey: queryKeys.syncStatus });
-      opts?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
-}
-
-/** Mutation: clear the local session + best-effort server-side revoke. */
-export function useSyncLogout(opts?: UseMutationOptions<void, Error, void>) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.sync.logout(),
-    ...opts,
-    onSuccess: (data, variables, onMutateResult, context) => {
-      qc.invalidateQueries({ queryKey: queryKeys.syncStatus });
-      opts?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
-}
-
-/**
- * Mutation: run one full sync cycle. Invalidates every entity that the cycle
- * could have mutated (decks, notes, cards, stats) plus the sync status so
- * `last_sync_at` refreshes in the UI.
- */
-export function useSyncNow(opts?: UseMutationOptions<SyncReport, Error, void>) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.sync.now(),
-    ...opts,
-    onSuccess: (data, variables, onMutateResult, context) => {
-      qc.invalidateQueries({ queryKey: queryKeys.decks });
-      qc.invalidateQueries({ queryKey: ["deck-stats"] });
-      qc.invalidateQueries({ queryKey: ["cards-in-deck"] });
-      qc.invalidateQueries({ queryKey: ["due-cards"] });
-      qc.invalidateQueries({ queryKey: queryKeys.todayStats });
-      qc.invalidateQueries({ queryKey: ["reviews-by-day"] });
-      qc.invalidateQueries({ queryKey: ["retention-by-day"] });
-      qc.invalidateQueries({ queryKey: queryKeys.syncStatus });
-      opts?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
-}
-
-// ---------------------------------------------------------------------------
 // Vague 1 — White Hat gamification
 // ---------------------------------------------------------------------------
 
@@ -949,54 +853,6 @@ export function useStreakFreeze(opts?: UseMutationOptions<UserStats, Error, void
     ...opts,
     onSuccess: (data, variables, onMutateResult, context) => {
       qc.invalidateQueries({ queryKey: queryKeys.userStats });
-      opts?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Vague 3 — Neuro modes (wellness, opt-in)
-// ---------------------------------------------------------------------------
-
-/** Today's wellness log, or `null` when the user hasn't checked in yet. */
-export function useTodayWellness(opts?: Partial<UseQueryOptions<WellnessLog | null>>) {
-  return useQuery<WellnessLog | null>({
-    queryKey: queryKeys.todayWellness,
-    queryFn: () => api.wellness.today(),
-    ...opts,
-  });
-}
-
-/** Last `days` wellness logs (newest first). */
-export function useRecentWellness(days = 30, opts?: Partial<UseQueryOptions<WellnessLog[]>>) {
-  return useQuery<WellnessLog[]>({
-    queryKey: queryKeys.recentWellness(days),
-    queryFn: () => api.wellness.recent(days),
-    ...opts,
-  });
-}
-
-/** Submit a wellness check-in. Invalidates the « today » + « recent » caches. */
-export function useSubmitWellness(
-  opts?: UseMutationOptions<
-    WellnessLog,
-    Error,
-    {
-      mood: number | null;
-      sleepHours: number | null;
-      stressLevel: number | null;
-      hydrated: boolean;
-      caffeineTaken: boolean;
-    }
-  >,
-) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input) => api.wellness.submit(input),
-    ...opts,
-    onSuccess: (data, variables, onMutateResult, context) => {
-      qc.invalidateQueries({ queryKey: queryKeys.todayWellness });
-      qc.invalidateQueries({ queryKey: ["recent-wellness"] });
       opts?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -1041,45 +897,6 @@ export function useCardSketches(
     queryKey: queryKeys.cardSketches(cardId, limit),
     queryFn: () => api.sketches.listForCard(cardId, limit),
     enabled: Number.isFinite(cardId) && cardId > 0,
-    ...opts,
-  });
-}
-
-/** Mutation: record one JOL prediction. Invalidates the pending list. */
-export function useRecordJol(
-  opts?: UseMutationOptions<
-    JolPrediction,
-    Error,
-    { cardId: number; predictedProb: number; horizonDays?: number }
-  >,
-) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ cardId, predictedProb, horizonDays }) =>
-      api.metacognition.recordJol(cardId, predictedProb, horizonDays),
-    ...opts,
-    onSuccess: (data, variables, onMutateResult, context) => {
-      qc.invalidateQueries({ queryKey: ["pending-jols"] });
-      qc.invalidateQueries({ queryKey: ["calibration-stats"] });
-      opts?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
-}
-
-/**
- * Predictions still waiting for the « delayed » follow-up. Polls every 5 min
- * by default — frequent enough to surface a prompt soon after a card becomes
- * eligible, infrequent enough to stay invisible in the IPC profile.
- */
-export function usePendingJols(
-  minAgeMinutes: number,
-  limit = 5,
-  opts?: Partial<UseQueryOptions<PendingJol[]>>,
-) {
-  return useQuery<PendingJol[]>({
-    queryKey: queryKeys.pendingJols(minAgeMinutes, limit),
-    queryFn: () => api.metacognition.getPendingJols(minAgeMinutes, limit),
-    refetchInterval: 5 * 60 * 1000,
     ...opts,
   });
 }
@@ -1175,161 +992,6 @@ export function useTranscribeVoiceAnswer(
     mutationFn: ({ audioBase64, mimeType, language }) =>
       api.whisper.transcribe(audioBase64, mimeType, language),
     ...opts,
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Vague 9 — Memory Palace 3D Builder
-// ---------------------------------------------------------------------------
-
-/** All palaces, alphabetical by name. */
-export function usePalaces(opts?: Partial<UseQueryOptions<Palace[]>>) {
-  return useQuery<Palace[]>({
-    queryKey: queryKeys.palaces,
-    queryFn: () => api.palaces.list(),
-    ...opts,
-  });
-}
-
-/** One palace + its loci in traversal order. */
-export function usePalace(id: number, opts?: Partial<UseQueryOptions<PalaceWithLoci>>) {
-  return useQuery<PalaceWithLoci>({
-    queryKey: queryKeys.palace(id),
-    queryFn: () => api.palaces.get(id),
-    enabled: Number.isFinite(id) && id > 0,
-    ...opts,
-  });
-}
-
-/** Mutation: create a new palace. Invalidates the index list. */
-export function useCreatePalace(
-  opts?: UseMutationOptions<
-    Palace,
-    Error,
-    { name: string; description?: string | null; template: PalaceTemplate }
-  >,
-) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input) => api.palaces.create(input),
-    ...opts,
-    onSuccess: (data, variables, onMutateResult, context) => {
-      qc.invalidateQueries({ queryKey: queryKeys.palaces });
-      opts?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
-}
-
-/** Mutation: partial update of a palace. Invalidates list + detail. */
-export function useUpdatePalace(
-  opts?: UseMutationOptions<
-    Palace,
-    Error,
-    {
-      id: number;
-      name?: string;
-      description?: string | null;
-      template?: PalaceTemplate;
-    }
-  >,
-) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, ...patch }) => api.palaces.update(id, patch),
-    ...opts,
-    onSuccess: (data, variables, onMutateResult, context) => {
-      qc.invalidateQueries({ queryKey: queryKeys.palaces });
-      qc.invalidateQueries({ queryKey: queryKeys.palace(variables.id) });
-      opts?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
-}
-
-/** Mutation: delete a palace + cascade loci. */
-export function useDeletePalace(opts?: UseMutationOptions<void, Error, number>) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id) => api.palaces.delete(id),
-    ...opts,
-    onSuccess: (data, variables, onMutateResult, context) => {
-      qc.invalidateQueries({ queryKey: queryKeys.palaces });
-      opts?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
-}
-
-/** Mutation: pin a card at a locus inside a palace. */
-export function useAddPalaceLocus(
-  opts?: UseMutationOptions<
-    PalaceLocus,
-    Error,
-    {
-      palaceId: number;
-      cardId: number;
-      x: number;
-      y: number;
-      z: number;
-      label?: string | null;
-    }
-  >,
-) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input) => api.palaces.addLocus(input),
-    ...opts,
-    onSuccess: (data, variables, onMutateResult, context) => {
-      qc.invalidateQueries({ queryKey: queryKeys.palace(variables.palaceId) });
-      opts?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
-}
-
-/** Mutation: remove a single locus. Caller passes `palaceId` so we can refresh the detail view. */
-export function useRemovePalaceLocus(
-  opts?: UseMutationOptions<void, Error, { locusId: number; palaceId: number }>,
-) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ locusId }) => api.palaces.removeLocus(locusId),
-    ...opts,
-    onSuccess: (data, variables, onMutateResult, context) => {
-      qc.invalidateQueries({ queryKey: queryKeys.palace(variables.palaceId) });
-      opts?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
-}
-
-/** Mutation: rewrite traversal ordinals. */
-export function useReorderPalaceLoci(
-  opts?: UseMutationOptions<void, Error, { palaceId: number; newOrder: number[] }>,
-) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ palaceId, newOrder }) => api.palaces.reorderLoci(palaceId, newOrder),
-    ...opts,
-    onSuccess: (data, variables, onMutateResult, context) => {
-      qc.invalidateQueries({ queryKey: queryKeys.palace(variables.palaceId) });
-      opts?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
-}
-
-/** Mutation: move a locus to a new (x, y, z) anchor. */
-export function useMovePalaceLocus(
-  opts?: UseMutationOptions<
-    void,
-    Error,
-    { locusId: number; palaceId: number; x: number; y: number; z: number }
-  >,
-) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ locusId, x, y, z }) => api.palaces.moveLocus({ locusId, x, y, z }),
-    ...opts,
-    onSuccess: (data, variables, onMutateResult, context) => {
-      qc.invalidateQueries({ queryKey: queryKeys.palace(variables.palaceId) });
-      opts?.onSuccess?.(data, variables, onMutateResult, context);
-    },
   });
 }
 

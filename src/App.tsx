@@ -24,15 +24,13 @@ import { createRouter, Link, RouterProvider } from "@tanstack/react-router";
 import { MotionConfig } from "framer-motion";
 import { AlertTriangle, Compass, Home, Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { DelayedJolPrompt } from "@/components/DelayedJolPrompt";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { MovementBreakReminder } from "@/components/MovementBreakReminder";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
 import { Button } from "@/components/ui/button";
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 import { Toaster } from "@/components/ui/toaster";
 import { scheduleNotifications } from "@/lib/notifications";
-import { usePlans, useSettingsQuery } from "@/lib/queries";
+import { usePlans } from "@/lib/queries";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routes/routeTree";
 
@@ -144,9 +142,15 @@ declare module "@tanstack/react-router" {
   }
 }
 
-/** Routes targeted by `g <key>` sequences. */
-const G_SEQUENCES: Record<string, "/" | "/stats" | "/settings"> = {
+/** Routes targeted by `g <key>` sequences — one per nav destination. */
+const G_SEQUENCES: Record<
+  string,
+  "/" | "/review-all" | "/create" | "/language" | "/stats" | "/settings"
+> = {
   h: "/",
+  r: "/review-all",
+  c: "/create",
+  l: "/language",
   s: "/stats",
   p: "/settings",
 };
@@ -187,8 +191,11 @@ export default function App() {
       if (isEditableTarget(e.target)) return;
 
       // `?` toggles the cheat-sheet. On most keyboards the key is reached
-      // via Shift+/, so we accept either form.
+      // via Shift+/, so we accept either form. Review routes own their own
+      // session-scoped help dialog — bail there so a single `?` can't open
+      // two stacked overlays (audit finding).
       if (e.key === "?") {
+        if (window.location.pathname.startsWith("/review")) return;
         e.preventDefault();
         clearPrefix();
         setShortcutsOpen((open) => !open);
@@ -237,9 +244,7 @@ export default function App() {
             <ToastProvider>
               <RouterProvider router={router} />
               <ShortcutsHelpDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-              <NeuroModesShell />
               <PlannerNotificationsShell />
-              <DelayedJolPrompt />
               <Toaster />
               <ToastViewport />
             </ToastProvider>
@@ -248,18 +253,6 @@ export default function App() {
       </MotionConfig>
     </ErrorBoundary>
   );
-}
-
-/**
- * Mounts every neuro-mode side-effect that lives at app-root level. Lives
- * inside the `QueryClientProvider` so `useSettingsQuery()` can hydrate the
- * cadence from the live settings without prop drilling.
- */
-function NeuroModesShell() {
-  const settings = useSettingsQuery();
-  const enabled = settings.data?.neuro_modes_enabled ?? false;
-  const minutes = settings.data?.movement_break_minutes ?? 25;
-  return <MovementBreakReminder enabled={enabled} intervalMinutes={minutes} />;
 }
 
 /**

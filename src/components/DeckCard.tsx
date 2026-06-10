@@ -12,7 +12,6 @@ import { BookOpen, Lock, Mic2, MoreVertical, Pencil, Play, Trash2 } from "lucide
 import { useState } from "react";
 import { DeckPodcastDialog } from "@/components/DeckPodcastDialog";
 import { EditDeckDialog } from "@/components/EditDeckDialog";
-import { schedulerLabel } from "@/components/SchedulerPicker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -190,12 +189,6 @@ export function DeckCard({ deck, statsData, masteryData }: DeckCardProps) {
             className="absolute inset-y-0 left-0 w-1.5"
             style={{ background: deck.color }}
           />
-          <span
-            className="absolute right-12 top-3 font-mono text-[10px] uppercase tracking-wide text-muted-foreground/70"
-            title={`Algorithme de scheduling : ${schedulerLabel(deck.scheduler_kind)}`}
-          >
-            {schedulerLabel(deck.scheduler_kind)}
-          </span>
           <CardContent className="space-y-3 p-5 pl-6">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">

@@ -8,6 +8,8 @@
  *      change via `setWordStatus`.
  *   3. With a learning word + a chosen deck, "Créer des cartes" calls
  *      `createCardsFromWords` with exactly the learning words.
+ *   4. The popover speaker button synthesises with the voice + speed from the
+ *      settings (regression: the voice used to be hardcoded to « nova »).
  *
  * The Tauri-backed query/mutation hooks are mocked; we assert on the call
  * arguments rather than any real IPC.
@@ -19,10 +21,21 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 const setStatusMutate = vi.fn();
 const createCardsMutate = vi.fn();
+const synthesizeMutateAsync = vi.fn(async () => ({
+  path: "/tmp/word.mp3",
+  cached: false,
+  size_bytes: 1,
+}));
 const toastMock = vi.fn();
 
 // `word -> status` the mocked useWordStatuses query reports back.
 let wordStatusRows: { word: string; language: string; status: string; updated_at: number }[] = [];
+
+// TTS settings the mocked useSettingsQuery reports back (null = nothing stored).
+let settingsData: { tts_voice: string | null; tts_speed: number | null } = {
+  tts_voice: null,
+  tts_speed: null,
+};
 
 vi.mock("@/components/ui/use-toast", () => ({
   toast: (...args: unknown[]) => toastMock(...args),
@@ -60,7 +73,8 @@ vi.mock("@/lib/queries", () => ({
   useCardsInDeck: () => ({ data: [], isLoading: false }),
   useCreateCardsFromWords: () => ({ mutate: createCardsMutate, isPending: false }),
   useCreateNote: () => ({ mutate: vi.fn(), isPending: false }),
-  useSynthesizeAudio: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSettingsQuery: () => ({ data: settingsData, isLoading: false }),
+  useSynthesizeAudio: () => ({ mutateAsync: synthesizeMutateAsync, isPending: false }),
   useGenerateCardsFromText: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
@@ -82,8 +96,10 @@ beforeAll(() => {
 beforeEach(() => {
   setStatusMutate.mockReset();
   createCardsMutate.mockReset();
+  synthesizeMutateAsync.mockClear();
   toastMock.mockReset();
   wordStatusRows = [];
+  settingsData = { tts_voice: null, tts_speed: null };
 });
 
 afterEach(() => {
@@ -167,5 +183,36 @@ describe("ReadingImport", () => {
       deckId: 3,
       words: ["gato"],
     });
+  });
+
+  it("speaks a word with the voice and speed from the settings (not hardcoded)", async () => {
+    settingsData = { tts_voice: "onyx", tts_speed: 1.5 };
+    render(<ReadingImport />);
+    // « the » is in the offline dictionary, so its popover shows the
+    // definition body, which carries the speaker button.
+    analyzeText("the");
+
+    const word = await screen.findByTestId("reading-word");
+    fireEvent.click(word.closest("button") as HTMLButtonElement);
+
+    const speakBtn = await screen.findByRole("button", { name: /Écouter la prononciation/i });
+    fireEvent.click(speakBtn);
+
+    await waitFor(() => expect(synthesizeMutateAsync).toHaveBeenCalledTimes(1));
+    expect(synthesizeMutateAsync).toHaveBeenCalledWith({ text: "the", voice: "onyx", speed: 1.5 });
+  });
+
+  it("falls back to nova / 1.0 when no TTS settings are stored", async () => {
+    render(<ReadingImport />);
+    analyzeText("the");
+
+    const word = await screen.findByTestId("reading-word");
+    fireEvent.click(word.closest("button") as HTMLButtonElement);
+
+    const speakBtn = await screen.findByRole("button", { name: /Écouter la prononciation/i });
+    fireEvent.click(speakBtn);
+
+    await waitFor(() => expect(synthesizeMutateAsync).toHaveBeenCalledTimes(1));
+    expect(synthesizeMutateAsync).toHaveBeenCalledWith({ text: "the", voice: "nova", speed: 1.0 });
   });
 });

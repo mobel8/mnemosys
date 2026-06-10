@@ -60,13 +60,21 @@ const ANKI_SCHEMA: &str = r#"
     );
 "#;
 
+/// Collision-proof temp path for a fixture DB. Tests run in parallel threads
+/// of ONE process, so a timestamp + pid suffix alone can collide when two
+/// [`build_apkg`] calls land on the same `SystemTime` tick (~100 ns
+/// granularity on Windows) — one test would then read or delete the other's
+/// fixture. The atomic counter guarantees per-process uniqueness.
 fn unique_tmp(prefix: &str) -> std::path::PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     std::env::temp_dir().join(format!(
-        "mnemo_apkg_test_{prefix}_{nanos}_{}.db",
+        "mnemo_apkg_test_{prefix}_{nanos}_{}_{seq}.db",
         std::process::id()
     ))
 }
