@@ -49,14 +49,17 @@ export default function IndexPage() {
 
   // Cards waiting today = every due card + today's REMAINING new-card
   // allowance (daily_new_limit minus the new cards already studied). This is
-  // the one number the hero leads with.
-  const waitingToday = useMemo(() => {
-    if (!decks.data || !today.data) return null;
+  // the one number the hero leads with. `quotaReached` distinguishes « rien
+  // à faire » from « le quota du jour est épuisé mais des nouvelles cartes
+  // attendent » — the two need different copy.
+  const { waitingToday, quotaReached } = useMemo(() => {
+    if (!decks.data || !today.data) return { waitingToday: null, quotaReached: false };
     const totalDue = decks.data.reduce((sum, d) => sum + d.stats.due_today, 0);
     const newAvailable = decks.data.reduce((sum, d) => sum + d.stats.new_cards, 0);
     const newLimit = settings.data?.daily_new_limit ?? 20;
     const newAllowance = Math.max(0, newLimit - today.data.new_cards_today);
-    return totalDue + Math.min(newAvailable, newAllowance);
+    const waiting = totalDue + Math.min(newAvailable, newAllowance);
+    return { waitingToday: waiting, quotaReached: waiting === 0 && newAvailable > 0 };
   }, [decks.data, today.data, settings.data?.daily_new_limit]);
 
   // Show the first-run wizard once the decks query resolves and reports an
@@ -105,6 +108,16 @@ export default function IndexPage() {
                     <p className="text-sm text-muted-foreground">
                       Environ {Math.max(1, Math.round((waitingToday * 9) / 60))} min — tous decks
                       confondus, mélangés.
+                    </p>
+                  </>
+                ) : quotaReached ? (
+                  <>
+                    <p className="font-display text-3xl tracking-tight">
+                      Objectif du jour atteint ✦
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Tes prochaines nouvelles cartes arrivent demain — ou augmente la limite
+                      quotidienne dans Paramètres → Révision.
                     </p>
                   </>
                 ) : (

@@ -52,7 +52,15 @@ export default function ReviewAllPage() {
       }));
   }, [due.data, decks.data, settings.data?.daily_new_limit, today.data?.new_cards_today]);
 
-  if (decks.isLoading || (deckIds.length > 0 && due.isLoading)) {
+  // Wait for settings + today's stats too: the new-card allowance filter
+  // below must never run against defaults (a race here briefly let the queue
+  // bypass the daily quota on first mount).
+  if (
+    decks.isLoading ||
+    settings.isLoading ||
+    today.isLoading ||
+    (deckIds.length > 0 && due.isLoading)
+  ) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="space-y-3 text-center" aria-busy="true">
@@ -70,9 +78,13 @@ export default function ReviewAllPage() {
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50">
             <GraduationCap className="h-6 w-6 text-brand-500" aria-hidden />
           </div>
-          <h1 className="mt-4 font-display text-2xl tracking-tight">Tu es à jour</h1>
+          <h1 className="mt-4 font-display text-2xl tracking-tight">
+            {(due.data?.length ?? 0) > 0 ? "Objectif du jour atteint" : "Tu es à jour"}
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Aucune carte n'est due pour l'instant. Reviens plus tard, ou ajoute de nouvelles cartes.
+            {(due.data?.length ?? 0) > 0
+              ? "Le quota quotidien de nouvelles cartes est épuisé — la suite arrive demain, ou augmente la limite dans Paramètres → Révision."
+              : "Aucune carte n'est due pour l'instant. Reviens plus tard, ou ajoute de nouvelles cartes."}
           </p>
           <div className="mt-6 flex justify-center gap-2">
             <Button asChild variant="outline">
