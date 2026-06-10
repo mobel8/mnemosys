@@ -9,9 +9,7 @@ use chrono::{Duration, Utc};
 use mnemosys_lib::db::{
     cards::CardState, decks::DeckPatch, notes::NoteTemplate, reviews::NewReview, Database,
 };
-use mnemosys_lib::scheduler::{
-    self, leitner::LeitnerScheduler, sm2::Sm2Scheduler, Scheduler, SchedulerKind,
-};
+use mnemosys_lib::scheduler::SchedulerKind;
 use serde_json::json;
 
 // ---- helpers ---------------------------------------------------------------
@@ -74,7 +72,6 @@ fn update_deck_partial() {
                 description: Some(Some("new description".into())),
                 color: None,
                 desired_retention: Some(0.85),
-                scheduler_kind: None,
                 language_mode: None,
                 prerequisite_deck_id: None,
             },
@@ -674,196 +671,7 @@ fn deck_mastery_distribution_buckets_by_stability() {
     assert_eq!(mastery.total(), 5);
 }
 
-// ---- wellness (Vague 3 — neuro modes opt-in) -------------------------------
-
-#[test]
-fn wellness_log_round_trip() {
-    let db = Database::for_test();
-    let conn = db.lock();
-    let repo = db.wellness(&conn);
-
-    let log = repo
-        .insert_log(
-            "2026-05-26",
-            Some(4),
-            Some(7.5),
-            Some(2),
-            true,
-            false,
-            1_700_000_000,
-        )
-        .expect("insert");
-    assert!(log.id > 0);
-
-    // latest_log() returns the freshly-inserted row.
-    let latest = repo.latest_log().unwrap().expect("row exists");
-    assert_eq!(latest.id, log.id);
-    assert_eq!(latest.mood, Some(4));
-    assert_eq!(latest.sleep_hours, Some(7.5));
-    assert_eq!(latest.stress_level, Some(2));
-    assert!(latest.hydrated);
-    assert!(!latest.caffeine_taken);
-    assert_eq!(latest.created_at, 1_700_000_000);
-}
-
-#[test]
-fn today_wellness_finds_same_day_log() {
-    let db = Database::for_test();
-    let conn = db.lock();
-    let repo = db.wellness(&conn);
-
-    // Two check-ins on the same day → log_for_date returns the latest one.
-    repo.insert_log("2026-05-26", Some(3), None, None, false, false, 1)
-        .unwrap();
-    repo.insert_log("2026-05-26", Some(5), Some(8.0), Some(1), true, true, 2)
-        .unwrap();
-    // Another row on a *different* day must not leak through.
-    repo.insert_log("2026-05-25", Some(2), None, None, false, false, 3)
-        .unwrap();
-
-    let same_day = repo
-        .log_for_date("2026-05-26")
-        .unwrap()
-        .expect("today's row");
-    assert_eq!(same_day.mood, Some(5));
-    assert_eq!(same_day.sleep_hours, Some(8.0));
-    assert!(same_day.hydrated);
-    assert!(same_day.caffeine_taken);
-}
-
-#[test]
-fn wellness_recent_logs_returns_newest_first() {
-    let db = Database::for_test();
-    let conn = db.lock();
-    let repo = db.wellness(&conn);
-    for (i, date) in ["2026-05-24", "2026-05-25", "2026-05-26"]
-        .iter()
-        .enumerate()
-    {
-        repo.insert_log(
-            date,
-            Some((i + 1) as i64),
-            None,
-            None,
-            false,
-            false,
-            i as i64 + 1,
-        )
-        .unwrap();
-    }
-    let logs = repo.recent_logs(2).unwrap();
-    assert_eq!(logs.len(), 2);
-    assert_eq!(logs[0].date, "2026-05-26");
-    assert_eq!(logs[1].date, "2026-05-25");
-}
-
-#[test]
-fn fsrs_params_seeded_on_init() {
-    let db = Database::for_test();
-    let conn = db.lock();
-    let v = db.params(&conn).get().unwrap();
-    assert_eq!(v.len(), 21, "FSRS-5 expects 21 parameters");
-
-    // Round-trip a new vector.
-    let new_vec: Vec<f32> = (0..21).map(|i| (i as f32) * 0.1).collect();
-    db.params(&conn)
-        .set(new_vec.clone(), Some(1_700_000_000), 42)
-        .unwrap();
-    let after = db.params(&conn).get().unwrap();
-    assert_eq!(after, new_vec);
-}
-
-// ---- pluggable schedulers (Vague 4) ---------------------------------------
-
-/// Helper: insert a basic note in `deck_id` and return its lone card row,
-/// re-fetched so the caller has the most up-to-date state.
-fn seed_one_card(db: &Database, deck_id: i64) -> mnemosys_lib::db::Card {
-    let conn = db.lock();
-    db.notes(&conn)
-        .create(
-            deck_id,
-            NoteTemplate::Basic,
-            json!({ "front": "Q", "back": "A" }),
-            vec![],
-            None,
-        )
-        .unwrap();
-    db.cards(&conn)
-        .list_in_deck(deck_id, 10, 0)
-        .unwrap()
-        .pop()
-        .unwrap()
-        .card
-}
-
-#[test]
-fn sm2_first_review_good_creates_6_day_interval() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let card = seed_one_card(&db, deck_id);
-
-    let s = Sm2Scheduler;
-    let out = s.next_review(&card, 3, 1_700_000_000).unwrap();
-    assert_eq!(out.scheduled_days, 6, "SM-2 'Good' on a new card → 6 days");
-    assert_eq!(out.state, CardState::Review);
-    assert!(out.stability == 0.0);
-    assert!(out.difficulty > 0.0, "EF must be seeded to the default");
-}
-
-#[test]
-fn sm2_again_resets_to_relearning() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let card = seed_one_card(&db, deck_id);
-
-    // Pretend the card had been Good'd a few times so we're testing the
-    // mature-review branch, not the new-card branch.
-    let mut mature = card;
-    mature.state = CardState::Review;
-    mature.reps = 4;
-    mature.scheduled_days = 25;
-    mature.difficulty = Some(2.5);
-
-    let s = Sm2Scheduler;
-    let out = s.next_review(&mature, 1, 1_700_000_000).unwrap();
-    assert_eq!(out.state, CardState::Relearning);
-    assert_eq!(out.scheduled_days, 0, "Again pulls the card back to today");
-    assert!(out.difficulty <= 2.5, "EF must drop after Again");
-}
-
-#[test]
-fn leitner_box_progression_easy_skips_two_boxes() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let card = seed_one_card(&db, deck_id);
-
-    // Card sitting at box 1 (interval=3) when graded Easy should jump to
-    // box 3 (interval=14) — Easy means +2.
-    let mut review_card = card;
-    review_card.state = CardState::Review;
-    review_card.reps = 2;
-    review_card.difficulty = Some(1.0);
-
-    let s = LeitnerScheduler;
-    let out = s.next_review(&review_card, 4, 1_700_000_000).unwrap();
-    assert_eq!(out.difficulty as i64, 3, "box 1 + Easy(+2) = box 3");
-    assert_eq!(out.scheduled_days, 14, "box 3 → 14 days");
-    assert_eq!(out.state, CardState::Review);
-}
-
-#[test]
-fn leitner_again_resets_to_box_zero() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let card = seed_one_card(&db, deck_id);
-
-    let mut mature = card;
-    mature.state = CardState::Review;
-    mature.reps = 5;
-    mature.difficulty = Some(4.0); // top box
-
-    let s = LeitnerScheduler;
-    let out = s.next_review(&mature, 1, 1_700_000_000).unwrap();
-    assert_eq!(out.difficulty as i64, 0);
-    assert_eq!(out.scheduled_days, 1, "box 0 → 1 day");
-    assert_eq!(out.state, CardState::Relearning);
-}
+// ---- scheduler kind (FSRS-6 only since v0.11) -------------------------------
 
 #[test]
 fn deck_scheduler_kind_defaults_to_fsrs6() {
@@ -873,8 +681,10 @@ fn deck_scheduler_kind_defaults_to_fsrs6() {
     assert_eq!(deck.scheduler_kind, SchedulerKind::Fsrs6);
 }
 
+/// v0.11 — FSRS-6 is the only scheduler: a caller asking for a legacy
+/// algorithm at create time is ignored, the deck is persisted as `'fsrs6'`.
 #[test]
-fn deck_scheduler_kind_persists() {
+fn create_deck_ignores_requested_scheduler_kind() {
     let db = Database::for_test();
     let conn = db.lock();
 
@@ -890,12 +700,12 @@ fn deck_scheduler_kind_persists() {
             None,
         )
         .expect("create");
-    assert_eq!(deck.scheduler_kind, SchedulerKind::Sm2);
+    assert_eq!(deck.scheduler_kind, SchedulerKind::Fsrs6);
 
     let refreshed = db.decks(&conn).get(deck.id).unwrap();
-    assert_eq!(refreshed.scheduler_kind, SchedulerKind::Sm2);
+    assert_eq!(refreshed.scheduler_kind, SchedulerKind::Fsrs6);
 
-    // list() must also return the kind correctly.
+    // list() must also return the forced kind.
     let listed = db
         .decks(&conn)
         .list()
@@ -903,51 +713,7 @@ fn deck_scheduler_kind_persists() {
         .into_iter()
         .find(|d| d.id == deck.id)
         .unwrap();
-    assert_eq!(listed.scheduler_kind, SchedulerKind::Sm2);
-}
-
-#[test]
-fn update_deck_scheduler_kind() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let conn = db.lock();
-
-    // Pre-condition: defaults to FSRS-6.
-    let before = db.decks(&conn).get(deck_id).unwrap();
-    assert_eq!(before.scheduler_kind, SchedulerKind::Fsrs6);
-
-    // Switch to Leitner.
-    let updated = db
-        .decks(&conn)
-        .update(
-            deck_id,
-            DeckPatch {
-                scheduler_kind: Some(SchedulerKind::Leitner),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    assert_eq!(updated.scheduler_kind, SchedulerKind::Leitner);
-
-    // And persisted across a fresh read.
-    let again = db.decks(&conn).get(deck_id).unwrap();
-    assert_eq!(again.scheduler_kind, SchedulerKind::Leitner);
-}
-
-#[test]
-fn scheduler_dispatcher_round_trip() {
-    // The dispatcher must produce the same outcome as the algorithm
-    // called directly. Sanity check that `from_kind` doesn't mis-wire.
-    let (db, deck_id) = fresh_db_with_deck();
-    let card = seed_one_card(&db, deck_id);
-
-    let fsrs = mnemosys_lib::fsrs::CardScheduler::with_defaults().unwrap();
-    let dispatcher = scheduler::from_kind(SchedulerKind::Sm2, &fsrs);
-    let via_dispatch = dispatcher.next_review(&card, 3, 1_700_000_000).unwrap();
-    let direct = Sm2Scheduler.next_review(&card, 3, 1_700_000_000).unwrap();
-
-    assert_eq!(via_dispatch.scheduled_days, direct.scheduled_days);
-    assert_eq!(via_dispatch.state, direct.state);
-    assert!((via_dispatch.difficulty - direct.difficulty).abs() < 1e-9);
+    assert_eq!(listed.scheduler_kind, SchedulerKind::Fsrs6);
 }
 
 // ---- Vague 5 — interleaved review ------------------------------------------
@@ -1103,7 +869,7 @@ fn interleaved_due_cards_shuffles_order() {
     );
 }
 
-// ---- Vague 7 — sketches + delayed JOL --------------------------------------
+// ---- Vague 7 — sketches ------------------------------------------------------
 
 /// Spin up a deck + a basic card + a review row, returning (card_id, review_id).
 fn seed_card_with_review(db: &Database, deck_id: i64) -> (i64, i64) {
@@ -1205,375 +971,6 @@ fn sketch_deleted_with_card_cascade() {
     }
 }
 
-#[test]
-fn jol_predict_resolve_round_trip() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let (card_id, _) = seed_card_with_review(&db, deck_id);
-    let conn = db.lock();
-    let meta = db.metacognition(&conn);
-    let p = meta
-        .record_prediction(card_id, 0.7, 7, 1_700_000_000)
-        .expect("record");
-    assert_eq!(p.card_id, card_id);
-    assert_eq!(p.actual_correct, None);
-
-    // P058 — resolution now requires the horizon (7 days) to have elapsed:
-    // predicted_at (1_700_000_000) + 7*86400 = 1_700_604_800.
-    let resolved = meta
-        .resolve_prediction(card_id, true, 1_700_604_800)
-        .expect("resolve");
-    assert_eq!(resolved, 1);
-
-    // A second resolve on the same card now finds nothing pending.
-    let resolved2 = meta
-        .resolve_prediction(card_id, false, 1_700_000_600)
-        .unwrap();
-    assert_eq!(resolved2, 0);
-}
-
-#[test]
-fn jol_pending_filters_by_age_and_resolution() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let (card_a, _) = seed_card_with_review(&db, deck_id);
-    let now = 1_700_010_000_i64;
-    // Add a second card on the same deck so we have two predictions.
-    let card_b = {
-        let conn = db.lock();
-        db.notes(&conn)
-            .create(
-                deck_id,
-                NoteTemplate::Basic,
-                json!({ "front": "Q2", "back": "A2" }),
-                vec![],
-                None,
-            )
-            .unwrap();
-        db.cards(&conn)
-            .list_in_deck(deck_id, 10, 0)
-            .unwrap()
-            .into_iter()
-            .map(|c| c.card)
-            .find(|c| c.id != card_a)
-            .unwrap()
-            .id
-    };
-    {
-        let conn = db.lock();
-        let meta = db.metacognition(&conn);
-        // Old prediction (90 min ago) on A — should appear as pending @30 min.
-        meta.record_prediction(card_a, 0.6, 7, now - 90 * 60)
-            .unwrap();
-        // Recent prediction (5 min ago) on B — should NOT appear at 30 min filter.
-        meta.record_prediction(card_b, 0.4, 7, now - 5 * 60)
-            .unwrap();
-    }
-    let conn = db.lock();
-    let pending = db
-        .metacognition(&conn)
-        .pending_predictions(30, 10, now)
-        .unwrap();
-    assert_eq!(pending.len(), 1);
-    assert_eq!(pending[0].card_id, card_a);
-
-    // Now resolve the old one — pending list is empty. P058: resolution must
-    // be past the 7-day horizon (predicted_at = now - 90 min), so resolve well
-    // beyond it rather than at `now`.
-    db.metacognition(&conn)
-        .resolve_prediction(card_a, true, now + 8 * 86400)
-        .unwrap();
-    assert!(db
-        .metacognition(&conn)
-        .pending_predictions(30, 10, now)
-        .unwrap()
-        .is_empty());
-}
-
-#[test]
-fn calibration_stats_returns_buckets() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let (card_id, _) = seed_card_with_review(&db, deck_id);
-    {
-        let conn = db.lock();
-        let meta = db.metacognition(&conn);
-        // 5 resolved predictions spread across 0.1..0.9.
-        for (i, (p, ok)) in [
-            (0.05, false),
-            (0.25, false),
-            (0.55, true),
-            (0.85, true),
-            (0.95, true),
-        ]
-        .iter()
-        .enumerate()
-        {
-            let _ = meta
-                .record_prediction(card_id, *p, 7, 1_700_000_000 + i as i64)
-                .unwrap();
-            // Each prediction has to be resolved → record then immediately
-            // resolve it; the next record/resolve cycle picks the next-oldest.
-            meta.resolve_prediction(card_id, *ok, 1_700_700_000 + i as i64)
-                .unwrap();
-        }
-    }
-    let conn = db.lock();
-    let stats = db.metacognition(&conn).calibration_stats(None).unwrap();
-    assert_eq!(stats.buckets.len(), 10);
-    assert_eq!(stats.total_resolved, 5);
-    // Quick sanity: at least one bucket has non-zero count.
-    let with_data: usize = stats.buckets.iter().filter(|b| b.count > 0).count();
-    assert!(with_data >= 3);
-}
-
-#[test]
-fn calibration_gamma_perfect_correlation() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let (card_id, _) = seed_card_with_review(&db, deck_id);
-    {
-        let conn = db.lock();
-        let meta = db.metacognition(&conn);
-        // High predictions land correct; low predictions land incorrect.
-        for (i, (p, ok)) in [
-            (0.9, true),
-            (0.85, true),
-            (0.8, true),
-            (0.2, false),
-            (0.15, false),
-            (0.1, false),
-        ]
-        .iter()
-        .enumerate()
-        {
-            meta.record_prediction(card_id, *p, 7, 1_700_000_000 + i as i64)
-                .unwrap();
-            meta.resolve_prediction(card_id, *ok, 1_700_700_000 + i as i64)
-                .unwrap();
-        }
-    }
-    let conn = db.lock();
-    let stats = db.metacognition(&conn).calibration_stats(None).unwrap();
-    assert!(
-        (stats.gamma - 1.0).abs() < 1e-9,
-        "expected γ ≈ 1.0, got {}",
-        stats.gamma
-    );
-}
-
-#[test]
-fn calibration_gamma_inverse_correlation() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let (card_id, _) = seed_card_with_review(&db, deck_id);
-    {
-        let conn = db.lock();
-        let meta = db.metacognition(&conn);
-        // Confidently wrong: high predictions → incorrect, low → correct.
-        for (i, (p, ok)) in [
-            (0.9, false),
-            (0.85, false),
-            (0.8, false),
-            (0.2, true),
-            (0.15, true),
-            (0.1, true),
-        ]
-        .iter()
-        .enumerate()
-        {
-            meta.record_prediction(card_id, *p, 7, 1_700_000_000 + i as i64)
-                .unwrap();
-            meta.resolve_prediction(card_id, *ok, 1_700_700_000 + i as i64)
-                .unwrap();
-        }
-    }
-    let conn = db.lock();
-    let stats = db.metacognition(&conn).calibration_stats(None).unwrap();
-    assert!(
-        (stats.gamma + 1.0).abs() < 1e-9,
-        "expected γ ≈ -1.0, got {}",
-        stats.gamma
-    );
-    // Mean predicted ≈ 0.5, mean actual ≈ 0.5 → bias should be ≈ 0.0.
-    assert!(stats.bias.abs() < 0.01);
-}
-
-// ---- Vague 9 — Memory Palace 3D Builder ------------------------------------
-
-/// Seed a deck and `n` distinct basic notes/cards, returning their card ids.
-fn seed_n_cards(db: &Database, deck_id: i64, n: usize) -> Vec<i64> {
-    let conn = db.lock();
-    for i in 0..n {
-        db.notes(&conn)
-            .create(
-                deck_id,
-                NoteTemplate::Basic,
-                json!({ "front": format!("Q{}", i), "back": format!("A{}", i) }),
-                vec![],
-                None,
-            )
-            .unwrap();
-    }
-    db.cards(&conn)
-        .list_in_deck(deck_id, n as u32, 0)
-        .unwrap()
-        .into_iter()
-        .map(|c| c.card.id)
-        .collect()
-}
-
-#[test]
-fn palace_round_trip() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let cards = seed_n_cards(&db, deck_id, 2);
-    let conn = db.lock();
-    let p = db
-        .palaces(&conn)
-        .create("My House", Some("Childhood home"), "house", 1_700_000_000)
-        .expect("create palace");
-    db.palaces(&conn)
-        .add_locus(
-            p.id,
-            cards[0],
-            0.0,
-            1.7,
-            0.0,
-            Some("kitchen"),
-            1_700_000_001,
-        )
-        .unwrap();
-    db.palaces(&conn)
-        .add_locus(
-            p.id,
-            cards[1],
-            4.0,
-            1.7,
-            0.0,
-            Some("bedroom"),
-            1_700_000_002,
-        )
-        .unwrap();
-    let full = db.palaces(&conn).get(p.id).unwrap();
-    assert_eq!(full.palace.name, "My House");
-    assert_eq!(full.palace.template, "house");
-    assert_eq!(full.loci.len(), 2);
-    assert_eq!(full.loci[0].ordinal, 1);
-    assert_eq!(full.loci[1].ordinal, 2);
-    assert_eq!(full.loci[0].label.as_deref(), Some("kitchen"));
-}
-
-#[test]
-fn palace_locus_unique_per_card() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let cards = seed_n_cards(&db, deck_id, 1);
-    let conn = db.lock();
-    let p = db
-        .palaces(&conn)
-        .create("X", None, "house", 1_700_000_000)
-        .unwrap();
-    db.palaces(&conn)
-        .add_locus(p.id, cards[0], 0.0, 0.0, 0.0, None, 1_700_000_001)
-        .unwrap();
-    // Re-pin the same card → UNIQUE(palace_id, card_id) must fire.
-    let err = db
-        .palaces(&conn)
-        .add_locus(p.id, cards[0], 1.0, 0.0, 0.0, None, 1_700_000_002)
-        .unwrap_err();
-    let msg = format!("{}", err);
-    assert!(
-        msg.contains("UNIQUE")
-            || msg.contains("unique")
-            || msg.to_lowercase().contains("constraint"),
-        "expected a UNIQUE constraint error, got: {}",
-        msg
-    );
-}
-
-#[test]
-fn delete_palace_cascades_to_loci() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let cards = seed_n_cards(&db, deck_id, 2);
-    let conn = db.lock();
-    let p = db
-        .palaces(&conn)
-        .create("X", None, "castle", 1_700_000_000)
-        .unwrap();
-    db.palaces(&conn)
-        .add_locus(p.id, cards[0], 0.0, 0.0, 0.0, None, 1_700_000_001)
-        .unwrap();
-    db.palaces(&conn)
-        .add_locus(p.id, cards[1], 1.0, 0.0, 0.0, None, 1_700_000_002)
-        .unwrap();
-    db.palaces(&conn).delete(p.id).unwrap();
-    let count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM palace_loci", [], |r| r.get(0))
-        .unwrap();
-    assert_eq!(count, 0, "loci should cascade-delete with the palace");
-}
-
-#[test]
-fn delete_card_cascades_to_palace_loci() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let cards = seed_n_cards(&db, deck_id, 1);
-    let conn = db.lock();
-    let p = db
-        .palaces(&conn)
-        .create("X", None, "street", 1_700_000_000)
-        .unwrap();
-    db.palaces(&conn)
-        .add_locus(p.id, cards[0], 0.0, 0.0, 0.0, None, 1_700_000_001)
-        .unwrap();
-    // Removing the underlying card should drop the locus row.
-    conn.execute(
-        "DELETE FROM cards WHERE id = ?1",
-        rusqlite::params![cards[0]],
-    )
-    .unwrap();
-    let count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM palace_loci WHERE palace_id = ?1",
-            rusqlite::params![p.id],
-            |r| r.get(0),
-        )
-        .unwrap();
-    assert_eq!(count, 0, "loci should cascade-delete with the card");
-}
-
-#[test]
-fn reorder_loci_updates_ordinals() {
-    let (db, deck_id) = fresh_db_with_deck();
-    let cards = seed_n_cards(&db, deck_id, 3);
-    let conn = db.lock();
-    let p = db
-        .palaces(&conn)
-        .create("X", None, "house", 1_700_000_000)
-        .unwrap();
-    let l1 = db
-        .palaces(&conn)
-        .add_locus(p.id, cards[0], 0.0, 0.0, 0.0, None, 1_700_000_001)
-        .unwrap();
-    let l2 = db
-        .palaces(&conn)
-        .add_locus(p.id, cards[1], 1.0, 0.0, 0.0, None, 1_700_000_002)
-        .unwrap();
-    let l3 = db
-        .palaces(&conn)
-        .add_locus(p.id, cards[2], 2.0, 0.0, 0.0, None, 1_700_000_003)
-        .unwrap();
-    // Initial ordinals 1, 2, 3 → reverse them to 3, 2, 1.
-    db.palaces(&conn)
-        .reorder_loci(p.id, &[l3.id, l2.id, l1.id])
-        .unwrap();
-    let full = db.palaces(&conn).get(p.id).unwrap();
-    assert_eq!(full.loci[0].id, l3.id, "first slot should now be l3");
-    assert_eq!(full.loci[1].id, l2.id);
-    assert_eq!(full.loci[2].id, l1.id);
-    assert_eq!(full.loci[0].ordinal, 1);
-    assert_eq!(full.loci[1].ordinal, 2);
-    assert_eq!(full.loci[2].ordinal, 3);
-}
-
-// ---- Vague 10: Mode Langue -------------------------------------------------
-
-/// A `Bidirectional` note materialises the two-card Lampariello pair
-/// (source→target at ord 0, target→source at ord 1). The brief calls this
-/// the "sentence" template; in the schema it's the bidirectional variant.
 #[test]
 fn create_sentence_note_creates_2_cards() {
     let (db, deck_id) = fresh_db_with_deck();

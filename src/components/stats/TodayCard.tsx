@@ -25,11 +25,11 @@ type StatColor = "default" | "red" | "amber" | "green";
 
 const COLOR_CLASSES: Record<StatColor, { icon: string; value: string }> = {
   default: { icon: "text-brand-500", value: "text-foreground" },
-  // `red`/`green` keep Tailwind's status palette so the traffic-light reads
-  // instantly; both carry chroma (not zero-chroma grey) per the design system.
-  red: { icon: "text-red-500", value: "text-red-600 dark:text-red-400" },
-  amber: { icon: "text-warning", value: "text-amber-600 dark:text-amber-400" },
-  green: { icon: "text-green-500", value: "text-green-600 dark:text-green-400" },
+  // Semantic design-system tokens (theme-aware in light & dark) so the
+  // traffic-light reads instantly without raw Tailwind palette values.
+  red: { icon: "text-destructive", value: "text-destructive" },
+  amber: { icon: "text-warning", value: "text-warning" },
+  green: { icon: "text-success", value: "text-success" },
 };
 
 /** Bucketise the retention rate into a traffic-light color. */

@@ -36,6 +36,35 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
+/**
+ * localStorage mirror of the persisted theme preference. The inline script in
+ * `index.html` reads this key BEFORE first paint so the app never flashes the
+ * wrong theme while waiting for the IPC settings round-trip (the FOUC the
+ * audit flagged). The settings store stays the source of truth — this is just
+ * a synchronous-read cache.
+ */
+const THEME_CACHE_KEY = "mnemosys.theme";
+
+function readCachedTheme(): Theme {
+  if (typeof window === "undefined") return "system";
+  try {
+    const raw = window.localStorage.getItem(THEME_CACHE_KEY);
+    if (raw === "light" || raw === "dark" || raw === "system") return raw;
+  } catch {
+    /* storage unavailable — fall through */
+  }
+  return "system";
+}
+
+function writeCachedTheme(theme: Theme) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(THEME_CACHE_KEY, theme);
+  } catch {
+    /* storage unavailable — non-fatal */
+  }
+}
+
 function getSystemTheme(): "light" | "dark" {
   if (typeof window === "undefined" || !window.matchMedia) return "light";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -53,7 +82,7 @@ function applyThemeClass(theme: "light" | "dark") {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const [theme, setThemeState] = useState<Theme>("system");
+  const [theme, setThemeState] = useState<Theme>(readCachedTheme);
   const [systemTheme, setSystemTheme] = useState<"light" | "dark">(getSystemTheme);
 
   // Hydrate from persisted settings on mount. If we're outside Tauri (e.g.
@@ -64,7 +93,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     api.settings
       .get()
       .then((settings: AppSettings) => {
-        if (!cancelled) setThemeState(settings.theme);
+        if (!cancelled) {
+          setThemeState(settings.theme);
+          writeCachedTheme(settings.theme);
+        }
       })
       .catch(() => {
         /* not running inside Tauri — keep defaults */
@@ -95,6 +127,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setTheme = useCallback(
     async (next: Theme) => {
       setThemeState(next);
+      writeCachedTheme(next);
       try {
         const current = await api.settings.get();
         const updated: AppSettings = { ...current, theme: next };

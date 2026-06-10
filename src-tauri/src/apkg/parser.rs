@@ -281,12 +281,24 @@ pub(crate) fn parse_models_json(json: &str) -> AppResult<Vec<AnkiModel>> {
         .collect())
 }
 
-/// Unique-enough suffix for the temp-dir name. We don't need true UUID
-/// strength — collisions only matter between simultaneous imports.
+/// Unique suffix for the temp-dir name.
+///
+/// Timestamp + pid alone are NOT collision-proof: `SystemTime::now()` has a
+/// ~100 ns granularity on Windows, so two `parse_apkg` calls racing in the
+/// same process (parallel imports — or the parallel test suite, where every
+/// converter test extracts a collection) can observe the *same* tick and end
+/// up sharing the extraction directory. One caller then reads — or deletes —
+/// the other's `collection.db`, which is exactly how
+/// `convert_skips_anki_default_deck` flaked under load. A process-wide
+/// atomic counter makes the suffix unique within the process; nanos + pid
+/// keep it unique across processes.
 fn unique_suffix() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    format!("{nanos}_{}", std::process::id())
+    format!("{nanos}_{}_{seq}", std::process::id())
 }

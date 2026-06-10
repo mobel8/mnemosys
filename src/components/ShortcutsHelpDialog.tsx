@@ -47,7 +47,6 @@ const SECTIONS: ShortcutSection[] = [
       { keys: ["2"], description: "Hard — difficile" },
       { keys: ["3"], description: "Good — correct" },
       { keys: ["4"], description: "Easy — facile" },
-      { keys: ["E"], description: "Éditer la carte" },
       { keys: ["S"], description: "Suspendre la carte" },
       { keys: ["Esc"], description: "Quitter la session" },
     ],

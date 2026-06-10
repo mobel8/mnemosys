@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::{AppError, AppResult};
 
 /// Current schema version. Bump when adding a new migration.
-pub const CURRENT_VERSION: i32 = 18;
+pub const CURRENT_VERSION: i32 = 19;
 
 /// Initial schema (v1).
 const SCHEMA_V1: &str = include_str!("schema.sql");
@@ -165,10 +165,13 @@ const SCHEMA_V8: &str = include_str!("schema_v8.sql");
 /// v9 — Delayed Judgments of Learning (Vague 7): metacognitive calibration.
 ///
 /// Rhodes & Tauber 2011 meta-analysis (4554 subjects) reports a γ ≈ 0.93
-/// effect size on resolution of delayed JOLs. Stores one prediction per
-/// learner self-rating event; `resolve_prediction` flips `actual_correct`
-/// at the next review and the calibration dashboard derives γ, bias and
-/// per-confidence-band buckets from there.
+/// effect size on resolution of delayed JOLs. Stored one prediction per
+/// learner self-rating event, resolved against the next review.
+///
+/// v0.11 — the JOL pipeline was removed (calibration now derives from
+/// `reviews.confidence`, see `db/metacognition.rs`); the `jol_predictions`
+/// table stays in the schema, inert, so historical rows survive and the
+/// migration chain stays append-only.
 const SCHEMA_V9: &str = include_str!("schema_v9.sql");
 
 /// v10 — Memory Palace 3D Builder (Vague 9): method-of-loci spatial review.
@@ -472,6 +475,81 @@ CREATE INDEX IF NOT EXISTS idx_notes_deck ON notes(deck_id);
 const SCHEMA_V18: &str =
     "CREATE INDEX IF NOT EXISTS idx_cards_due_deck ON cards(deck_id, next_review) WHERE suspended = 0;";
 
+/// v19 — restructure/v0.11: FSRS-6 becomes the **only** scheduler.
+///
+/// The pluggable per-deck algorithms (SM-2 / Leitner from Vague 4, HLR /
+/// MEMORIZE from Vague 20) are removed from the codebase; every deck is
+/// scheduled by FSRS-6 from now on. This is a pure *data* migration (no DDL):
+/// for each deck whose `scheduler_kind` is not `'fsrs6'`, every card's
+/// `(stability, difficulty)` pair — whose meaning was algorithm-specific
+/// (SM-2 stored the easiness factor, Leitner the box index, HLR the
+/// correct/incorrect counts, MEMORIZE the forgetting rate) — is converted to
+/// genuine FSRS memory fields through
+/// [`crate::scheduler::convert_memory_fields`] (P073), anchored on the card's
+/// `scheduled_days` (its last interval). The deck row is then stamped
+/// `'fsrs6'`.
+///
+/// The `decks.scheduler_kind` column and its v15/v17 CHECK constraint are
+/// left untouched (no table rebuild): the legacy values stay *storable* so
+/// this migration — and any pre-v19 backup replayed through it — keeps
+/// parsing, but after v19 the application only ever writes `'fsrs6'`.
+///
+/// Unlike the SQL-only migrations this one needs per-row Rust logic, so it
+/// runs through [`apply_migration_with`] — same transaction + FK-guard
+/// envelope, arbitrary body.
+fn migrate_v19_fsrs6_only(conn: &Connection) -> AppResult<()> {
+    use std::str::FromStr;
+
+    use crate::scheduler::{convert_memory_fields, SchedulerKind};
+
+    // Decks still on a legacy algorithm, collected up front so no SELECT
+    // statement is alive while the per-card UPDATEs run below.
+    let legacy_decks: Vec<(i64, String)> = {
+        let mut stmt =
+            conn.prepare("SELECT id, scheduler_kind FROM decks WHERE scheduler_kind <> 'fsrs6'")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+
+    for (deck_id, kind_str) in legacy_decks {
+        // The CHECK constraint pins the stored values to the known set, so a
+        // parse failure here means a corrupted DB — abort (and roll back).
+        let old_kind = SchedulerKind::from_str(&kind_str)?;
+
+        let cards: Vec<(i64, Option<f64>, Option<f64>, i64)> = {
+            let mut stmt = conn.prepare(
+                "SELECT id, stability, difficulty, scheduled_days
+                 FROM cards WHERE deck_id = ?1",
+            )?;
+            let rows = stmt.query_map(rusqlite::params![deck_id], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+
+        for (card_id, stability, difficulty, scheduled_days) in cards {
+            let (new_stability, new_difficulty) = convert_memory_fields(
+                old_kind,
+                SchedulerKind::Fsrs6,
+                stability,
+                difficulty,
+                scheduled_days,
+            );
+            conn.execute(
+                "UPDATE cards SET stability = ?1, difficulty = ?2 WHERE id = ?3",
+                rusqlite::params![new_stability, new_difficulty, card_id],
+            )?;
+        }
+
+        conn.execute(
+            "UPDATE decks SET scheduler_kind = 'fsrs6' WHERE id = ?1",
+            rusqlite::params![deck_id],
+        )?;
+    }
+
+    Ok(())
+}
+
 /// Apply all pending migrations to `conn`.
 ///
 /// Reads `PRAGMA user_version` and applies migrations in order. Each migration
@@ -589,10 +667,30 @@ pub fn run(conn: &Connection) -> AppResult<()> {
         apply_migration(conn, 18, SCHEMA_V18)?;
     }
 
+    // v19 — restructure/v0.11: FSRS-6 is the only scheduler. Convert every
+    // legacy deck's cards to FSRS memory fields and stamp the decks 'fsrs6'.
+    if current < 19 {
+        apply_migration_with(conn, 19, migrate_v19_fsrs6_only)?;
+    }
+
     Ok(())
 }
 
 /// Run `sql` inside a transaction and bump `user_version` to `version`.
+/// Thin wrapper over [`apply_migration_with`] for the SQL-only migrations.
+fn apply_migration(conn: &Connection, version: i32, sql: &str) -> AppResult<()> {
+    apply_migration_with(conn, version, |conn| {
+        conn.execute_batch(sql)?;
+        Ok(())
+    })
+}
+
+/// Run a migration `body` inside a transaction and bump `user_version` to
+/// `version`. Most migrations are plain SQL batches (see
+/// [`apply_migration`]); data migrations whose per-row logic SQL alone can't
+/// express (v19's scheduler-field conversion goes through Rust code in
+/// [`crate::scheduler`]) pass an arbitrary body and get the exact same
+/// envelope.
 ///
 /// CRITICAL — foreign keys are disabled for the duration of the migration.
 /// Several migrations rebuild a table via the SQLite "12-step recipe"
@@ -619,7 +717,11 @@ pub fn run(conn: &Connection) -> AppResult<()> {
 /// `PRAGMA foreign_key_check` *inside* the transaction, just before `COMMIT`,
 /// and abort (ROLLBACK) if it reports any violation — so a migration can never
 /// commit an orphaned row.
-fn apply_migration(conn: &Connection, version: i32, sql: &str) -> AppResult<()> {
+fn apply_migration_with(
+    conn: &Connection,
+    version: i32,
+    body: impl FnOnce(&Connection) -> AppResult<()>,
+) -> AppResult<()> {
     log::info!("Applying DB migration v{}", version);
 
     // Disabling FKs must happen OUTSIDE any transaction (SQLite ignores the
@@ -629,7 +731,7 @@ fn apply_migration(conn: &Connection, version: i32, sql: &str) -> AppResult<()> 
     let _fk_guard = FkGuard { conn };
 
     conn.execute_batch("BEGIN;")?;
-    if let Err(e) = conn.execute_batch(sql) {
+    if let Err(e) = body(conn) {
         // Best-effort rollback; surface the original error regardless.
         let _ = conn.execute_batch("ROLLBACK;");
         return Err(AppError::Database(format!(
@@ -900,5 +1002,164 @@ mod tests {
                 .expect("query sqlite_master for cards index");
             assert_eq!(present, 1, "{idx} must survive the v17 cards rebuild");
         }
+    }
+
+    /// v19 — legacy-scheduler decks must be converted to FSRS-6: every card's
+    /// `(stability, difficulty)` is re-encoded as genuine FSRS memory fields
+    /// (anchored on `scheduled_days`) and the deck is stamped `'fsrs6'`. Boots
+    /// a DB at v18 — one step short of CURRENT — seeds one deck per legacy
+    /// algorithm plus an FSRS-6 control, then replays `run` and checks the
+    /// converted stabilities are the plausible day-scale values.
+    #[test]
+    fn migration_v19_converts_legacy_decks_to_fsrs6() {
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory");
+        for (version, sql) in [
+            (1, SCHEMA_V1),
+            (2, SCHEMA_V2),
+            (3, SCHEMA_V3),
+            (4, SCHEMA_V4),
+            (5, SCHEMA_V5),
+            (6, SCHEMA_V6),
+            (7, SCHEMA_V7),
+            (8, SCHEMA_V8),
+            (9, SCHEMA_V9),
+            (10, SCHEMA_V10),
+            (11, SCHEMA_V11),
+            (12, SCHEMA_V12),
+            (13, SCHEMA_V13),
+            (14, SCHEMA_V14),
+            (15, SCHEMA_V15),
+            (16, SCHEMA_V16),
+            (17, SCHEMA_V17),
+            (18, SCHEMA_V18),
+        ] {
+            apply_migration(&conn, version, sql)
+                .unwrap_or_else(|e| panic!("bootstrap migration v{version}: {e}"));
+        }
+
+        // Seed one deck + note + reviewed card under `kind`, returning
+        // `(deck_id, card_id)`. Field semantics are the pre-v19 per-algorithm
+        // encodings (EF / box index / counters / forgetting rate).
+        let seed = |name: &str,
+                    kind: &str,
+                    stability: Option<f64>,
+                    difficulty: Option<f64>,
+                    scheduled_days: i64|
+         -> (i64, i64) {
+            conn.execute(
+                "INSERT INTO decks (name, color, desired_retention, scheduler_kind,
+                                    created_at, updated_at)
+                 VALUES (?1, '#3b82f6', 0.9, ?2, 0, 0)",
+                rusqlite::params![name, kind],
+            )
+            .expect("seed deck");
+            let deck_id = conn.last_insert_rowid();
+            conn.execute(
+                "INSERT INTO notes (deck_id, template, fields, tags, created_at, updated_at)
+                 VALUES (?1, 'basic', '{\"front\":\"q\",\"back\":\"a\"}', '[]', 0, 0)",
+                rusqlite::params![deck_id],
+            )
+            .expect("seed note");
+            let note_id = conn.last_insert_rowid();
+            conn.execute(
+                "INSERT INTO cards (note_id, deck_id, card_ord, state, stability, difficulty,
+                                    scheduled_days, created_at, updated_at)
+                 VALUES (?1, ?2, 0, 'review', ?3, ?4, ?5, 0, 0)",
+                rusqlite::params![note_id, deck_id, stability, difficulty, scheduled_days],
+            )
+            .expect("seed card");
+            (deck_id, conn.last_insert_rowid())
+        };
+
+        // SM-2: EF 2.5 in `difficulty`, last interval 20 d.
+        let (sm2_deck, sm2_card) = seed("sm2-deck", "sm2", Some(0.0), Some(2.5), 20);
+        // Leitner: box 4 in `difficulty` (30-day box).
+        let (_, leitner_card) = seed("leitner-deck", "leitner", Some(0.0), Some(4.0), 30);
+        // HLR: 5 correct / 0 incorrect in `(stability, difficulty)`.
+        let (_, hlr_card) = seed("hlr-deck", "hlr", Some(5.0), Some(0.0), 10);
+        // MEMORIZE: forgetting rate 0.09 in `difficulty` (interval 2.7/√n = 9 d).
+        let (_, memorize_card) = seed("memorize-deck", "memorize", Some(0.0), Some(0.09), 9);
+        // FSRS-6 control deck — must come through completely untouched.
+        let (_, fsrs_card) = seed("fsrs-deck", "fsrs6", Some(12.5), Some(6.0), 12);
+
+        // A pristine New card in the SM-2 deck (never reviewed, NULL fields) —
+        // must stay fresh rather than gaining bogus memory state.
+        conn.execute(
+            "INSERT INTO notes (deck_id, template, fields, tags, created_at, updated_at)
+             VALUES (?1, 'basic', '{\"front\":\"q2\",\"back\":\"a2\"}', '[]', 0, 0)",
+            rusqlite::params![sm2_deck],
+        )
+        .unwrap();
+        let pristine_note = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO cards (note_id, deck_id, card_ord, state, created_at, updated_at)
+             VALUES (?1, ?2, 0, 'new', 0, 0)",
+            rusqlite::params![pristine_note, sm2_deck],
+        )
+        .unwrap();
+        let pristine_card = conn.last_insert_rowid();
+
+        run(&conn).expect("replay v19");
+
+        let user_version: i32 = conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .expect("read user_version");
+        assert_eq!(user_version, CURRENT_VERSION);
+
+        // Every deck must now be FSRS-6.
+        let legacy_left: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM decks WHERE scheduler_kind <> 'fsrs6'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(legacy_left, 0, "every deck must be stamped 'fsrs6'");
+
+        let fields = |card_id: i64| -> (Option<f64>, Option<f64>) {
+            conn.query_row(
+                "SELECT stability, difficulty FROM cards WHERE id = ?1",
+                rusqlite::params![card_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .expect("read card fields")
+        };
+
+        // SM-2: EF carries no day scale — the last interval (20 d) anchors the
+        // stability; difficulty seeds the FSRS neutral midpoint.
+        let (s, d) = fields(sm2_card);
+        assert!((s.unwrap() - 20.0).abs() < 1e-9, "sm2 stability: {s:?}");
+        assert!((d.unwrap() - 5.0).abs() < 1e-9, "sm2 difficulty: {d:?}");
+
+        // Leitner: box 4 ↔ its 30-day interval.
+        let (s, d) = fields(leitner_card);
+        assert!((s.unwrap() - 30.0).abs() < 1e-9, "leitner stability: {s:?}");
+        assert!((d.unwrap() - 5.0).abs() < 1e-9, "leitner difficulty: {d:?}");
+
+        // HLR: half-life 2^(5-0+1) = 64 d, rescaled from the 50 %-recall point
+        // to the 90 %-recall scale: 64·log2(1/0.9) ≈ 9.73 d — NOT the raw 64.
+        let (s, d) = fields(hlr_card);
+        let expected_hlr = 64.0 * (1.0f64 / 0.9).log2();
+        assert!(
+            (s.unwrap() - expected_hlr).abs() < 1e-6,
+            "hlr stability: expected ≈{expected_hlr}, got {s:?}"
+        );
+        assert!((d.unwrap() - 5.0).abs() < 1e-9, "hlr difficulty: {d:?}");
+
+        // MEMORIZE: rate 0.09 → interval 2.7/√0.09 = 9 d.
+        let (s, _) = fields(memorize_card);
+        assert!((s.unwrap() - 9.0).abs() < 1e-9, "memorize stability: {s:?}");
+
+        // FSRS-6 control deck — untouched (same-algorithm no-op).
+        let (s, d) = fields(fsrs_card);
+        assert_eq!(s, Some(12.5), "fsrs6 card must keep its stability");
+        assert_eq!(d, Some(6.0), "fsrs6 card must keep its difficulty");
+
+        // Pristine New card — stays fresh under FSRS-6 too.
+        let (s, d) = fields(pristine_card);
+        assert!(
+            s.is_none() && d.is_none(),
+            "a never-reviewed card must not gain memory state ({s:?}, {d:?})"
+        );
     }
 }

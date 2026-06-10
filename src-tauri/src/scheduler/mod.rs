@@ -1,42 +1,38 @@
-//! Pluggable per-deck schedulers (Vague 4).
+//! Per-deck scheduling — FSRS-6 only (restructure/v0.11).
 //!
-//! Mnemosys ships three scheduling algorithms; each deck picks one through
-//! its [`crate::db::Deck::scheduler_kind`] column:
+//! Mnemosys ships a single scheduling algorithm: **FSRS-6**
+//! ([`fsrs6_adapter`]) — adaptive, 21-parameter, predicts retention. Owned by
+//! the long-lived [`crate::fsrs::CardScheduler`] held in
+//! [`crate::app_state::AppState`]. The pluggable per-deck algorithms of
+//! Vagues 4/20 (SM-2, Leitner, HLR, MEMORIZE) were removed; migration v19
+//! converted every legacy deck to FSRS-6, so `decks.scheduler_kind` is always
+//! `'fsrs6'` at runtime.
 //!
-//! - **FSRS-6** (default, [`fsrs6_adapter`]) — adaptive, 21-parameter,
-//!   predicts retention. Owned by the long-lived
-//!   [`crate::fsrs::CardScheduler`] held in [`crate::app_state::AppState`].
-//! - **SM-2** ([`sm2`]) — the classic SuperMemo-2 algorithm popularised by
-//!   Anki. Deterministic, auditable, no global parameter set.
-//! - **Leitner** ([`leitner`]) — 5-box system. Forgiving and very
-//!   predictable; convenient for low-stakes decks or beginners.
+//! FSRS-6 implements [`Scheduler`], which produces a [`SchedulerOutcome`]
+//! from the trio `(card, rating, reviewed_at)`. The outcome is then persisted
+//! via [`crate::db::cards::CardRepo::update_after_review`] — keeping the
+//! storage schema unchanged.
 //!
-//! Every algorithm implements [`Scheduler`] which produces a
-//! [`SchedulerOutcome`] from the trio `(card, rating, reviewed_at)`. The
-//! outcome is then persisted via
-//! [`crate::db::cards::CardRepo::update_after_review`] just like the
-//! existing FSRS flow — keeping the storage schema unchanged.
+//! What survives from the pluggable era, and why:
 //!
-//! Cross-algorithm migration (P073): if the learner switches a deck's
-//! `scheduler_kind`, the meaning of the `stability` / `difficulty` columns
-//! changes (FSRS uses both literally; SM-2 stores the easiness factor in
-//! `difficulty`; Leitner the box index; HLR the correct/incorrect counts;
-//! MEMORIZE the forgetting rate). Leaving the raw values untouched silently
-//! re-interprets nonsense (e.g. an FSRS difficulty of `8.0` read as a Leitner
-//! box, or an EF read as a stability in days), producing a wrong first
-//! interval. Since planning precision is the product's core value, we instead
-//! **convert** the fields at the switch through a single algorithm-agnostic
-//! currency — the card's *estimated memory strength in days* — see
-//! [`convert_memory_fields`]. The conversion is lossy by nature (the
-//! algorithms model memory differently) but it keeps the next interval in the
-//! right ballpark instead of arbitrary; a same-algorithm "switch" is a no-op.
-//! Learners who want a true fresh start can still reset a card from the UI.
+//! - [`SchedulerKind`] keeps all five variants. The legacy strings (`"sm2"`,
+//!   `"leitner"`, `"hlr"`, `"memorize"`) must stay *parseable* so migration
+//!   v19 — and any pre-v19 database replayed through it — can read the old
+//!   `decks.scheduler_kind` values. The application only ever writes
+//!   `"fsrs6"`.
+//! - [`convert_memory_fields`] (P073) bridges a card's stored
+//!   `(stability, difficulty)` from one algorithm's semantics to another's
+//!   through a single algorithm-agnostic currency — the card's *estimated
+//!   memory strength in days*. The columns meant different things per
+//!   algorithm (FSRS uses both literally; SM-2 stored the easiness factor in
+//!   `difficulty`; Leitner the box index; HLR the correct/incorrect counts;
+//!   MEMORIZE the forgetting rate), so reinterpreting them verbatim would
+//!   yield a wrong first interval. Migration v19 uses this to turn every
+//!   legacy card's fields into genuine FSRS memory state. The conversion is
+//!   lossy by nature (the algorithms model memory differently) but it keeps
+//!   the next interval in the right ballpark instead of arbitrary.
 
 pub mod fsrs6_adapter;
-pub mod hlr;
-pub mod leitner;
-pub mod memorize;
-pub mod sm2;
 
 use std::str::FromStr;
 
@@ -47,20 +43,24 @@ use crate::error::{AppError, AppResult};
 
 /// Which scheduling algorithm a deck uses.
 ///
-/// Stored in the `decks.scheduler_kind` TEXT column. Serde uses
-/// lowercase strings (`"fsrs6"`, `"sm2"`, `"leitner"`, `"hlr"`,
-/// `"memorize"`) so the wire format matches what SQLite stores and what
-/// the frontend ships.
+/// Stored in the `decks.scheduler_kind` TEXT column. Since migration v19
+/// every persisted row is `"fsrs6"`; the legacy variants exist solely so the
+/// migration (and pre-v19 data passing through it) can parse the historical
+/// values. Serde uses lowercase strings (`"fsrs6"`, `"sm2"`, `"leitner"`,
+/// `"hlr"`, `"memorize"`) so the wire format matches what SQLite stores and
+/// what the frontend ships.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SchedulerKind {
     #[default]
     Fsrs6,
+    /// Legacy (pre-v19) — SuperMemo-2.
     Sm2,
+    /// Legacy (pre-v19) — 5-box Leitner system.
     Leitner,
-    /// Half-Life Regression (Settles & Meeder 2016 — Duolingo). See [`hlr`].
+    /// Legacy (pre-v19) — Half-Life Regression (Settles & Meeder 2016).
     Hlr,
-    /// Optimal-control spacing (Tabibian et al. 2019). See [`memorize`].
+    /// Legacy (pre-v19) — optimal-control spacing (Tabibian et al. 2019).
     Memorize,
 }
 
@@ -100,14 +100,10 @@ impl FromStr for SchedulerKind {
 ///
 /// `state` is the new lifecycle bucket the card belongs to (matches the
 /// existing [`CardState`] enum so the persisted schema stays untouched).
-/// `stability` and `difficulty` are stored verbatim in `cards.stability`
-/// and `cards.difficulty`; each algorithm gives them its own meaning:
-///
-/// - **FSRS-6** — both are the FSRS memory-state floats.
-/// - **SM-2** — `stability = 0.0`, `difficulty` holds the *easiness
-///   factor* (EF, default 2.5, min 1.3).
-/// - **Leitner** — `stability = 0.0`, `difficulty` holds the *box index*
-///   `0..=4` cast to `f64`.
+/// `stability` and `difficulty` are the FSRS memory-state floats, stored
+/// verbatim in `cards.stability` and `cards.difficulty`. (Pre-v19, the
+/// removed algorithms overloaded those columns with their own state — see
+/// [`convert_memory_fields`] for the historical encodings.)
 ///
 /// `scheduled_days` is the integer interval (clamped >= 0) used to
 /// compute `cards.next_review`. `elapsed_days` is the number of days
@@ -122,9 +118,9 @@ pub struct SchedulerOutcome {
     pub elapsed_days: i64,
 }
 
-/// Common interface every per-deck algorithm implements. Implementations
-/// must be **pure** with respect to `(card, rating, reviewed_at)` — all
-/// the inputs they need to compute the next state live on the [`Card`].
+/// Common interface the scheduler implements. Implementations must be
+/// **pure** with respect to `(card, rating, reviewed_at)` — all the inputs
+/// they need to compute the next state live on the [`Card`].
 pub trait Scheduler {
     /// Compute the next state for `card` given a `rating` in `1..=4`
     /// (`1=Again`, `2=Hard`, `3=Good`, `4=Easy`) and a unix-seconds
@@ -133,11 +129,11 @@ pub trait Scheduler {
     fn next_review(&self, card: &Card, rating: u8, reviewed_at: i64)
         -> AppResult<SchedulerOutcome>;
 
-    /// Stable identifier used in logs (`"fsrs6"`, `"sm2"`, `"leitner"`).
+    /// Stable identifier used in logs (`"fsrs6"`).
     fn name(&self) -> &'static str;
 
     /// Preview the four possible outcomes (one per rating). The default
-    /// implementation runs [`Self::next_review`] four times — algorithms
+    /// implementation runs [`Self::next_review`] four times — implementations
     /// can override for efficiency but the math has to match.
     fn preview(&self, card: &Card, reviewed_at: i64) -> AppResult<RatingPreview> {
         Ok(RatingPreview {
@@ -159,51 +155,8 @@ pub struct RatingPreview {
     pub easy: SchedulerOutcome,
 }
 
-/// Build the right [`Scheduler`] for `kind`, borrowing the long-lived
-/// FSRS engine when needed. The returned trait object captures the
-/// borrow for FSRS-6 (so it can call into the global tensor-backed
-/// engine) — for the deterministic SM-2 / Leitner branches the inner
-/// value is owned and the lifetime is effectively `'static`.
-pub fn from_kind<'a>(
-    kind: SchedulerKind,
-    fsrs: &'a crate::fsrs::CardScheduler,
-) -> Box<dyn Scheduler + 'a> {
-    match kind {
-        SchedulerKind::Fsrs6 => Box::new(fsrs6_adapter::Fsrs6Adapter::new(fsrs)),
-        SchedulerKind::Sm2 => Box::new(sm2::Sm2Scheduler),
-        SchedulerKind::Leitner => Box::new(leitner::LeitnerScheduler),
-        SchedulerKind::Hlr => Box::new(hlr::HlrScheduler),
-        SchedulerKind::Memorize => Box::new(memorize::MemorizeScheduler),
-    }
-}
-
-/// Same as [`from_kind`] but threads a per-deck `desired_retention` into the
-/// FSRS-6 adapter so the deck's own retention target actually drives the
-/// scheduled interval (P006).
-///
-/// Only FSRS-6 consumes `retention`; the deterministic algorithms (SM-2,
-/// Leitner, HLR, Memorize) don't model FSRS retention, so they ignore it and
-/// behave exactly like [`from_kind`]. `retention` is clamped into the
-/// FSRS-safe band by the engine, so any valid deck value is accepted.
-pub fn from_kind_with_retention<'a>(
-    kind: SchedulerKind,
-    fsrs: &'a crate::fsrs::CardScheduler,
-    retention: f32,
-) -> Box<dyn Scheduler + 'a> {
-    match kind {
-        SchedulerKind::Fsrs6 => {
-            Box::new(fsrs6_adapter::Fsrs6Adapter::with_retention(fsrs, retention))
-        }
-        SchedulerKind::Sm2 => Box::new(sm2::Sm2Scheduler),
-        SchedulerKind::Leitner => Box::new(leitner::LeitnerScheduler),
-        SchedulerKind::Hlr => Box::new(hlr::HlrScheduler),
-        SchedulerKind::Memorize => Box::new(memorize::MemorizeScheduler),
-    }
-}
-
 /// Days between `last_review` (unix seconds, may be `None`) and `now`
 /// (unix seconds). Clamped to 0 for new cards or future timestamps.
-/// Shared by every scheduler so the elapsed-days math stays consistent.
 pub(crate) fn elapsed_days_since(last_review: Option<i64>, now: i64) -> i64 {
     match last_review {
         Some(ts) => {
@@ -214,8 +167,22 @@ pub(crate) fn elapsed_days_since(last_review: Option<i64>, now: i64) -> i64 {
     }
 }
 
+/// Scale factor turning an HLR **half-life** (the delay at which recall drops
+/// to 50 %) into a 90 %-recall memory strength on the same exponential
+/// forgetting curve `p = 2^(-Δ/h)`: solving for `p = 0.9` gives
+/// `Δ = h·log2(1/0.9) = h·ln(0.9)/ln(0.5) ≈ 0.152·h`. The half-life is NOT
+/// an FSRS stability (which targets 90 % recall) — treating it verbatim
+/// inflated every converted strength by `1/0.152 ≈ 6.6×`.
+fn hlr_half_life_to_strength_factor() -> f64 {
+    (1.0f64 / 0.9).log2()
+}
+
 /// P073 — convert a card's stored `(stability, difficulty)` from one
-/// algorithm's semantics to another's at a `scheduler_kind` switch.
+/// algorithm's semantics to another's.
+///
+/// Historically this powered the per-deck `scheduler_kind` switch; since
+/// v0.11 its one production caller is migration v19, which converts every
+/// legacy (SM-2 / Leitner / HLR / MEMORIZE) card to FSRS-6.
 ///
 /// The columns mean different things per algorithm (see the crate-level
 /// docs), so reinterpreting them verbatim yields a wrong first interval.
@@ -272,9 +239,10 @@ pub fn convert_memory_fields(
 }
 
 /// Map a source algorithm's stored fields onto an estimated memory strength in
-/// days. Mirrors each module's interval math so the estimate matches what the
-/// source would actually have scheduled. The result is clamped to a sane band
-/// (`[1, 36500]` days) so a degenerate stored value can't poison the target.
+/// days. Mirrors each legacy algorithm's interval math so the estimate matches
+/// what the source would actually have scheduled. The result is clamped to a
+/// sane band (`[1, 36500]` days) so a degenerate stored value can't poison the
+/// target.
 fn estimate_strength_days(
     from: SchedulerKind,
     stability: Option<f64>,
@@ -292,7 +260,8 @@ fn estimate_strength_days(
         // available strength anchor.
         Sm2 => anchor_days,
         // Leitner: the box interval IS the strength. `difficulty` holds the
-        // box index 0..=4 (see leitner.rs `BOX_INTERVALS_DAYS`).
+        // box index 0..=4 (the legacy scheduler's box intervals were
+        // 1/3/7/14/30 days).
         Leitner => {
             const BOX_INTERVALS_DAYS: [f64; 5] = [1.0, 3.0, 7.0, 14.0, 30.0];
             let box_idx = difficulty
@@ -302,8 +271,12 @@ fn estimate_strength_days(
                 .min(4);
             BOX_INTERVALS_DAYS[box_idx]
         }
-        // HLR: half-life `h = 2^(nb_correct - nb_incorrect + bias)` (see
-        // hlr.rs, θ = [+1, -1, +1]). The half-life is the natural strength.
+        // HLR: half-life `h = 2^(nb_correct - nb_incorrect + bias)` (the
+        // legacy scheduler's θ = [+1, -1, +1]). The half-life is the 50 %
+        // recall point, NOT a 90 %-recall stability — rescale it onto the
+        // strength scale the other algorithms use (see
+        // [`hlr_half_life_to_strength_factor`]; treating `h` verbatim
+        // overshot the converted strength ≈6.6×).
         Hlr => {
             let nb_correct = stability
                 .filter(|v| v.is_finite() && *v >= 0.0)
@@ -311,10 +284,12 @@ fn estimate_strength_days(
             let nb_incorrect = difficulty
                 .filter(|v| v.is_finite() && *v >= 0.0)
                 .unwrap_or(0.0);
-            2f64.powf(nb_correct - nb_incorrect + 1.0)
+            let half_life = 2f64.powf(nb_correct - nb_incorrect + 1.0);
+            half_life * hlr_half_life_to_strength_factor()
         }
-        // MEMORIZE: interval = C/√n with C ≈ 2.7 (see memorize.rs). The current
-        // interval (which equals that expression) is the strength.
+        // MEMORIZE: interval = C/√n with C ≈ 2.7 (the legacy scheduler's
+        // calibration). The current interval (which equals that expression)
+        // is the strength.
         Memorize => {
             const INTERVAL_SCALE: f64 = 2.7;
             difficulty
@@ -350,8 +325,8 @@ fn encode_strength_days(
             (Some(strength), Some(difficulty))
         }
         // SM-2: stability unused (0.0); EF can't be inferred from days, so seed
-        // the default EF (2.5, see sm2.rs `EF_DEFAULT`). The preserved interval
-        // lives in `cards.scheduled_days`, which SM-2 reads as `prev_interval`.
+        // the legacy default EF (2.5). The preserved interval lives in
+        // `cards.scheduled_days`, which SM-2 read as `prev_interval`.
         Sm2 => (Some(0.0), Some(2.5)),
         // Leitner: pick the box whose interval is closest to the strength.
         Leitner => {
@@ -369,14 +344,17 @@ fn encode_strength_days(
                 .unwrap_or(0);
             (Some(0.0), Some(box_idx as f64))
         }
-        // HLR: invert the half-life with zero lapses → nb_correct =
-        // log2(strength) - bias (bias = 1.0). Clamp to a non-negative count.
+        // HLR: invert the estimate above with zero lapses — undo the
+        // 50 %→90 % rescale to recover the half-life, then
+        // `nb_correct = log2(half_life) - bias` (bias = 1.0). Clamp to a
+        // non-negative count.
         Hlr => {
-            let nb_correct = (strength.log2() - 1.0).max(0.0).round();
+            let half_life = strength / hlr_half_life_to_strength_factor();
+            let nb_correct = (half_life.log2() - 1.0).max(0.0).round();
             (Some(nb_correct), Some(0.0))
         }
         // MEMORIZE: invert interval = C/√n → n = (C / strength)², clamped into
-        // the rate band [0.01, 5.0] (see memorize.rs MIN_RATE/MAX_RATE).
+        // the legacy rate band [0.01, 5.0].
         Memorize => {
             const INTERVAL_SCALE: f64 = 2.7;
             let n = (INTERVAL_SCALE / strength).powi(2).clamp(0.01, 5.0);
@@ -478,6 +456,26 @@ mod tests {
             20,
         );
         assert_eq!(stability, Some(20.0));
+    }
+
+    #[test]
+    fn convert_hlr_half_life_is_rescaled_to_90_percent_strength() {
+        // HLR stored (nb_correct=5, nb_incorrect=0) → half-life 2^6 = 64 days.
+        // The half-life is the 50 %-recall delay; FSRS stability targets 90 %
+        // recall, so the converted strength must be 64·log2(1/0.9) ≈ 9.73 days
+        // — NOT the raw 64 (the old ×6.6 inflation).
+        let (stability, difficulty) = convert_memory_fields(
+            SchedulerKind::Hlr,
+            SchedulerKind::Fsrs6,
+            Some(5.0),
+            Some(0.0),
+            10,
+        );
+        let s = stability.unwrap();
+        let expected = 64.0 * (1.0f64 / 0.9).log2();
+        assert!((s - expected).abs() < 1e-9, "expected ≈{expected}, got {s}");
+        assert!(s < 32.0, "raw half-life must not leak through as strength");
+        assert_eq!(difficulty, Some(5.0));
     }
 
     #[test]

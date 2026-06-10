@@ -21,9 +21,9 @@
  *   - PDF tab without picked file → button disabled; we never call the
  *     backend with an empty path.
  *
- * The shadcn `Select` component isn't part of this project's UI kit, so
- * the deck + language pickers fall back to native `<select>` elements
- * styled to match the `Input` component.
+ * Form controls follow design.md: deck + language pickers use the Radix
+ * `ui/select`, the opt-in passes (local AI / elaboration / critique) use
+ * `ui/switch` — native `<select>` / `<input type=checkbox>` are banned.
  */
 
 import { Link } from "@tanstack/react-router";
@@ -35,6 +35,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
@@ -598,22 +606,21 @@ export function AiGenerator() {
                 pour pouvoir générer des cartes.
               </div>
             ) : (
-              <select
-                id={deckSelectId}
-                value={deckId ?? ""}
-                onChange={(e) => setDeckId(Number(e.target.value))}
-                className={cn(
-                  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm",
-                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                  "disabled:cursor-not-allowed disabled:opacity-50",
-                )}
+              <Select
+                value={deckId === null ? "" : String(deckId)}
+                onValueChange={(value) => setDeckId(Number(value))}
               >
-                {decks.map((deck) => (
-                  <option key={deck.id} value={deck.id}>
-                    {deck.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id={deckSelectId}>
+                  <SelectValue placeholder="Choisir un deck" />
+                </SelectTrigger>
+                <SelectContent>
+                  {decks.map((deck) => (
+                    <SelectItem key={deck.id} value={String(deck.id)}>
+                      {deck.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
 
@@ -694,85 +701,76 @@ export function AiGenerator() {
             </div>
             <div className="space-y-2">
               <Label htmlFor={langSelectId}>Langue</Label>
-              <select
-                id={langSelectId}
+              <Select
                 value={language}
-                onChange={(e) => setLanguage(e.target.value as LanguageValue)}
-                className={cn(
-                  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm",
-                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                )}
+                onValueChange={(value) => setLanguage(value as LanguageValue)}
               >
-                {LANGUAGES.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id={langSelectId}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGUAGES.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
-          <div className="flex items-start gap-2 rounded-md border border-dashed bg-muted/20 p-3">
-            <input
-              id={localAiCheckboxId}
-              type="checkbox"
-              checked={useLocalAI}
-              onChange={(e) => setUseLocalAI(e.target.checked)}
-              disabled={isGenerating || isElaborating || isCritiquing || sourceTab === "pdf"}
-              className="mt-0.5 h-4 w-4 rounded border-input"
-            />
+          <div className="flex items-center justify-between gap-3 rounded-md border border-dashed bg-muted/20 p-3">
             <div className="space-y-0.5">
               <Label htmlFor={localAiCheckboxId} className="cursor-pointer text-sm">
-                🖥️ IA locale (Ollama) — privée &amp; gratuite
+                IA locale (Ollama) — privée et gratuite
               </Label>
               <p className="text-xs text-muted-foreground">
-                Génère les cartes via un modèle LLM tournant sur ta machine (aucune donnée envoyée,
-                zéro coût API). Nécessite Ollama installé et lancé. Onglet Texte uniquement —
-                configure l'URL et le modèle dans Paramètres → Intégrations.
+                Génère sur ta machine, sans rien envoyer. Onglet Texte uniquement — réglages dans
+                Paramètres → Intégrations.
               </p>
             </div>
+            <Switch
+              id={localAiCheckboxId}
+              checked={useLocalAI}
+              onCheckedChange={setUseLocalAI}
+              disabled={isGenerating || isElaborating || isCritiquing || sourceTab === "pdf"}
+            />
           </div>
 
-          <div className="flex items-start gap-2 rounded-md border border-dashed bg-muted/20 p-3">
-            <input
-              id={elaborationCheckboxId}
-              type="checkbox"
-              checked={includeElaboration}
-              onChange={(e) => setIncludeElaboration(e.target.checked)}
-              disabled={isGenerating || isElaborating}
-              className="mt-0.5 h-4 w-4 rounded border-input"
-            />
+          <div className="flex items-center justify-between gap-3 rounded-md border border-dashed bg-muted/20 p-3">
             <div className="space-y-0.5">
               <Label htmlFor={elaborationCheckboxId} className="cursor-pointer text-sm">
                 Inclure « Pourquoi » et « Exemples » auto-générés
               </Label>
               <p className="text-xs text-muted-foreground">
-                Pour chaque carte, un appel supplémentaire à Claude produit une justification courte
-                (elaborative interrogation) et 1-2 exemples concrets — coût IA légèrement plus
-                élevé.
+                Ajoute à chaque carte une justification courte et un exemple concret — appels IA
+                supplémentaires.
               </p>
             </div>
+            <Switch
+              id={elaborationCheckboxId}
+              checked={includeElaboration}
+              onCheckedChange={setIncludeElaboration}
+              disabled={isGenerating || isElaborating}
+            />
           </div>
 
-          <div className="flex items-start gap-2 rounded-md border border-dashed bg-muted/20 p-3">
-            <input
-              id={critiqueCheckboxId}
-              type="checkbox"
-              checked={includeCritique}
-              onChange={(e) => setIncludeCritique(e.target.checked)}
-              disabled={isGenerating || isElaborating || isCritiquing}
-              className="mt-0.5 h-4 w-4 rounded border-input"
-            />
+          <div className="flex items-center justify-between gap-3 rounded-md border border-dashed bg-muted/20 p-3">
             <div className="space-y-0.5">
               <Label htmlFor={critiqueCheckboxId} className="cursor-pointer text-sm">
-                Vérification qualité IA (2e passe critic)
+                Vérification qualité IA (seconde passe)
               </Label>
               <p className="text-xs text-muted-foreground">
-                Après génération, un relecteur IA évalue chaque carte (factualité, clarté,
-                atomicité) et propose une correction pour les cartes faibles — pipeline Generator →
-                Critic, coût IA supplémentaire.
+                Un relecteur IA évalue chaque carte et propose une correction pour les plus faibles
+                — appel IA supplémentaire.
               </p>
             </div>
+            <Switch
+              id={critiqueCheckboxId}
+              checked={includeCritique}
+              onCheckedChange={setIncludeCritique}
+              disabled={isGenerating || isElaborating || isCritiquing}
+            />
           </div>
 
           <div className="flex flex-wrap items-center gap-2 pt-1">

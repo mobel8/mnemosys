@@ -1,7 +1,9 @@
 /**
- * Unit tests for the `<ImportExportSection />` component (C2).
+ * Unit tests for Settings → « Données » : `<ImportExportSection />` (export +
+ * composition) and the extracted self-contained `<ImportPanel />` (JSON /
+ * .apkg / subtitles imports — also reused by the « Créer » hub).
  *
- * The component talks to two off-process APIs we have to stub:
+ * Both components talk to two off-process APIs we have to stub:
  *   - `@tauri-apps/plugin-dialog` (native save/open dialogs)
  *   - `@/lib/queries` (TanStack Query mutations)
  *
@@ -101,6 +103,7 @@ vi.mock("@/lib/queries", () => ({
 }));
 
 import { ImportExportSection } from "@/components/settings/ImportExportSection";
+import { ImportPanel } from "@/components/settings/ImportPanel";
 
 beforeEach(() => {
   saveMock.mockReset();
@@ -119,10 +122,19 @@ describe("ImportExportSection", () => {
     render(<ImportExportSection />);
     expect(screen.getByText("Données")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^Exporter$/ })).toBeInTheDocument();
+    // The import half is delegated to the embedded <ImportPanel>.
     expect(screen.getByRole("heading", { name: /^Importer$/ })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Importer un fichier Mnemosys/i }),
     ).toBeInTheDocument();
+  });
+
+  it("mentions that exports include scheduling state + review history (v2)", () => {
+    render(<ImportExportSection />);
+    expect(
+      screen.getByText(/inclut l'état de planification des cartes et l'historique de révision/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/n'est pas inclus/i)).not.toBeInTheDocument();
   });
 
   it("disables 'Exporter la sélection' until a deck is checked", async () => {
@@ -208,5 +220,32 @@ describe("ImportExportSection", () => {
     await user.click(screen.getByRole("button", { name: /Tout désélectionner/i }));
     expect(spanish.checked).toBe(false);
     expect(french.checked).toBe(false);
+  });
+});
+
+describe("ImportPanel (standalone)", () => {
+  it("renders self-sufficiently with zero props (JSON + apkg + subtitles)", () => {
+    render(<ImportPanel />);
+    expect(screen.getByRole("heading", { name: /^Importer$/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Importer un fichier Mnemosys/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Importer un paquet Anki/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Sous-titres/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Importer des sous-titres/i })).toBeInTheDocument();
+    // No export affordance — exports stay in Settings → Données.
+    expect(screen.queryByRole("button", { name: /Exporter/i })).not.toBeInTheDocument();
+  });
+
+  it("runs the JSON import flow end-to-end from the standalone panel", async () => {
+    openMock.mockResolvedValue("/tmp/standalone.json");
+    const user = userEvent.setup();
+    render(<ImportPanel />);
+
+    await user.click(screen.getByRole("button", { name: /Importer un fichier Mnemosys/i }));
+
+    expect(openMock).toHaveBeenCalledTimes(1);
+    expect(importMutate).toHaveBeenCalledWith({ path: "/tmp/standalone.json" });
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "Import terminé" }));
   });
 });

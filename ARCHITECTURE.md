@@ -51,7 +51,7 @@ Mnemosys est une application desktop **3-tiers locale**, sans serveur. La sépar
                        v
 +--------------------------------------------------------------+
 |           SQLite (bundled, ~/.local/share/.../mnemosys.db)   |
-|     schema v16 — 17 tables + 1 virtual FTS5 + 3 triggers     |
+|     schema v19 — FSRS-6 unique (v19 migre les decks legacy)  |
 +--------------------------------------------------------------+
 ```
 
@@ -74,7 +74,6 @@ Mnemosys est une application desktop **3-tiers locale**, sans serveur. La sépar
 | Recharts | 3.x | Charts du dashboard stats |
 | canvas-confetti | 1.9 | Célébration fin de session |
 | three / @react-three/fiber / drei | 0.184 / 9.6 / 10.7 | Memory Palace 3D (WebGL, V9 — cf. ADR-8) |
-| webgazer | 3.5 | Focus Guard — eye-tracking webcam local (V12 — cf. ADR-7) |
 | Biome | 2.x | Lint + format |
 
 ### Tauri 2
@@ -414,7 +413,7 @@ CREATE TABLE study_plans (
 
 ### Migrations
 
-- Versionnage via `PRAGMA user_version`. **Version courante : v16** (`CURRENT_VERSION` dans `migrations.rs`).
+- Versionnage via `PRAGMA user_version`. **Version courante : v19** (`CURRENT_VERSION` dans `migrations.rs` ; v17 = FK hardening, v18 = index covering dû, v19 = conversion de tous les decks vers FSRS-6).
 - Chaque migration est embarquée dans le binaire (`include_str!` d'un `schema_vN.sql`, ou littéral inline pour v2/v7/v15/v16) et appliquée conditionnellement (`if current < N`) dans une transaction (bump du `user_version` + COMMIT, ROLLBACK best-effort en cas d'échec).
 - **Refus de downgrade** : si `user_version > CURRENT_VERSION`, on n'altère pas la base (un build futur a ouvert ce fichier).
 - SQLite n'a pas d'`ALTER … DROP/ADD CONSTRAINT` : modifier un CHECK suit la **« 12-step recipe »** (recréer la table, copier les rows, renommer, reconstruire FTS5 + triggers). Utilisé en v2, v7, v11, v12, v13 (template CHECK) et v15 (scheduler_kind CHECK).
@@ -464,7 +463,7 @@ Sources :
 
 Tous les handlers vivent dans `src-tauri/src/commands/` et sont enregistrés via `tauri::generate_handler![]` dans `lib.rs::run()`. Le frontend les invoque via les wrappers typés de `src/lib/tauri.ts` (`api.<feature>.<command>`).
 
-L'`invoke_handler` enregistre **~95 commandes**. Regroupées par module / feature :
+L'`invoke_handler` enregistre **~55 commandes** (v0.11 a supprimé sync, wellness, palaces, JOL et 2 commandes mortes). Regroupées par module / feature :
 
 | Module | Commands | Feature |
 |--------|----------|---------|
@@ -657,3 +656,6 @@ L'app est partie d'un MVP SRS local (S1) et s'est étendue par **sessions** (gro
 | **Vague 23** | Temporal Mastery Graph + mode review mains-libres. | `get_mastery_timeline`, orchestration TTS+Whisper (ADR-13). |
 
 > Les Vagues sont numérotées de façon non strictement séquentielle (pas de Vague 6 ni 19 publiques ; la v7 du **schéma DB** correspond à la **Vague 4**, etc.). La table *Migrations* ci-dessus donne la correspondance exacte version-de-schéma ↔ vague.
+
+
+> **Note v0.11** : ce document décrit l'architecture historique. La restructuration v0.11 (« Recentrage ») a supprimé les modules sync/wellness/palaces/JOL et le multi-scheduler — voir `AUDIT_V0.11.md` et le CHANGELOG pour l'état courant.

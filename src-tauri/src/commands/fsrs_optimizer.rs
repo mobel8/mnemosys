@@ -13,7 +13,10 @@
 //!     review history, builds `FSRSItem`s, hands them to
 //!     `fsrs::FSRS::compute_parameters`, persists the result via
 //!     `ParamsRepo::set`, and rebuilds the live scheduler so the new
-//!     parameters take effect without a restart.
+//!     parameters take effect without a restart. The command is `async` and
+//!     offloads the multi-second training pass to a blocking thread
+//!     (`tauri::async_runtime::spawn_blocking`) so the UI thread and the
+//!     other IPC commands stay responsive throughout.
 //!
 //! Errors:
 //!   - `AppError::Validation` when the review count is below the threshold
@@ -63,12 +66,21 @@ pub fn get_total_reviews_count(state: State<'_, AppState>) -> AppResult<u32> {
 /// (defaults to [`MIN_REVIEWS_FOR_OPTIM`] when the IPC payload omits the
 /// field) so the UI can surface a clear « keep revising » message.
 ///
+/// The training pass takes 5–30 s on a realistic history, so the command is
+/// `async`: the cheap DB snapshots happen inline (each one drops its
+/// connection guard before the `.await`, keeping the future `Send`), while
+/// the heavy `optimize_params_from_history` call — history read + gradient
+/// descent — runs inside `tauri::async_runtime::spawn_blocking`. The DB
+/// handle is an `Arc` clone, and the optimiser only holds the connection
+/// lock while *reading* the history, never during training, so concurrent
+/// commands keep flowing.
+///
 /// On success: persists the new parameters in `fsrs_params` (stamping the
 /// `optimized_at` and `reviews_at_optim` columns) and rebuilds the active
 /// [`crate::fsrs::CardScheduler`] so the new weights apply to subsequent
 /// reviews immediately, no restart required.
 #[tauri::command]
-pub fn optimize_fsrs_params(
+pub async fn optimize_fsrs_params(
     state: State<'_, AppState>,
     min_reviews: Option<u32>,
 ) -> AppResult<OptimizeResult> {
@@ -107,7 +119,15 @@ pub fn optimize_fsrs_params(
         )));
     }
 
-    let new_params = optimize_params_from_history(&state.db)?;
+    // Heavy part — read the history and train on a dedicated blocking thread
+    // so neither the async runtime nor the webview event loop stalls. The
+    // `Database` clone is just an `Arc` bump; `optimize_params_from_history`
+    // releases the connection lock before training starts.
+    let db = state.db.clone();
+    let train = move || optimize_params_from_history(&db);
+    let new_params = tauri::async_runtime::spawn_blocking(train)
+        .await
+        .map_err(|e| crate::error::AppError::Fsrs(format!("optimizer task failed: {e}")))??;
 
     // Persist + bump bookkeeping columns.
     let now = Utc::now().timestamp();

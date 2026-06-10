@@ -1,0 +1,11 @@
+# Biome enforces LF (`lineEnding: "lf"`); without this, a fresh Windows clone
+# with core.autocrlf=true checks out CRLF everywhere and `pnpm lint` reports
+# hundreds of phantom format errors (audit finding).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary
+*.onnx binary
+*.traineddata binary
+*.wasm binary

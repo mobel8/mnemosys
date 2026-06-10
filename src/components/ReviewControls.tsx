@@ -98,7 +98,14 @@ export function ReviewControls({
 
   if (phase === "question") {
     return (
-      <div className="flex w-full justify-center pt-2">
+      <div className="flex w-full max-w-2xl flex-col items-center gap-3 pt-2">
+        {/* CBM — confidence is only meaningful BEFORE the answer is revealed.
+            v0.10 rendered this strip after the flip, which invalidated the
+            measure (audit finding); it now lives in the question phase and
+            disappears once the card is flipped. */}
+        {confidenceEnabled && onConfidenceChange ? (
+          <ConfidenceRating value={confidenceValue} onChange={onConfidenceChange} />
+        ) : null}
         <Button
           type="button"
           size="lg"
@@ -120,13 +127,6 @@ export function ReviewControls({
 
   return (
     <div className="flex w-full max-w-2xl flex-col items-center gap-3">
-      {confidenceEnabled && onConfidenceChange ? (
-        <ConfidenceRating
-          value={confidenceValue}
-          onChange={onConfidenceChange}
-          disabled={isSubmitting}
-        />
-      ) : null}
       <div className="grid w-full grid-cols-4 gap-2">
         {RATINGS.map((r) => {
           const interval =

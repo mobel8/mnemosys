@@ -1,11 +1,16 @@
 /**
- * Tests for the Study Planner page (Vague 21 — Implementation Intentions).
+ * Tests for Settings → « Rappels » (`<RemindersSection>`), which absorbed the
+ * former /planner page.
  *
  * Coverage:
- *   1. The Gollwitzer rationale + the « si X alors Y » form render.
- *   2. Submitting the form calls `createPlan` with the typed trigger/action
- *      and a JSON-encoded `days` array reflecting the selected weekdays.
+ *   1. The time-only reminder form renders (no trigger-type selector — the
+ *      legacy « lieu » / « après une habitude » triggers are gone).
+ *   2. Submitting the form calls `createPlan` with a `time` trigger and a
+ *      JSON-encoded `days` array reflecting the selected weekdays.
  *   3. Toggling a plan's Switch calls `togglePlan` with the new enabled state.
+ *   4. « Modifier » pre-fills the form and saving calls `useUpdatePlan`.
+ *   5. Legacy place/habit plans render with an « Informatif » badge and no
+ *      edit button (they can't be edited into the time-only form).
  *
  * The Tauri-backed query/mutation hooks are mocked; we assert on the call
  * arguments rather than any real IPC.
@@ -51,7 +56,7 @@ vi.mock("@/lib/queries", () => ({
   useDeletePlan: () => ({ mutate: deleteMutate, isPending: false }),
 }));
 
-import PlannerPage from "@/routes/planner.page";
+import { RemindersSection } from "@/components/settings/RemindersSection";
 
 beforeEach(() => {
   createMutate.mockReset();
@@ -66,19 +71,21 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("PlannerPage", () => {
-  it("renders the Gollwitzer rationale and the intention form", () => {
-    render(<PlannerPage />);
-    expect(screen.getByText(/Gollwitzer 1999/i)).toBeInTheDocument();
-    expect(screen.getByText(/doublent la probabilité/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Type de déclencheur/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Ajouter l'intention/i })).toBeInTheDocument();
+describe("RemindersSection", () => {
+  it("renders the time-only reminder form (no trigger-type selector)", () => {
+    render(<RemindersSection />);
+    expect(screen.getByText(/Rappels de révision/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Quand \? \(heure\)/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/alors j'étudie/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ajouter le rappel/i })).toBeInTheDocument();
+    // The legacy « lieu » / « après une habitude » triggers are gone from the form.
+    expect(screen.queryByLabelText(/Type de déclencheur/i)).not.toBeInTheDocument();
   });
 
-  it("submits a plan with action and JSON-encoded selected days", () => {
-    render(<PlannerPage />);
+  it("submits a time plan with action and JSON-encoded selected days", () => {
+    render(<RemindersSection />);
 
-    // Fill the action (trigger defaults to time / 19:00).
+    // Fill the action (the time input defaults to 19:00).
     fireEvent.change(screen.getByLabelText(/alors j'étudie/i), {
       target: { value: "Réviser Espagnol 15 min" },
     });
@@ -86,7 +93,7 @@ describe("PlannerPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Jour 1" }));
     fireEvent.click(screen.getByRole("button", { name: "Jour 3" }));
 
-    fireEvent.click(screen.getByRole("button", { name: /Ajouter l'intention/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Ajouter le rappel/i }));
 
     expect(createMutate).toHaveBeenCalledTimes(1);
     const payload = createMutate.mock.calls[0]?.[0];
@@ -113,7 +120,7 @@ describe("PlannerPage", () => {
         created_at: 0,
       },
     ];
-    render(<PlannerPage />);
+    render(<RemindersSection />);
 
     // The plan renders with a Switch (labelled "Désactiver" while enabled).
     const sw = screen.getByRole("switch", { name: /Désactiver/i });
@@ -136,13 +143,13 @@ describe("PlannerPage", () => {
         created_at: 0,
       },
     ];
-    render(<PlannerPage />);
+    render(<RemindersSection />);
 
     // Enter edit mode for the existing plan.
     fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
 
     // The form heading and action input reflect the plan being edited.
-    expect(screen.getByText(/Modifier l'intention/i)).toBeInTheDocument();
+    expect(screen.getByText(/Modifier le rappel/i)).toBeInTheDocument();
     const actionInput = screen.getByLabelText(/alors j'étudie/i) as HTMLInputElement;
     expect(actionInput.value).toBe("Réviser le vocabulaire");
 
@@ -161,5 +168,27 @@ describe("PlannerPage", () => {
     });
     // Pre-filled weekdays are preserved as a JSON array.
     expect(JSON.parse(payload.days).sort()).toEqual([2, 4]);
+  });
+
+  it("shows legacy place plans with an « Informatif » badge and no edit button", () => {
+    planRows = [
+      {
+        id: 11,
+        trigger_type: "place",
+        trigger_value: "bibliothèque",
+        action: "Réviser l'anatomie",
+        deck_id: null,
+        days: "[]",
+        enabled: true,
+        created_at: 0,
+      },
+    ];
+    render(<RemindersSection />);
+
+    expect(screen.getByText("Informatif")).toBeInTheDocument();
+    expect(screen.getByText(/au lieu « bibliothèque »/i)).toBeInTheDocument();
+    // No edit affordance for non-time plans — only toggle and delete.
+    expect(screen.queryByRole("button", { name: "Modifier" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Supprimer" })).toBeInTheDocument();
   });
 });

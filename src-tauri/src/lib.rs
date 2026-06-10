@@ -25,7 +25,6 @@ pub mod error;
 pub mod fsrs;
 pub mod scheduler;
 pub mod subtitles;
-pub mod sync;
 pub mod tts;
 
 use tauri::Manager;
@@ -107,7 +106,6 @@ pub fn run() {
             commands::decks::delete_deck,
             commands::decks::get_deck_stats,
             commands::decks::get_decks_with_stats,
-            commands::decks::count_decks,
             // P091 — diagnostics surface for the error boundary.
             commands::diagnostics::log_frontend_error,
             commands::diagnostics::open_log_dir,
@@ -169,11 +167,6 @@ pub fn run() {
             commands::apkg::import_apkg,
             // media (image-occlusion template)
             commands::media::copy_image_to_app_data,
-            // sync (Session 3 — Supabase cloud sync scaffolding)
-            commands::sync::sync_login,
-            commands::sync::sync_logout,
-            commands::sync::sync_status,
-            commands::sync::sync_now,
             // fsrs optimizer (Session 4)
             commands::fsrs_optimizer::get_total_reviews_count,
             commands::fsrs_optimizer::optimize_fsrs_params,
@@ -181,18 +174,10 @@ pub fn run() {
             commands::gamification::get_user_stats,
             commands::gamification::use_streak_freeze,
             commands::gamification::list_unlocked_achievements,
-            // cognitive features (Vague 2 — type-the-answer, confidence rating, pre-questioning)
-            commands::cognitive::generate_pre_questions,
-            // wellness (Vague 3 — neuro modes opt-in)
-            commands::wellness::submit_wellness_log,
-            commands::wellness::get_today_wellness,
-            commands::wellness::get_recent_wellness,
-            // sketches (Vague 7 — drawing effect, Wammes 2016)
+            // sketches (drawing effect — Labs)
             commands::sketches::save_sketch,
             commands::sketches::get_card_sketches,
-            // metacognition (Vague 7 — delayed JOL + calibration)
-            commands::metacognition::record_jol,
-            commands::metacognition::get_pending_jols,
+            // metacognition — calibration computed from CBM confidence ratings
             commands::metacognition::get_calibration_stats,
             // podcast (Vague 8 — Deck Podcast NotebookLM-style)
             commands::podcast::generate_deck_podcast,
@@ -200,16 +185,6 @@ pub fn run() {
             commands::podcast::delete_podcast,
             // whisper (Vague 8 — voice answer transcription)
             commands::whisper::transcribe_voice_answer,
-            // palaces (Vague 9 — Memory Palace 3D Builder)
-            commands::palaces::list_palaces,
-            commands::palaces::get_palace,
-            commands::palaces::create_palace,
-            commands::palaces::update_palace,
-            commands::palaces::delete_palace,
-            commands::palaces::add_palace_locus,
-            commands::palaces::remove_palace_locus,
-            commands::palaces::reorder_palace_loci,
-            commands::palaces::move_palace_locus,
             // reading import (Vague 17 — LingQ-style word tracking)
             commands::reading::get_word_statuses,
             commands::reading::set_word_status,

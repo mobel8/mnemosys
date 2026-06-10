@@ -1,17 +1,22 @@
 /**
- * Settings → "Réglages des révisions".
+ * Settings → "Révision".
  *
- * Surfaces the FSRS-relevant knobs (desired retention) and the daily caps
- * (new cards, reviews). Values live in `AppSettings` on the backend; we
- * hydrate via `useSettingsQuery()` and persist with `useSaveSettings()`.
+ * Surfaces the scheduling knobs (default retention for new decks, daily caps)
+ * plus the two active-recall options that stayed in core (type-the-answer,
+ * confidence rating). Values live in `AppSettings` on the backend; we hydrate
+ * via `useSettingsQuery()` and persist with `useSaveSettings()`.
  *
  * "Save" is a single bulk-write rather than per-field auto-save, mostly to
  * avoid spamming the backend while a slider is being dragged. The local
  * draft state is reset whenever a fresh server payload arrives so other
  * agents that mutate settings don't get clobbered.
+ *
+ * Everything experimental (sketch, voice answer, hands-free, ambience) lives
+ * in `<LabsSection>`; the removed features (pre-questioning, JOL, pretest,
+ * self-explanation, focus guard) are gone from `AppSettings` entirely.
  */
 
-import { Headphones, Loader2, Save } from "lucide-react";
+import { Loader2, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,15 +73,7 @@ export function ReviewSettingsSection() {
       a.daily_review_limit !== b.daily_review_limit ||
       a.show_next_interval !== b.show_next_interval ||
       a.type_the_answer_enabled !== b.type_the_answer_enabled ||
-      a.confidence_rating_enabled !== b.confidence_rating_enabled ||
-      a.pre_questioning_enabled !== b.pre_questioning_enabled ||
-      a.sketch_before_flip_enabled !== b.sketch_before_flip_enabled ||
-      a.delayed_jol_enabled !== b.delayed_jol_enabled ||
-      a.voice_answer_enabled !== b.voice_answer_enabled ||
-      a.pretest_mode_enabled !== b.pretest_mode_enabled ||
-      a.self_explanation_enabled !== b.self_explanation_enabled ||
-      a.focus_guard_enabled !== b.focus_guard_enabled ||
-      a.hands_free_enabled !== b.hands_free_enabled
+      a.confidence_rating_enabled !== b.confidence_rating_enabled
     );
   }, [query.data, draft]);
 
@@ -91,14 +88,6 @@ export function ReviewSettingsSection() {
       show_next_interval: draft.show_next_interval,
       type_the_answer_enabled: draft.type_the_answer_enabled,
       confidence_rating_enabled: draft.confidence_rating_enabled,
-      pre_questioning_enabled: draft.pre_questioning_enabled,
-      sketch_before_flip_enabled: draft.sketch_before_flip_enabled,
-      delayed_jol_enabled: draft.delayed_jol_enabled,
-      voice_answer_enabled: draft.voice_answer_enabled,
-      pretest_mode_enabled: draft.pretest_mode_enabled,
-      self_explanation_enabled: draft.self_explanation_enabled,
-      focus_guard_enabled: draft.focus_guard_enabled,
-      hands_free_enabled: draft.hands_free_enabled,
     });
   }
 
@@ -109,22 +98,22 @@ export function ReviewSettingsSection() {
       <CardHeader>
         <CardTitle>Réglages des révisions</CardTitle>
         <CardDescription>
-          Ajuste la rétention cible et le rythme journalier. Les changements ne s'appliquent
-          qu'après sauvegarde.
+          Ajuste le rythme journalier et les options de rappel actif. Les changements ne
+          s'appliquent qu'après sauvegarde.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Desired retention */}
+        {/* Default retention for new decks */}
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-4">
             <Label htmlFor="retention-slider" className="text-sm">
-              Rétention cible
+              Rétention par défaut des nouveaux decks
             </Label>
             <span className="tabular-nums text-sm font-semibold text-primary">{retentionPct}%</span>
           </div>
           <Slider
             id="retention-slider"
-            aria-label="Rétention cible"
+            aria-label="Rétention par défaut des nouveaux decks"
             aria-valuetext={`${retentionPct} %`}
             min={RETENTION_MIN}
             max={RETENTION_MAX}
@@ -139,7 +128,7 @@ export function ReviewSettingsSection() {
             disabled={query.isLoading}
           />
           <p className="text-xs text-muted-foreground">
-            FSRS-6 ajuste les intervalles pour viser ce taux de réussite. 90 % est un bon compromis.
+            La planification utilise la rétention propre à chaque deck.
           </p>
         </div>
 
@@ -197,17 +186,16 @@ export function ReviewSettingsSection() {
           />
         </div>
 
-        {/* --- Vague 2: Cognitive features ---------------------------------- */}
+        {/* Active recall options */}
         <div className="space-y-3">
-          <div className="text-sm font-medium text-foreground">Modes cognitifs</div>
+          <div className="text-sm font-medium text-foreground">Rappel actif</div>
           <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
             <div className="space-y-0.5">
               <Label htmlFor="type-the-answer-toggle" className="text-sm">
                 Saisie de la réponse
               </Label>
               <p className="text-xs text-muted-foreground">
-                Tape la réponse avant de retourner la carte (generation effect — Slamecka &amp; Graf
-                1978, d≈0.40).
+                Tape ta réponse avant de retourner la carte.
               </p>
             </div>
             <Switch
@@ -225,7 +213,8 @@ export function ReviewSettingsSection() {
                 Évaluation de confiance
               </Label>
               <p className="text-xs text-muted-foreground">
-                Note ta confiance 1-5 avant le rating FSRS (CBM — Gardner-Medwin, UCL).
+                Note ta confiance avant de voir la réponse ; alimente l'onglet Calibration des
+                statistiques.
               </p>
             </div>
             <Switch
@@ -234,172 +223,6 @@ export function ReviewSettingsSection() {
               disabled={query.isLoading}
               onCheckedChange={(checked) =>
                 setDraft((d) => ({ ...d, confidence_rating_enabled: checked }))
-              }
-            />
-          </div>
-          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
-            <div className="space-y-0.5">
-              <Label htmlFor="pre-questioning-toggle" className="text-sm">
-                Pré-questionnement IA
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Questions d'amorçage avant chaque nouveau bloc (g≈0.45 — Pan et al. 2023). Nécessite
-                une clé Anthropic configurée.
-              </p>
-            </div>
-            <Switch
-              id="pre-questioning-toggle"
-              checked={draft.pre_questioning_enabled}
-              disabled={query.isLoading}
-              onCheckedChange={(checked) =>
-                setDraft((d) => ({ ...d, pre_questioning_enabled: checked }))
-              }
-            />
-          </div>
-          {/* --- Vague 7: Tier S — Sketch + Delayed-JOL ----------------------- */}
-          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
-            <div className="space-y-0.5">
-              <Label htmlFor="sketch-toggle" className="text-sm">
-                Dessin avant le retournement (effet de dessin)
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Dessine ta réponse avant de retourner la carte (Wammes 2016, +30-50% rappel).
-                Capture PNG stockée localement.
-              </p>
-            </div>
-            <Switch
-              id="sketch-toggle"
-              checked={draft.sketch_before_flip_enabled}
-              disabled={query.isLoading}
-              onCheckedChange={(checked) =>
-                setDraft((d) => ({ ...d, sketch_before_flip_enabled: checked }))
-              }
-            />
-          </div>
-          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
-            <div className="space-y-0.5">
-              <Label htmlFor="jol-toggle" className="text-sm">
-                Prédictions de rappel différées (JOL)
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Prédis la chance de réussir une carte ~30 min après l'avoir vue (Rhodes &amp; Tauber
-                2011, g=0.93). Affiche la calibration γ + biais dans Stats.
-              </p>
-            </div>
-            <Switch
-              id="jol-toggle"
-              checked={draft.delayed_jol_enabled}
-              disabled={query.isLoading}
-              onCheckedChange={(checked) =>
-                setDraft((d) => ({ ...d, delayed_jol_enabled: checked }))
-              }
-            />
-          </div>
-          {/* --- Vague 8: Whisper Mode Review (voice answer) ------------------ */}
-          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
-            <div className="space-y-0.5">
-              <Label htmlFor="voice-answer-toggle" className="text-sm">
-                Réponse vocale (Whisper)
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Réponds aux cartes basic à voix haute. La transcription OpenAI Whisper est comparée
-                à la réponse attendue via la même comparaison approximative que la saisie de la
-                réponse. Nécessite une clé OpenAI configurée.
-              </p>
-            </div>
-            <Switch
-              id="voice-answer-toggle"
-              checked={draft.voice_answer_enabled}
-              disabled={query.isLoading}
-              onCheckedChange={(checked) =>
-                setDraft((d) => ({ ...d, voice_answer_enabled: checked }))
-              }
-            />
-          </div>
-          {/* --- Vague 12: Pretest + Self-explanation + Focus Guard --------- */}
-          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
-            <div className="space-y-0.5">
-              <Label htmlFor="pretest-mode-toggle" className="text-sm">
-                Mode pré-test
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Devine la réponse d'une carte neuve avant de la révéler, même en cas d'erreur
-                (pretesting effect — Pan et al. 2023).
-              </p>
-            </div>
-            <Switch
-              id="pretest-mode-toggle"
-              checked={draft.pretest_mode_enabled}
-              disabled={query.isLoading}
-              onCheckedChange={(checked) =>
-                setDraft((d) => ({ ...d, pretest_mode_enabled: checked }))
-              }
-            />
-          </div>
-          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
-            <div className="space-y-0.5">
-              <Label htmlFor="self-explanation-toggle" className="text-sm">
-                Auto-explication
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Sur ~1 carte sur 5, explique en une phrase pourquoi c'est la réponse, après le flip
-                (Chi 1989, g=0.55). Texte libre, non noté.
-              </p>
-            </div>
-            <Switch
-              id="self-explanation-toggle"
-              checked={draft.self_explanation_enabled}
-              disabled={query.isLoading}
-              onCheckedChange={(checked) =>
-                setDraft((d) => ({ ...d, self_explanation_enabled: checked }))
-              }
-            />
-          </div>
-          <div className="flex items-center justify-between gap-4 rounded-md border border-warning/30 bg-warning/5 px-4 py-3">
-            <div className="space-y-0.5">
-              <Label htmlFor="focus-guard-toggle" className="text-sm">
-                Garde-attention (webcam)
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Détecte le décrochage d'attention via la webcam pendant une session (Hutt 2024).
-                <strong className="text-foreground/80">
-                  {" "}
-                  100 % local : aucune image n'est enregistrée ni envoyée.
-                </strong>{" "}
-                Consentement demandé au premier lancement.
-              </p>
-            </div>
-            <Switch
-              id="focus-guard-toggle"
-              checked={draft.focus_guard_enabled}
-              disabled={query.isLoading}
-              onCheckedChange={(checked) =>
-                setDraft((d) => ({ ...d, focus_guard_enabled: checked }))
-              }
-            />
-          </div>
-          {/* --- Vague 23: Hands-free review (audio + voice) ---------------- */}
-          <div className="flex items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3">
-            <div className="space-y-0.5">
-              <Label htmlFor="hands-free-toggle" className="text-sm">
-                Mode mains-libres (audio + voix)
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {/* P110 — icône lucide en flux plutôt qu'un emoji brut. */}
-                Ajoute un bouton casque{" "}
-                <Headphones className="inline h-3.5 w-3.5 align-text-bottom" aria-hidden="true" />{" "}
-                en session : la question est lue (TTS), tu réponds à voix haute, la réponse est lue,
-                puis tu notes à la voix (« encore / difficile / bien / facile » via Whisper) ou via
-                de gros boutons. Pensé pour réviser en marchant. Nécessite une voix TTS
-                (OpenAI/Piper) et, pour la notation vocale, une clé OpenAI.
-              </p>
-            </div>
-            <Switch
-              id="hands-free-toggle"
-              checked={draft.hands_free_enabled}
-              disabled={query.isLoading}
-              onCheckedChange={(checked) =>
-                setDraft((d) => ({ ...d, hands_free_enabled: checked }))
               }
             />
           </div>

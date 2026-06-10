@@ -1,9 +1,10 @@
 /**
  * Confidence rating — CBM (Confidence-Based Marking, Gardner-Medwin / UCL).
  *
- * The learner rates how confident they are in their upcoming answer on a
- * 1..5 scale BEFORE seeing the FSRS rating buttons. The two signals are
- * kept orthogonal:
+ * v0.11 — single variant, rendered in the QUESTION phase: the learner rates
+ * their confidence BEFORE the flip (the v0.10 post-flip placement invalidated
+ * the measure; the redundant retrospective strip was removed). The two
+ * signals are kept orthogonal:
  *   - The FSRS rating measures the *outcome* (did the learner get it
  *     right + how easy was it?).
  *   - The CBM rating measures the *metacognition* (how sure was the
@@ -28,27 +29,12 @@ interface ConfidenceRatingProps {
   value: number | null | undefined;
   onChange: (value: number) => void;
   disabled?: boolean;
-  /**
-   * Which capture moment this strip represents:
-   *   - `"prospective"` (default, v5) — before the flip (CBM, Gardner-Medwin).
-   *   - `"retrospective"` (v15) — after the answer is shown (Bang & Fleming
-   *     2018, two-step confidence). Only the labels change; the 1..5 scale and
-   *     `onChange` contract are identical.
-   */
-  variant?: "prospective" | "retrospective";
 }
 
-const VARIANT_COPY = {
-  prospective: {
-    legend: "Confiance avant rating (CBM)",
-    help: "Très peu confiant → Très confiant. Aide à mesurer la calibration de ta métacognition (Gardner-Medwin, UCL).",
-    testid: "confidence-rating",
-  },
-  retrospective: {
-    legend: "Maintenant que tu as vu la réponse, à quel point étais-tu sûr ?",
-    help: "Confiance rétrospective (Bang & Fleming 2018) : capte ta certitude une fois la réponse révélée.",
-    testid: "confidence-rating-post",
-  },
+const COPY = {
+  legend: "Ta confiance, avant de voir la réponse",
+  help: "1 = aucune idée, 5 = certain. L'onglet Calibration des statistiques te montre si ta confiance prédit vraiment tes réussites.",
+  testid: "confidence-rating",
 } as const;
 
 interface LevelDef {
@@ -91,13 +77,8 @@ const LEVELS: readonly LevelDef[] = [
   },
 ];
 
-export function ConfidenceRating({
-  value,
-  onChange,
-  disabled = false,
-  variant = "prospective",
-}: ConfidenceRatingProps) {
-  const copy = VARIANT_COPY[variant];
+export function ConfidenceRating({ value, onChange, disabled = false }: ConfidenceRatingProps) {
+  const copy = COPY;
   return (
     <fieldset className="flex w-full max-w-md flex-col gap-2" data-testid={copy.testid}>
       <legend className="text-xs uppercase tracking-wide text-muted-foreground">

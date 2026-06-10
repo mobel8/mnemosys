@@ -18,21 +18,10 @@ interface Crumb {
 // Human-readable French label per top-level route segment. Keeps the
 // breadcrumb in sync with the sidebar labels for every destination.
 const TOP_LABELS: Record<string, string> = {
-  "review-interleaved": "Révision entrelacée",
-  "ai-generate": "Génération IA",
-  capture: "Capture → cartes",
-  reading: "Lecture",
-  shadowing: "Shadowing",
-  vocabulary: "Vocabulaire",
-  pronunciation: "Prononciation",
-  palaces: "Palais de mémoire",
-  mnemonics: "Mnémotechnique",
-  music: "Musique",
-  gesture: "Dessin",
+  "review-all": "Réviser",
+  create: "Créer",
+  language: "Langues",
   stats: "Statistiques",
-  graph: "Graphe",
-  achievements: "Succès",
-  planner: "Planning",
   settings: "Paramètres",
 };
 
@@ -51,9 +40,6 @@ function buildCrumbs(pathname: string, deckName?: string): Crumb[] {
   } else if (first === "review" && second) {
     crumbs.push({ label: deckName ?? `Deck #${second}`, to: `/decks/${second}` });
     crumbs.push({ label: "Révision" });
-  } else if (first === "palaces" && second) {
-    crumbs.push({ label: "Palais de mémoire", to: "/palaces" });
-    crumbs.push({ label: third === "review" ? "Révision" : "Éditeur 3D" });
   } else {
     const label = first ? TOP_LABELS[first] : undefined;
     if (label) crumbs.push({ label });

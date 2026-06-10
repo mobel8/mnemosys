@@ -39,26 +39,22 @@ pub mod gamification;
 pub mod metacognition;
 pub mod migrations;
 pub mod notes;
-pub mod palaces;
 pub mod params;
 pub mod plans;
 pub mod reading;
 pub mod reviews;
 pub mod sketches;
-pub mod wellness;
 
 pub use cards::{Card, CardRepo, CardState, CardWithNote};
 pub use decks::{Deck, DeckMastery, DeckPatch, DeckRepo, DeckStats, DeckWithStats, MasteryStatus};
 pub use gamification::{Achievement, GamificationRepo, UserStats};
-pub use metacognition::{CalibrationBucket, CalibrationStats, JolPrediction, MetacognitionRepo};
+pub use metacognition::{CalibrationBucket, CalibrationStats, MetacognitionRepo};
 pub use notes::{FrequencyCoverage, Note, NoteRepo, NoteTemplate};
-pub use palaces::{Palace, PalaceLocus, PalaceRepo, PalaceWithLoci};
 pub use params::ParamsRepo;
 pub use plans::{PlanRepo, StudyPlan};
 pub use reading::{ReadingRepo, WordStatus};
 pub use reviews::{DayCount, DayRetention, NewReview, Review, ReviewRepo};
 pub use sketches::{Sketch, SketchRepo};
-pub use wellness::{WellnessLog, WellnessRepo};
 
 /// Process-wide DB handle. Cheap to clone (just bumps an `Arc` refcount).
 #[derive(Clone)]
@@ -140,20 +136,12 @@ impl Database {
         GamificationRepo::new(conn)
     }
 
-    pub fn wellness<'a>(&self, conn: &'a Connection) -> WellnessRepo<'a> {
-        WellnessRepo::new(conn)
-    }
-
     pub fn sketches<'a>(&self, conn: &'a Connection) -> SketchRepo<'a> {
         SketchRepo::new(conn)
     }
 
     pub fn metacognition<'a>(&self, conn: &'a Connection) -> MetacognitionRepo<'a> {
         MetacognitionRepo::new(conn)
-    }
-
-    pub fn palaces<'a>(&self, conn: &'a Connection) -> PalaceRepo<'a> {
-        PalaceRepo::new(conn)
     }
 
     pub fn reading<'a>(&self, conn: &'a Connection) -> ReadingRepo<'a> {

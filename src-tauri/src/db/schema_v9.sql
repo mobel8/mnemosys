@@ -1,22 +1,21 @@
 -- v9__metacognition.sql
 -- Delayed Judgments of Learning (JOL) — Vague 7 « tier S » metacognition.
 --
--- Rhodes & Tauber 2011 meta-analysis (4554 subjects) found delayed JOLs
--- correlate strongly with subsequent test performance: Goodman-Kruskal γ
--- jumps from ~0.4 (immediate JOL) to ~0.9 (delayed). The signature loop:
--- the learner predicts a recall probability at study time, the system
--- prompts them again ~30 min later (« delayed »), and the prediction is
--- resolved against the next actual review outcome to surface a
--- calibration dashboard (over/under-confidence + per-bucket bias).
+-- ⚠ v0.11 — LEGACY, table kept inert. The delayed-JOL pipeline was removed:
+-- it could never bootstrap (the prompt that recorded predictions only opened
+-- when predictions already existed, so `jol_predictions` never received its
+-- first row). The calibration dashboard is now computed from the CBM
+-- confidence on `reviews.confidence` (see `db/metacognition.rs`). The table
+-- and its indexes stay as-is — migrations are append-only and a DROP would
+-- buy nothing — but no code writes to or reads from them anymore.
 --
--- Schema notes:
---   - `predicted_prob` is stored as REAL in [0.0, 1.0]. UI clamps before
---     persistence; backend re-validates at the command layer.
---   - `actual_correct` stays NULL until the next review for the same
---     `card_id` happens — at which point `submit_review` calls
---     `MetacognitionRepo::resolve_prediction` to flip the bit.
---   - The partial index `idx_jol_unresolved` keeps `pending_predictions`
---     lookups O(unresolved) rather than O(all jols).
+-- Original design (historical): Rhodes & Tauber 2011 meta-analysis (4554
+-- subjects) found delayed JOLs correlate strongly with subsequent test
+-- performance: Goodman-Kruskal γ jumps from ~0.4 (immediate JOL) to ~0.9
+-- (delayed). The signature loop: the learner predicts a recall probability
+-- at study time, the system prompts them again ~30 min later (« delayed »),
+-- and the prediction is resolved against the next actual review outcome to
+-- surface a calibration dashboard (over/under-confidence + per-bucket bias).
 
 CREATE TABLE IF NOT EXISTS jol_predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

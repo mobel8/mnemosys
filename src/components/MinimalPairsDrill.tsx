@@ -1,8 +1,10 @@
 /**
  * Minimal-pairs pronunciation drill (sous-feature 3).
  *
- * Full page. The learner picks a phonemic contrast (e.g. /iː/ vs /ɪ/), then
- * runs a « listen & identify » loop:
+ * Rendered as the « Prononciation » tab of the `/language` hub (the hub owns
+ * the page chrome — heading, padding — so this component is embeddable). The
+ * learner picks a phonemic contrast (e.g. /iː/ vs /ɪ/), then runs a
+ * « listen & identify » loop:
  *   1. We pick a random pair from the contrast and a random side (a or b).
  *   2. The chosen word is spoken aloud — via the existing OpenAI/Piper TTS
  *      command (`useSynthesizeAudio`), with a Web SpeechSynthesis fallback
@@ -243,17 +245,7 @@ export default function MinimalPairsDrill() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6" data-testid="minimal-pairs-drill">
-      <header>
-        <h2 className="flex items-center gap-2 font-display text-2xl font-semibold tracking-tight">
-          <Headphones className="h-6 w-6" /> Prononciation
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Entraîne ton oreille sur les paires minimales anglaises. Choisis un contraste, écoute le
-          mot prononcé, puis clique sur celui que tu penses avoir entendu.
-        </p>
-      </header>
-
+    <div className="space-y-6" data-testid="minimal-pairs-drill">
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Contraste phonémique</CardTitle>

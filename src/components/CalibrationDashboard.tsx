@@ -2,9 +2,10 @@
  * Metacognition calibration dashboard.
  *
  * Renders Goodman-Kruskal γ, calibration bias and a 10-bucket histogram
- * (predicted vs actual). Backed by Rhodes & Tauber 2011 (delayed-JOL
- * resolution g=0.93). Mnemosys is, to our knowledge, the first SRS app
- * to expose this measure to learners.
+ * (predicted vs actual). v0.11 — the JOL pipeline is gone; stats are now
+ * computed from CBM confidence ratings (1-5 captured before the flip,
+ * Gardner-Medwin) against actual recall (rating ≥ 3). Mnemosys is, to our
+ * knowledge, the first SRS app to expose this measure to learners.
  */
 
 import { Brain } from "lucide-react";
@@ -22,62 +23,6 @@ function biasInterpretation(b: number): string {
   if (Math.abs(b) < 0.05) return "Calibration équilibrée";
   if (b > 0) return `Surconfiance de ${(b * 100).toFixed(0)}%`;
   return `Sous-confiance de ${(-b * 100).toFixed(0)}%`;
-}
-
-/**
- * Vague 22 — retrospective calibration block (Bang & Fleming 2018, two-step
- * confidence). Shown only when the backend reports a `gamma_post` (≥ 10
- * reviews carry a post-answer confidence). Compares "once you'd seen the
- * answer, did your confidence track reality?" against the prospective γ.
- */
-function RetrospectiveCalibration({
-  gammaPost,
-  biasPost,
-  totalPost,
-  gammaProspective,
-}: {
-  gammaPost: number;
-  biasPost: number;
-  totalPost: number;
-  gammaProspective: number | null;
-}) {
-  const gInt = gammaInterpretation(gammaPost);
-  const improves =
-    gammaProspective != null && gammaPost > gammaProspective + 0.05
-      ? "Ta confiance s'affine après avoir vu la réponse."
-      : gammaProspective != null && gammaPost < gammaProspective - 0.05
-        ? "Ta confiance prospective (avant) est mieux calibrée que la rétrospective."
-        : "Confiance prospective et rétrospective sont proches.";
-
-  return (
-    <div className="space-y-2 border-t pt-4" data-testid="retrospective-calibration">
-      <p className="text-sm font-medium">Calibration rétrospective (après avoir vu la réponse)</p>
-      <p className="text-xs text-muted-foreground">
-        Confiance post-réponse vs réussite réelle (Bang &amp; Fleming 2018) sur {totalPost} reviews.
-      </p>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">γ rétrospectif</p>
-          <p className="font-mono text-2xl font-semibold">{gammaPost.toFixed(2)}</p>
-          <p className={`text-xs ${gInt.color}`}>{gInt.label}</p>
-        </div>
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Biais rétro.</p>
-          <p className="font-mono text-2xl font-semibold">
-            {biasPost >= 0 ? "+" : ""}
-            {(biasPost * 100).toFixed(0)}%
-          </p>
-          <p className="text-xs text-muted-foreground">{biasInterpretation(biasPost)}</p>
-        </div>
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Reviews</p>
-          <p className="font-mono text-2xl font-semibold">{totalPost}</p>
-          <p className="text-xs text-muted-foreground">avec confiance post</p>
-        </div>
-      </div>
-      <p className="text-xs text-muted-foreground">{improves}</p>
-    </div>
-  );
 }
 
 export function CalibrationDashboard() {
@@ -102,26 +47,17 @@ export function CalibrationDashboard() {
             Calibration métacognitive
           </CardTitle>
           <CardDescription>
-            Active les JOL différés dans les paramètres pour mesurer la précision de tes prédictions
-            de rappel. Méta-analyse Rhodes &amp; Tauber 2011 (g=0.93) : prédire à J+30 min ce que tu
-            sauras dans 1 semaine est le meilleur signal métacognitif.
+            Active l'évaluation de confiance dans Paramètres → Révision, puis révise ~30 cartes en
+            notant ta confiance : tu verras ici si ta confiance prédit vraiment tes réussites.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <p className="text-sm text-muted-foreground">
-            {stats
-              ? `${stats.total_resolved} / 30 prédictions résolues — reviens dans quelques jours.`
-              : "Aucune prédiction résolue pour l'instant."}
-          </p>
-          {stats?.gamma_post != null && stats.bias_post != null && (
-            <RetrospectiveCalibration
-              gammaPost={stats.gamma_post}
-              biasPost={stats.bias_post}
-              totalPost={stats.total_post}
-              gammaProspective={null}
-            />
-          )}
-        </CardContent>
+        {stats && stats.total_resolved > 0 && (
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              {stats.total_resolved} / 30 révisions avec confiance.
+            </p>
+          </CardContent>
+        )}
       </Card>
     );
   }
@@ -137,8 +73,8 @@ export function CalibrationDashboard() {
           Calibration métacognitive
         </CardTitle>
         <CardDescription>
-          Précision de tes prédictions de rappel sur {stats.total_resolved} cartes (Rhodes &amp;
-          Tauber 2011).
+          Ta confiance avant de voir la réponse vs tes réussites réelles, sur {stats.total_resolved}{" "}
+          révisions.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -157,9 +93,9 @@ export function CalibrationDashboard() {
             <p className="text-xs text-muted-foreground">{biasInterpretation(stats.bias)}</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Résolues</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Révisions</p>
             <p className="font-mono text-2xl font-semibold">{stats.total_resolved}</p>
-            <p className="text-xs text-muted-foreground">prédictions</p>
+            <p className="text-xs text-muted-foreground">avec confiance</p>
           </div>
         </div>
 
@@ -219,15 +155,6 @@ export function CalibrationDashboard() {
             surconfiance
           </p>
         </div>
-
-        {stats.gamma_post != null && stats.bias_post != null && (
-          <RetrospectiveCalibration
-            gammaPost={stats.gamma_post}
-            biasPost={stats.bias_post}
-            totalPost={stats.total_post}
-            gammaProspective={stats.gamma}
-          />
-        )}
       </CardContent>
     </Card>
   );

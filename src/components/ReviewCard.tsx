@@ -85,6 +85,10 @@ interface ReviewCardProps {
    *  the typed input. Mutually exclusive with `typeTheAnswerEnabled` — voice
    *  wins because the typing alternative is always available offline. */
   voiceAnswerEnabled?: boolean;
+  /** ISO 639-1 hint for the Whisper transcription (deck.language_mode).
+   *  The v0.10 hardcoded "fr" sabotaged answers spoken in the target
+   *  language (audit finding). */
+  languageHint?: string;
   /** Fired when the learner submits a typed answer. Surfaces the
    *  normalised similarity score so the parent can log it / nudge a
    *  rating decision. */
@@ -258,6 +262,7 @@ export function ReviewCard({
   cardOrd = 0,
   typeTheAnswerEnabled = false,
   voiceAnswerEnabled = false,
+  languageHint,
   onTypedAnswer,
   deckName,
 }: ReviewCardProps) {
@@ -562,7 +567,7 @@ export function ReviewCard({
           <div className="flex w-full justify-center">
             <VoiceAnswerButton
               key={`voice-${note.id}`}
-              language="fr"
+              language={languageHint ?? "fr"}
               onTranscribed={(text) => {
                 const score = similarityScore(text, basic.back);
                 onTypedAnswer?.(text, score, verdictFor(score));

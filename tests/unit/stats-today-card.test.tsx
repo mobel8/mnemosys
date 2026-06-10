@@ -36,7 +36,7 @@ describe("TodayCard", () => {
     expect(screen.getByTestId("today-retention-value")).toHaveTextContent("—");
   });
 
-  it("colors retention red when below 75 %", () => {
+  it("colors retention with the destructive token when below 75 %", () => {
     render(
       <TodayCard
         data={{
@@ -48,13 +48,13 @@ describe("TodayCard", () => {
       />,
     );
     const value = screen.getByTestId("today-retention-value");
-    expect(value.className).toMatch(/text-red/);
+    expect(value.className).toMatch(/text-destructive/);
   });
 
-  it("colors retention green at >= 90 %", () => {
+  it("colors retention with the success token at >= 90 %", () => {
     render(<TodayCard data={FULL_DATA} />);
     const value = screen.getByTestId("today-retention-value");
-    expect(value.className).toMatch(/text-green/);
+    expect(value.className).toMatch(/text-success/);
   });
 
   it("shows em-dash while loading", () => {

@@ -48,11 +48,12 @@ import {
   useCreateNote,
   useDecks,
   useGenerateCardsFromText,
+  useSettingsQuery,
   useSetWordStatus,
   useSynthesizeAudio,
   useWordStatuses,
 } from "@/lib/queries";
-import type { WordStatusKind } from "@/lib/tauri";
+import type { TTSVoice, WordStatusKind } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
 /**
@@ -92,6 +93,26 @@ const DEDUP_FETCH_LIMIT = 5000;
 /** Lower-case + trim a card front for case-insensitive duplicate matching. */
 function normalizeFront(value: string): string {
   return value.trim().toLowerCase();
+}
+
+/** TTS defaults + validation — same pattern as TtsButton / ShadowingPractice. */
+const DEFAULT_VOICE: TTSVoice = "nova";
+const DEFAULT_SPEED = 1.0;
+const VALID_VOICES: readonly TTSVoice[] = [
+  "alloy",
+  "echo",
+  "fable",
+  "onyx",
+  "nova",
+  "shimmer",
+  "coral",
+  "sage",
+];
+
+/** Map the persisted `tts_voice` setting to a valid voice (default « nova »). */
+function resolveVoice(raw: string | null | undefined): TTSVoice {
+  if (raw && (VALID_VOICES as readonly string[]).includes(raw)) return raw as TTSVoice;
+  return DEFAULT_VOICE;
 }
 
 /** One parsed segment of the source text. */
@@ -210,6 +231,12 @@ export function ReadingImport() {
   const generateCards = useGenerateCardsFromText();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Voix + vitesse depuis les réglages (fallback « nova » / 1.0), comme
+  // TtsButton / ShadowingPractice — la voix n'est plus codée en dur (audit).
+  const settingsQuery = useSettingsQuery();
+  const voice = resolveVoice(settingsQuery.data?.tts_voice);
+  const speed = settingsQuery.data?.tts_speed ?? DEFAULT_SPEED;
+
   // Existing cards in the chosen deck, used to skip words already added so the
   // reading flow doesn't re-create duplicates across overlapping texts (P078).
   const existingCardsQuery = useCardsInDeck(deckId ?? -1, DEDUP_FETCH_LIMIT, 0, {
@@ -306,12 +333,14 @@ export function ReadingImport() {
     [aiEntries],
   );
 
-  /** Speak a word via the project TTS (used by the popover speaker button). */
+  /**
+   * Speak a word via the project TTS (used by the popover speaker button),
+   * honouring the voice + speed configured in the settings.
+   */
   const handleSpeak = useCallback(
     async (word: string) => {
       try {
-        const voice = "nova" as const;
-        const res = await synthesize.mutateAsync({ text: word, voice });
+        const res = await synthesize.mutateAsync({ text: word, voice, speed });
         const audio = audioRef.current;
         if (audio) {
           audio.src = convertFileSrc(res.path);
@@ -326,7 +355,7 @@ export function ReadingImport() {
         });
       }
     },
-    [synthesize],
+    [synthesize, voice, speed],
   );
 
   /** Mint one Basic card from a popover (front = word, back = gloss + IPA). */

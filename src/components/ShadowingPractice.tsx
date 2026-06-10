@@ -5,6 +5,10 @@
  *   1. Types (or pastes) a sentence to shadow.
  *   2. Hits "Écouter" → the sentence is synthesised with OpenAI TTS (reusing
  *      the existing `synthesize_audio` command) and played as the reference.
+ *      When synthesis is unavailable (no API key / offline / error) we degrade
+ *      to the Web SpeechSynthesis voice — same fallback as MinimalPairsDrill —
+ *      with a discreet « voix système » note; no reference waveform can be
+ *      drawn in that mode (the Web Speech API exposes no decodable buffer).
  *   3. Hits "Enregistrer" → MediaRecorder captures their own voice (same
  *      pattern as VoiceAnswerButton), then plays it back.
  *   4. Both clips are decoded to PCM, down-sampled to ~200 peaks and drawn as
@@ -50,6 +54,26 @@ const VALID_VOICES: readonly TTSVoice[] = [
 function resolveVoice(raw: string | null | undefined): TTSVoice {
   if (raw && (VALID_VOICES as readonly string[]).includes(raw)) return raw as TTSVoice;
   return DEFAULT_VOICE;
+}
+
+/**
+ * Speak `text` through the Web SpeechSynthesis API as a graceful fallback
+ * when the Tauri TTS command is unavailable — same pattern as
+ * MinimalPairsDrill. Resolves silently when the API is missing so the
+ * practice loop keeps working. The sentence language is unknown here, so the
+ * utterance keeps the system default voice; `rate` mirrors the user's TTS
+ * speed setting (clamped to a sane band).
+ */
+function speakWithWebApi(text: string, rate: number): void {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  try {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = Math.min(2, Math.max(0.5, rate));
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    /* SpeechSynthesis can throw on some locked-down webviews — ignore. */
+  }
 }
 
 type RecordingState = "idle" | "recording" | "processing";
@@ -131,6 +155,8 @@ export function ShadowingPractice() {
   const [refPeaks, setRefPeaks] = useState<number[]>([]);
   const [userPeaks, setUserPeaks] = useState<number[]>([]);
   const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null);
+  /** Whether we've fallen back to the Web Speech API for this session. */
+  const [usingFallback, setUsingFallback] = useState(false);
 
   const settingsQuery = useSettingsQuery();
   const synthesize = useSynthesizeAudio();
@@ -223,6 +249,10 @@ export function ShadowingPractice() {
         void audioCtxRef.current.close().catch(() => {});
       }
       audioCtxRef.current = null;
+      // Stop any in-flight Web Speech utterance (fallback voice).
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, [clearStopTimer, cleanupStream]);
 
@@ -249,6 +279,12 @@ export function ShadowingPractice() {
     // not write back its src/peaks.
     listenGenRef.current += 1;
     const gen = listenGenRef.current;
+    // Mode dégradé déjà actif : parle directement via Web Speech. Pas de forme
+    // d'onde de référence possible (aucun buffer audio à décoder).
+    if (usingFallback) {
+      speakWithWebApi(trimmed, speed);
+      return;
+    }
     try {
       const result = await synthesize.mutateAsync({ text: trimmed, voice, speed });
       // A newer listen (or unmount) superseded us while synthesis was pending.
@@ -274,13 +310,19 @@ export function ShadowingPractice() {
       }
     } catch (err) {
       if (gen !== listenGenRef.current || !mountedRef.current) return;
+      // Première panne (clé absente, hors-ligne…) : on bascule sur la voix du
+      // système au lieu d'un échec sec — même dégradation gracieuse que
+      // MinimalPairsDrill — et on prévient une fois.
+      setUsingFallback(true);
       const message = err instanceof Error ? err.message : String(err);
       const isMissingKey = /api key/i.test(message);
       toast({
-        title: isMissingKey ? "Clé API manquante" : "Synthèse vocale impossible",
-        description: isMissingKey ? "Configure ta clé OpenAI dans Settings." : message,
-        variant: "destructive",
+        title: "Voix locale utilisée",
+        description: isMissingKey
+          ? "Clé OpenAI absente — on bascule sur la synthèse vocale du système."
+          : "Synthèse en ligne indisponible — on bascule sur la voix du système.",
       });
+      speakWithWebApi(trimmed, speed);
     }
   }
 
@@ -453,6 +495,12 @@ export function ShadowingPractice() {
               Écouter (référence)
             </Button>
 
+            {usingFallback && (
+              <span className="text-xs text-muted-foreground" data-testid="fallback-note">
+                voix système
+              </span>
+            )}
+
             <Button
               type="button"
               variant={isRecording ? "destructive" : "default"}
@@ -512,7 +560,9 @@ export function ShadowingPractice() {
             </div>
             {refPeaks.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                Clique « Écouter » pour générer la forme d'onde de référence.
+                {usingFallback
+                  ? "Voix système active — pas de forme d'onde de référence disponible."
+                  : "Clique « Écouter » pour générer la forme d'onde de référence."}
               </p>
             )}
           </div>

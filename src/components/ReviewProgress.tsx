@@ -3,21 +3,14 @@
  *
  * Two responsibilities:
  *   1. Visualise progress with a slim bar + textual `X / N · mm:ss`.
- *   2. Offer the only exit affordance during a session ("Quit"), with a
- *      confirmation dialog once the user has invested enough effort to
- *      avoid an accidental click.
+ *   2. Offer the exit affordance ("Quitter"). The confirmation lives in the
+ *      parent (`ReviewSession.requestQuit`) so the Esc hotkey and this button
+ *      share ONE quit path — the audit caught Esc bypassing the confirm when
+ *      it lived here.
  */
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { formatElapsed } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +18,6 @@ interface ReviewProgressProps {
   current: number;
   total: number;
   startedAt: number;
-  reviewedCount: number;
   onQuit: () => void;
   onHelp?: () => void;
   /** P112 — libellé contextuel optionnel affiché dans la barre unique (ex. « Session entrelacée »). */
@@ -36,13 +28,11 @@ export function ReviewProgress({
   current,
   total,
   startedAt,
-  reviewedCount,
   onQuit,
   onHelp,
   label,
 }: ReviewProgressProps) {
   const [now, setNow] = useState(() => Date.now());
-  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -57,16 +47,6 @@ export function ReviewProgress({
   // « Carte N sur N ».
   const currentCard = total > 0 ? Math.min(Math.max(current, 1), total) : 0;
   const progressText = total > 0 ? `Carte ${currentCard} sur ${total}` : "Aucune carte à réviser";
-
-  const requestQuit = () => {
-    // Five-card threshold avoids nagging users who tap quit immediately after
-    // realising they're in the wrong deck, but protects longer sessions.
-    if (reviewedCount > 5) {
-      setConfirmOpen(true);
-    } else {
-      onQuit();
-    }
-  };
 
   return (
     <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
@@ -108,37 +88,11 @@ export function ReviewProgress({
               ?
             </Button>
           )}
-          <Button type="button" variant="ghost" size="sm" onClick={requestQuit}>
+          <Button type="button" variant="ghost" size="sm" onClick={onQuit}>
             Quitter
           </Button>
         </div>
       </div>
-
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Quitter la session ?</DialogTitle>
-            <DialogDescription>
-              Tu as déjà révisé {reviewedCount} cartes. Le progrès est sauvegardé carte par carte —
-              tu peux reprendre à tout moment.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
-              Continuer la session
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                setConfirmOpen(false);
-                onQuit();
-              }}
-            >
-              Quitter
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
